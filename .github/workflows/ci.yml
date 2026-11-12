@@ -1,0 +1,118 @@
+name: ci
+
+# Gate design for verirun.
+# The merge verdict is hosted green on the exact head plus the milestone
+# gate sign-off from Main Muse. See docs/ARCHITECTURE.md section 9 and
+# CONTRIBUTING.md once it lands in Milestone 4.
+# Milestone 0 ships design documents only, with no Cargo workspace yet.
+# The hygiene job runs on every head. The rust job detects the workspace
+# and activates in full from Milestone 1, when Cargo.toml first lands.
+# No rust step is skipped silently. The detect step prints its verdict.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Deterministic seed for every simulation and property runner.
+  # CONTRIBUTING.md documents the failure reproduction workflow that
+  # replays a failing seed locally with the same value.
+  SIM_SEED: "20261112"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Required files, copy bar, and Milestone 0 inventory
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          root = pathlib.Path(".")
+          required = [
+              "DECISIONS.md",
+              "docs/ARCHITECTURE.md",
+              "docs/INVARIANTS.md",
+              "rust-toolchain.toml",
+              ".github/workflows/ci.yml",
+          ]
+          missing = [p for p in required if not (root / p).is_file()]
+          if missing:
+              print("missing required files:", missing)
+              sys.exit(1)
+          # Copy bar: no em dashes in Markdown. Verified by codepoint
+          # scan, never by a shell pattern that can miss the character.
+          bad = []
+          for md in root.rglob("*.md"):
+              if ".git" in md.parts:
+                  continue
+              text = md.read_text(encoding="utf-8")
+              if chr(0x2014) in text:
+                  bad.append(str(md))
+          if bad:
+              print("em dash found in:", bad)
+              sys.exit(1)
+          # Until a Cargo workspace exists, the tree must hold no Rust
+          # sources at all. Milestone gates enforce this for M0.
+          if not (root / "Cargo.toml").exists():
+              rs = [str(p) for p in root.rglob("*.rs") if ".git" not in p.parts]
+              if rs:
+                  print("Rust sources present before Milestone 1:", rs)
+                  sys.exit(1)
+          print("hygiene ok")
+          PY
+      - name: Toolchain pin is present and singular
+        run: |
+          grep -E '^channel = "[0-9]+\.[0-9]+\.[0-9]+"' rust-toolchain.toml
+          test "$(grep -c '^channel' rust-toolchain.toml)" = "1"
+
+  rust:
+    name: rust
+    runs-on: ubuntu-latest
+    env:
+      # Decision Q6: 1,000 cases per pull request, 10,000 on main.
+      PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '1000' || '10000' }}
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Detect Cargo workspace
+        id: detect
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "has_cargo=true" >> "$GITHUB_OUTPUT"
+            echo "Cargo workspace present. Full rust gates apply."
+          else
+            echo "has_cargo=false" >> "$GITHUB_OUTPUT"
+            echo "No Cargo workspace yet (Milestone 0). Rust gates arm at Milestone 1."
+          fi
+      - name: Print active seed
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: echo "SIM_SEED=$SIM_SEED PROPTEST_CASES=$PROPTEST_CASES"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        if: steps.detect.outputs.has_cargo == 'true'
+      - name: Format
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Test
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: cargo test --workspace --all-features --no-fail-fast
+      - name: Doc
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: cargo doc --workspace --all-features --no-deps
+      - name: Bench compile and smoke run
+        if: steps.detect.outputs.has_cargo == 'true'
+        run: cargo bench --workspace -- --test

@@ -1,0 +1,8 @@
+# Pinned toolchain for verirun. See DECISIONS.md Q4.
+# Rust 2024 edition needs Rust 1.85 or newer. This pin tracks the latest
+# stable release at the time of the pin and moves only by an explicit
+# toolchain bump commit that re-runs the full gate set.
+[toolchain]
+channel = "1.100.0"
+profile = "minimal"
+components = ["rustfmt", "clippy"]
