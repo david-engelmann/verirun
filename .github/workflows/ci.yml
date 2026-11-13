@@ -51,17 +51,17 @@ jobs:
           if missing:
               print("missing required files:", missing)
               sys.exit(1)
-          # Copy bar: no em dashes in Markdown. Verified by codepoint
+          # Copy bar: no em dashes or en dashes in Markdown. Verified by codepoint
           # scan, never by a shell pattern that can miss the character.
           bad = []
           for md in root.rglob("*.md"):
               if ".git" in md.parts:
                   continue
               text = md.read_text(encoding="utf-8")
-              if chr(0x2014) in text:
+              if chr(0x2014) in text or chr(0x2013) in text:
                   bad.append(str(md))
           if bad:
-              print("em dash found in:", bad)
+              print("em dash or en dash found in:", bad)
               sys.exit(1)
           # Until a Cargo workspace exists, the tree must hold no Rust
           # sources at all. Milestone gates enforce this for M0.

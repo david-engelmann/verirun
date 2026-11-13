@@ -23,12 +23,12 @@ For any in-domain value v, `parse(encode(v))` equals v, and `encode(parse(encode
 Edge cases: empty object, empty array, empty string, deeply nested arrays up to the depth limit, strings with every control character.
 
 ### INV-CAN-3. Number domain
-Negative zero encodes as `0`. NaN and both infinities are rejected. Any number whose value is integral with magnitude above 9007199254740991 is rejected with `IntegerOutOfSafeRange`. A literal that overflows f64 is rejected at parse with its byte offset. Rejection through the CLI exits with code 3.
-Edge cases: -0.0, 9007199254740991 (accepted, encodes as itself), 9007199254740992 (rejected), 1e21 (integral, rejected), 1.5e21 (non-integral, accepted), 1e999 (parse rejection), 5e-324 (smallest subnormal, accepted).
+Negative zero encodes as `0`. NaN and both infinities are rejected. The safe-integer rule is purely value-based: any f64 whose value is integral, meaning it has no fractional part, with magnitude above 9007199254740991 is rejected with `IntegerOutOfSafeRange`. The rule never inspects the literal form, because the encoder sees values, not source text. Every finite f64 at or above 2^52 in magnitude is integral, so no large non-integral value exists that this rule could wrongly catch. A literal that overflows f64 is rejected at parse with its byte offset. Rejection through the CLI exits with code 3.
+Edge cases: -0.0, 9007199254740991 (accepted, encodes as itself), 9007199254740992 (rejected), 1e20, 1e21, 1.5e21, and 1e30 (all integral in value, all rejected), 4503599627370495.5 (non-integral, just below 2^52, accepted), 1e999 (parse rejection), 5e-324 (smallest subnormal, accepted).
 
 ### INV-CAN-4. ECMAScript number layout
-Every accepted non-integral or small integral value encodes byte-identically to the ECMA-262 `Number::toString` layout of ARCHITECTURE.md section 4.3, including the notation thresholds at 1e21 and 1e-6 and the explicit exponent sign.
-Edge cases: 0.000001 encodes as `0.000001`, 0.0000001 as `1e-7`, 1.5e21 as `1.5e+21`, integers at the 21 digit boundary, subnormals, values whose shortest digit string ends in zeros after parsing the standard library form.
+Every accepted value encodes byte-identically to the ECMA-262 `Number::toString` layout of ARCHITECTURE.md section 4.3, including the explicit exponent sign in scientific notation. Under the value-based domain of INV-CAN-3, the large-magnitude region of that layout is unreachable, because every value large enough to enter it is integral and rejected before layout. The operative layout boundaries inside the domain are the small-end scientific threshold below 1e-6 and plain integer formatting up to the safe bound.
+Edge cases: 0.000001 encodes as `0.000001`, 0.0000001 as `1e-7`, 9007199254740991 as itself, 4503599627370495.5 with the decimal point inside the digit string, subnormals, values whose shortest digit string ends in zeros after parsing the standard library form. RFC 8785 Appendix B vectors above the safe bound are asserted as specified rejections under INV-CAN-3, never as layout cases.
 
 ### INV-CAN-5. String escaping minimality
 Canonical output escapes exactly the quotation mark, the backslash, and control characters U+0000 to U+001F (short escapes where RFC 8785 defines them, lowercase `\u00xx` otherwise). All other characters, including `/`, U+007F, and all non-ASCII text, emit as raw UTF-8.
@@ -67,8 +67,8 @@ A blob is never observable in a partial state. At the destination path, a reader
 Edge cases: crash during write, after file sync, and after rename before directory sync, per the ARCHITECTURE.md section 6.2 table.
 
 ### INV-CAS-2. Durability ordering
-`put` reports success only after the file sync, the rename, and the destination directory sync have all completed, in that order. A success result followed by a power loss never loses the blob on a filesystem that honours sync semantics.
-Edge case: fault injection that records the call order of sync and rename operations through a test filesystem seam, asserting the order rather than the timing.
+`put` reports success only after the file sync, the rename, and the destination directory sync have all completed, in that order. When the put created the shard directory, the `objects/` directory sync after the rename is part of the required order, so the shard entry is durable along with the file entry. A success result followed by a power loss never loses the blob on a filesystem that honours sync semantics.
+Edge case: fault injection that records the call order of sync and rename operations through a test filesystem seam, asserting the order rather than the timing, including a put into a shard directory that does not exist yet.
 
 ### INV-CAS-3. Immutability and read-only storage
 A stored object is never modified after its rename. Objects are stored read-only. No API opens an object for writing, and repair means delete plus re-derive.
@@ -139,12 +139,12 @@ A task exceeding its `timeout_ms` is killed, reaped, and recorded with status `t
 Edge cases: a task that floods both pipes and then sleeps past its deadline (the kill must not hang the drains), a task that exits just before the deadline (recorded by its real exit), `timeout_ms` absent (no deadline).
 
 ### INV-RUN-5. Worker-count independence
-The same graph and inputs executed with 1 worker and with N workers produce byte-identical manifests. Scheduling affects wall-clock time only.
+The same graph and inputs executed with 1 worker and with N workers produce byte-identical manifests, at a fixed cache disposition (INV-MAN-1). Scheduling affects wall-clock time only.
 Edge case: a wide graph with many independent tasks of uneven duration, where completion order visibly differs between the two runs.
 
 ### INV-RUN-6. Failure propagation is exact
-When a task fails or times out, exactly its transitive dependents are recorded `skipped`. Independent tasks still run. The manifest holds one record per spec task in all outcomes, and the run exits with code 1.
-Edge cases: a failure at the root of a chain, a failure in one branch of a diamond (the other branch and the join's other inputs still resolve, the join itself is skipped), a graph where everything fails.
+When a task fails or times out, exactly its transitive dependents are recorded `skipped`. Independent tasks still run. The manifest holds one record per spec task in all outcomes, and the run exits with code 1. Recording a skipped task puts the empty blob into the store through the normal put protocol, so every digest a skipped record names exists in the store the run produced. A manifest containing skipped records passes `verirun verify` against that store with exit code 0. The fault test for this invariant asserts that verification pass explicitly, because a skipped record whose empty blob was never put would fail its own verification.
+Edge cases: a failure at the root of a chain, a failure in one branch of a diamond (the other branch and the join's other inputs still resolve, the join itself is skipped), a graph where everything fails, a run whose manifest holds only skipped records apart from one failed root, verified clean after the run.
 
 ### INV-RUN-7. Cache soundness
 A cached task is reused only when its execution digest matches and every recorded output and log blob still exists and re-hashes correctly at materialization. A cache entry pointing at missing or corrupted blobs is ignored and the task re-executes. Cache state can never change a manifest's meaning: a run served fully from cache and the same run executed cold produce identical manifests apart from the `cached` status markers defined in the record semantics, and identical artifact and log digests.
@@ -160,9 +160,9 @@ Edge cases: `../escape`, `a/../../escape`, `a/../b` (rejected as well: any `..` 
 A declared path that is absolute is rejected during validation with exit code 3.
 Edge cases: `/etc/passwd` as an output, a Windows-style rooted path on a Unix host (still a path string with components that fail the relative rule or the component rules).
 
-### INV-SBX-3. Symlink outputs rejected
-A declared output path that is a symbolic link at collection time fails the task, whatever the link target. The check uses `symlink_metadata` and fires before any open of the path.
-Edge cases: a link to a file inside the sandbox (still rejected), a link to a file outside the sandbox, a dangling link, a link created by the task itself during execution pointing at a host file, whose content must never enter the store.
+### INV-SBX-3. Symlink path components rejected
+At collection and at input materialization, every component of the joined path is examined with `symlink_metadata`, walking each prefix from the sandbox root, not only the final path. Any component that is a symbolic link fails the task at collection, or aborts materialization, whatever the link target and whatever its position in the path. The walk fires before any open through the path. Checking the final component alone is a known insufficient form of this invariant: a symlinked intermediate directory would carry the joined path outside the sandbox undetected.
+Edge cases: a final-component link to a file inside the sandbox (still rejected), a final-component link to a file outside the sandbox, a dangling link, a link created by the task itself during execution pointing at a host file whose content must never enter the store, an intermediate directory component that is a symlink to a directory outside the sandbox (the escape this invariant exists to catch), an intermediate symlink to a directory inside the sandbox (still rejected, the rule admits no judgement about targets), and an intermediate symlink planted in the input area before materialization.
 
 ### INV-SBX-4. Collection is exact and metadata is normalized
 Collection gathers exactly the declared outputs, in sorted path order. Each artifact record carries only relative path, content digest, byte length, and the executable bit. No timestamps, owners, or host paths appear in any record.
@@ -175,8 +175,8 @@ Edge case: corrupt one byte of an input blob in the store, then run a graph that
 ## 7. Manifest invariants (MAN)
 
 ### INV-MAN-1. Manifest byte determinism
-Executing the same graph with the same inputs produces the same manifest bytes, and therefore the same manifest digest, regardless of worker count, completion order, and host workspace directory. There are no timestamps or host values in a manifest to break this.
-Edge case: the two runs happen from different absolute workspace paths with different directory names.
+Executing the same graph with the same inputs produces the same manifest bytes, and therefore the same manifest digest, regardless of worker count, completion order, and host workspace directory, at a fixed cache disposition. The cache disposition qualifier is normative, and the carve-out is exactly the one INV-RUN-7 defines: across different dispositions, manifests for identical work may differ only in task status fields (`cached` in place of `succeeded`) and in the record and root digests derived from those fields. Artifact digests, log digests, execution digests, and the task set are identical across dispositions. There are no timestamps or host values in a manifest to break this.
+Edge cases: the two runs happen from different absolute workspace paths with different directory names, a warm-cache and a cold run of the same graph compared field by field to prove the difference is confined to status-derived fields.
 
 ### INV-MAN-2. Portability of the manifest digest
 A manifest produced on one host verifies on another host against a store holding the same blobs. Nothing in verification depends on the producing host's paths, locale, timezone, or user.
@@ -245,8 +245,8 @@ A task writing unbounded output to both pipes is bounded by its timeout or by co
 Edge case: 16 MiB split across both streams from a child that never closes either stream until the end.
 
 ### INV-LAT-3. Verification is single pass
-Verifying a manifest re-hashes each named blob exactly once and recomputes each record digest exactly once. Verification cost is linear in total bytes plus record count. No blob is read twice in one verify run.
-Edge case: a manifest with many tasks sharing one large blob still reads that blob once per referencing check as specified, and the counting reader in the test double proves no record triggers a rescan of the whole store.
+Verifying a manifest re-hashes each distinct named blob exactly once, deduplicated by digest across all records, and recomputes each record digest exactly once. A blob shared by many records is read once per verify run, not once per reference. Verification cost is linear in distinct bytes plus record count. No blob is read twice in one verify run, and no record triggers a rescan of the store.
+Edge case: a manifest with many tasks sharing one large blob reads that blob exactly once, proven by the counting reader in the test double, which also proves no record triggers a rescan of the whole store.
 
 ### INV-LAT-4. Validation precedes work
 All validation errors (DAG family, SBX-1, SBX-2, CAN family) are reported before any sandbox is created, any blob is written, or any process is spawned. An invalid run leaves the store and the work directory untouched.
@@ -302,7 +302,7 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-RUN-3 | F | `runner_pipes::stress_both_pipes_past_capacity` | M2, M4 |
 | INV-RUN-4 | F | `runner_timeout::fault_timeout_kills_and_reaps`, `runner_timeout::fault_timeout_under_pipe_flood` | M2, M4 |
 | INV-RUN-5 | P | `scheduler_prop::prop_worker_count_independence` | M2 |
-| INV-RUN-6 | F | `scheduler_faults::fault_failure_propagation_sets` | M2 |
+| INV-RUN-6 | F | `scheduler_faults::fault_failure_propagation_sets`, `manifest_faults::fault_skipped_records_verify_clean` | M2 |
 | INV-RUN-7 | F | `scheduler_faults::fault_cache_missing_blob_reexecutes` | M2 |
 | INV-SBX-1 | F | `paths_faults::fault_parent_traversal_table` in `crates/verirun-core/tests/` | M2 |
 | INV-SBX-2 | F | `paths_faults::fault_absolute_path_table` | M2 |

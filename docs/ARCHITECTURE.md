@@ -6,7 +6,7 @@ Normative words: MUST and MUST NOT state rules an implementation has to follow t
 
 ## 1. What verirun is
 
-verirun is a content-addressed deterministic execution and evaluation runner. A caller describes a directed acyclic graph of tasks in a run file. verirun validates the graph, executes each task in a hermetic subprocess with a cleared environment, captures stdout and stderr as raw bytes, stores every input, output, and log as an immutable blob in a content-addressed store, and emits a manifest that commits to the whole run. The manifest digest is portable. The same graph, the same input bytes, and the same task behaviour produce the same manifest digest on any host, from any workspace directory, with any worker count.
+verirun is a content-addressed deterministic execution and evaluation runner. A caller describes a directed acyclic graph of tasks in a run file. verirun validates the graph, executes each task in a hermetic subprocess with a cleared environment, captures stdout and stderr as raw bytes, stores every input, output, and log as an immutable blob in a content-addressed store, and emits a manifest that commits to the whole run. The manifest digest is portable. The same graph, the same input bytes, and the same task behaviour produce the same manifest digest on any host, from any workspace directory, with any worker count, at a fixed cache disposition. Cache disposition is part of a record by design: a task served from cache records status `cached` rather than `succeeded`, so a warm-cache run and a cold run of identical work produce manifests that differ in exactly the status fields and the record digests derived from them, and in nothing else. Artifact and log digests are identical across dispositions. INV-RUN-7 states this carve-out and INV-MAN-1 scopes the determinism claim to it.
 
 Four properties carry the design, and every mechanism in this document exists to serve one of them.
 
@@ -135,7 +135,7 @@ Manifest       = (format tag, tasks sorted by task_id, merkle_root)
 TaskStatus     = Succeeded | Failed | TimedOut | Cached | Skipped
 ```
 
-`Skipped` marks a task that never started because an ancestor failed or timed out. Its execution digest is still computed from its spec. Its stdout and stderr digests are the blob digest of the empty byte string. Its artifact list is empty and its exit code is absent. A manifest always holds exactly one record per task in the spec, so a manifest covers the whole graph by construction.
+`Skipped` marks a task that never started because an ancestor failed or timed out. Its execution digest is still computed from its spec. Its stdout and stderr digests are the blob digest of the empty byte string. Its artifact list is empty and its exit code is absent. A manifest always holds exactly one record per task in the spec, so a manifest covers the whole graph by construction. Because verification re-hashes every blob a manifest names (section 9.3), recording a skipped task obliges the runner to put the empty blob into the store through the normal protocol of section 6.2. The put is idempotent and normally hits the already-present fast path. A manifest that contains skipped records therefore verifies against the store its own run produced, with no special case in the verifier.
 
 ## 4. Canonical encoding. The RFC 8785 profile
 
@@ -164,7 +164,7 @@ RFC 8785 section 3.2.2.3 defers number formatting to the ECMAScript `Number::toS
 
 - Negative zero normalizes to zero. The canonical form of -0.0 is `0`.
 - NaN, positive infinity, and negative infinity are rejected with `CanonicalError` kind `NonFiniteNumber`, carrying the byte offset when the value came from parsing.
-- A number whose value is integral and whose magnitude exceeds 9007199254740991 (2^53 minus 1, the largest IEEE 754 safe integer) is rejected with kind `IntegerOutOfSafeRange`, carrying the value and the bound. This covers integer literals and exponent forms alike. The literal `1e21` is integral in value and is rejected. A non-integral value such as `1.5e21` is not an integer and encodes under the normal layout rules.
+- The safe-integer rule is purely value-based. Any f64 whose value is integral, meaning it has no fractional part, and whose magnitude exceeds 9007199254740991 (2^53 minus 1, the largest IEEE 754 safe integer) is rejected with kind `IntegerOutOfSafeRange`, carrying the value and the bound. The rule looks at the value only, never at the literal form, because the encoder sees values, not source text: a literal-form rule could not be applied consistently by the parser and the encoder. Value-based rejection covers `1e21`, `1.5e21`, and `1e30` alike. No accepted case is lost by this strictness, because every finite f64 with magnitude at or above 2^52 is integral. A non-integral value at that magnitude does not exist, so there is no large non-integral class left to encode.
 - A parsed literal that overflows f64 to infinity, such as `1e999`, is rejected at parse time with kind `NumberOutOfRange` and its byte offset.
 
 Layout algorithm, given a finite in-domain f64 value v:
@@ -178,7 +178,7 @@ Layout algorithm, given a finite in-domain f64 value v:
    - Otherwise emit scientific notation. Emit the first digit, then a decimal point and the remaining digits when k is greater than 1, then `e`, then an explicit sign (`+` for a non-negative exponent, `-` otherwise), then the decimal form of (n minus 1) with no leading zeros.
 4. Prefix `-` for negative values.
 
-Worked examples. `1.0` gives `1`. `1e20` gives `100000000000000000000`. `1e21` is rejected as an out-of-range integer before layout. `1.5e21` gives `1.5e+21`. `0.000001` gives `0.000001`. `0.0000001` gives `1e-7`. `333333333.33333329` gives `333333333.3333333` only if that is the shortest round-trip form of the stored f64, which the conformance vectors pin down byte for byte.
+Worked examples. `1.0` gives `1`. `9007199254740991` gives `9007199254740991`, the largest accepted integer. `9007199254740992` is rejected. `1e20`, `1e21`, `1.5e21`, and `1e30` are all rejected before layout, because each is integral in value and above the bound. `4503599627370495.5` gives `4503599627370495.5`, a non-integral value just below 2^52 with the decimal point inside the digit string. `0.000001` gives `0.000001`. `0.0000001` gives `1e-7`. `333333333.33333329` gives `333333333.3333333` only if that is the shortest round-trip form of the stored f64, which the conformance vectors pin down byte for byte. One consequence of the value-based domain deserves stating plainly: the scientific notation branch of the layout algorithm is reachable for accepted values only at the small end, below 1e-6. The large end of the ECMA-262 layout is specified in step 3 for completeness, and no accepted value can reach it, because every value large enough to need it is integral and already rejected. RFC 8785 Appendix B vectors whose values fall above the safe bound belong to the specified-rejection class of section 13, not to the byte-exact class.
 
 The digit extraction in step 2 is the one place where a subtle bug changes bytes without changing values. The verification plan therefore cross-checks the encoder against two independent oracles in tests: the RFC 8785 Appendix B vectors that fall inside the verirun domain, and a dev-dependency reference formatter. Section 13.
 
@@ -262,17 +262,47 @@ Two specs that differ in any of these fields have different execution digests, u
 
 ### 5.4 Why the hasher is a trait
 
-The zero-dependency core rule (DECISIONS.md Q5) forbids the `sha2` crate inside `verirun-core`, and the standard library has no SHA-256. Core therefore defines:
+The zero-dependency core rule (DECISIONS.md Q5) forbids the `sha2` crate inside `verirun-core`, and the standard library has no SHA-256. The seam has one pinned API shape, decided here so Milestone 1 Stage A writes it literally. It is a boxed trait object created through a factory trait. Generic type parameters over the hasher were considered and rejected: they would infect every public signature in `digest`, `manifest`, and the store contracts, for a saving of one allocation per stream, which is noise next to the I/O each stream performs.
 
-```text
-trait StreamingHasher {
-    fn update(&mut self, bytes: &[u8]);
-    fn finalize(self) -> Digest;
+```rust
+/// A domain tag. `as_bytes` returns the exact ASCII bytes of section 5.2.
+pub enum DomainTag {
+    Blob,
+    Input,
+    Env,
+    Exec,
+    Artifact,
+    Task,
+    Node,
+    Empty,
 }
-fn new_hasher(tag) -> impl StreamingHasher   // supplied by adapters
+
+impl DomainTag {
+    pub fn as_bytes(self) -> &'static [u8];
+}
+
+/// One streaming hash computation. Implementations are supplied by
+/// adapter crates. A hasher is created for exactly one digest and is
+/// consumed by `finalize`.
+pub trait StreamingHasher: Send {
+    fn update(&mut self, bytes: &[u8]);
+    fn finalize(self: Box<Self>) -> Digest;
+}
+
+/// Creates hashers. Implemented once by `verirun-store` over the `sha2`
+/// crate, and by test doubles in core tests. Held as
+/// `&dyn HasherFactory` or `Arc<dyn HasherFactory>` at call sites.
+pub trait HasherFactory: Send + Sync {
+    fn new_hasher(&self, tag: DomainTag) -> Box<dyn StreamingHasher>;
+}
 ```
 
-In practice the trait is an interface the adapter implements, with core functions generic over it, plus a factory the CLI injects at startup. All framing logic, including the tag prefix write, lives in core and is exercised in core tests against a test hasher that records its input bytes, so framing is verified byte for byte without any real hash function. The adapter test suite then pins the real SHA-256 outputs for fixed inputs, including the empty string and the standard test vectors. A framing bug and a hash bug are therefore separable failures with separate tests.
+Rules that bind the seam:
+
+- Core owns framing. A core helper takes a factory and a tag, creates the hasher, and writes the tag bytes plus the 0x00 separator before any payload. Adapter implementations receive a hasher that is already framed and only ever see payload bytes through `update`. No adapter code writes a tag.
+- Streaming call sites (pipe drains, CAS puts) hold one `Box<dyn StreamingHasher>` per stream, created before the first byte moves. One-shot helpers in core create, feed, and finalize inside a single function.
+- `finalize` consumes the boxed hasher, so a digest cannot be taken twice and a hasher cannot be reused across digests by accident.
+- The core test double is a factory whose hashers record every byte they receive. Framing is therefore verified byte for byte in core tests with no real hash function present. The adapter test suite pins the real SHA-256 outputs for fixed inputs, including the empty string and the standard test vectors. A framing bug and a hash bug are separable failures with separate tests.
 
 ## 6. The content-addressed store
 
@@ -317,7 +347,7 @@ The four steps, in order, with no step skippable:
 1. Streamed write. Create the temporary file with create-new semantics and stream the content through a 64 KiB buffer, feeding the hasher and the file in the same pass. Memory use is bounded by the buffer, independent of blob size.
 2. File sync. Call `sync_all` on the temporary file. After this point the bytes are durable under the temporary name.
 3. Read-only and rename. Set the file read-only (`Permissions::set_readonly(true)`, mode 0o444 on Unix). Then rename it to `objects/<xx>/<digest>`, creating the shard directory first when absent. Rename within one filesystem is atomic. A reader at the destination path sees the complete old file or the complete new file, never a partial one. When the destination already exists, the put discards its temporary file and reports the digest as already present. Existing content is never rewritten, because the name already commits to the bytes.
-4. Directory sync. Call `sync_all` on the destination shard directory. Only after this call returns does `put` report success. A success result is a durability claim, and this step is what backs it.
+4. Directory sync. Call `sync_all` on the destination shard directory. When this put created the shard directory, also call `sync_all` on the `objects/` directory after the rename, so the shard directory entry itself is durable and not only the file entry inside it. Only after these calls return does `put` report success. A success result is a durability claim, and this step is what backs it.
 
 State machine for one put:
 
@@ -373,7 +403,7 @@ The validator computes indegrees over `BTreeMap` structures and processes a lexi
 
 - Workers: a fixed pool, sized by `--jobs`, defaulting to the available parallelism. Worker count is an execution detail only. It appears in no digest and no record.
 - Eligibility: a task becomes ready when all of its dependencies have status Succeeded or Cached. The ready set is ordered by task id. Workers always take the lexicographically smallest ready task. Start order is therefore deterministic, even though finish order is not.
-- Failure propagation: when a task ends Failed or TimedOut, every transitive dependent is marked Skipped without starting. Independent branches run to completion. The run then finishes and exits with code 1.
+- Failure propagation: when a task ends Failed or TimedOut, every transitive dependent is marked Skipped without starting. Recording a Skipped task puts the empty blob into the store first (section 3.3), so the record's stdout and stderr digests name an object that exists. Independent branches run to completion. The run then finishes and exits with code 1.
 - Outcome collection: outcomes land in a `BTreeMap` keyed by task id. The manifest is built from that map in key order. Finish order has no path into the manifest. This is the mechanism behind the worker-count independence invariant.
 
 ### 7.4 Cache
@@ -411,8 +441,8 @@ Each task gets a sandbox directory, `<work>/tasks/<task_id>/`, with subdirectori
 1. The path must be relative. Absolute paths are rejected.
 2. No component may be `..`. Components are examined with `Path::components`, so tricks with separators or repeated slashes get no special purchase. `.` components are normalized away before any other check.
 3. The normalized path must stay inside the sandbox when joined to it. This is a lexical guarantee first.
-4. At collection time, each declared output is examined with `symlink_metadata`. A symbolic link at the output path is rejected outright, whatever it points at. A missing output marks the task Failed. A non-regular file (directory, device, fifo) is rejected as an output.
-5. Input materialization writes only into the sandbox input area, and the runner never follows a symlink out of the sandbox when collecting outputs, because rule 4 rejects the link itself before any open.
+4. At collection time, the runner walks the declared output path component by component from the sandbox root, calling `symlink_metadata` on every prefix of the joined path, not only on the final path. Any component that is a symbolic link fails the task, whether it is the final component or an intermediate directory, and whatever it points at, including a target inside the sandbox. Checking only the final path would let a symlinked intermediate directory carry the joined path outside the sandbox undetected, so the walk is the rule, not a hardening extra. A missing output marks the task Failed. A non-regular final component (directory, device, fifo) is rejected as an output.
+5. Input materialization follows the same component walk on the destination path inside the sandbox input area before writing any bytes, and rejects any symlink component the same way. The runner never follows a symlink out of the sandbox when collecting outputs or materializing inputs, because rules 4 and 5 reject every link component itself before any open through it.
 
 Undeclared files a task writes are ignored. They stay in the sandbox, are never collected, and the sandbox is scratch space the caller owns. Collection covers exactly the declared outputs, in sorted path order, each streamed into the store with its metadata captured as `(relative_path, content_sha256, byte_len, is_executable)`. `is_executable` on Unix is whether any execute bit is set in the mode. No timestamps, user ids, or group ids are captured anywhere. There is nothing time-shaped in an artifact record.
 
@@ -452,7 +482,7 @@ Swapping two digest pointers inside a manifest, editing a status, or flipping on
 1. Fetch the manifest blob and re-hash it. Mismatch against the requested digest fails with exit code 2.
 2. Parse the manifest bytes with the strict parser and re-encode them. Bytes that are not the canonical encoding of their own content fail with exit code 2.
 3. Recompute every task record digest and the Merkle root from the fields. A mismatch against the stored `merkle_root` fails with exit code 2 and names the stored and recomputed roots.
-4. Re-hash every artifact, stdout, and stderr blob the manifest names. The first mismatch fails with exit code 2 and names the expected digest, the actual digest, and the task and path that referenced it.
+4. Collect the set of distinct artifact, stdout, and stderr digests the manifest names, deduplicated by digest across all records, and re-hash each distinct blob exactly once, however many records reference it. The first mismatch fails with exit code 2 and names the expected digest, the actual digest, and one task and path that referenced it.
 
 ### 9.4 Diff
 
