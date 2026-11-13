@@ -17,6 +17,7 @@
 //! value form, and recomputes roots from record fields alone, which
 //! is the core of the verification algorithm (section 9.3).
 
+use crate::canonical;
 use crate::digest::{self, Digest, HasherFactory, TaskStatus};
 use crate::error::{CanonicalError, ManifestError};
 use crate::value::Value;
@@ -64,11 +65,19 @@ impl ArtifactRecord {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     #[must_use]
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "byte lengths are inside the safe integer domain by physical necessity (section 9.1), and the canonical encoder rejects any value outside it at encode time"
+    )]
     pub fn to_value(&self) -> Value {
-        panic!("verirun Milestone 2 Stage A: ArtifactRecord::to_value is not yet implemented")
+        Value::Object(vec![
+            ("path".to_string(), Value::String(self.path.clone())),
+            ("sha256".to_string(), Value::String(self.digest.to_hex())),
+            ("bytes".to_string(), Value::Number(self.bytes as f64)),
+            ("executable".to_string(), Value::Bool(self.executable)),
+        ])
     }
 
     /// Parses the value form back into a record.
@@ -80,11 +89,15 @@ impl ArtifactRecord {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     pub fn from_value(value: &Value) -> Result<Self, ManifestError> {
-        let _ = value;
-        panic!("verirun Milestone 2 Stage A: ArtifactRecord::from_value is not yet implemented")
+        let pairs = as_object(value, "artifact")?;
+        Ok(Self {
+            path: as_string(get(pairs, "path")?, "path")?.to_string(),
+            digest: as_digest(get(pairs, "sha256")?, "sha256")?,
+            bytes: as_bytes(get(pairs, "bytes")?, "bytes")?,
+            executable: as_bool(get(pairs, "executable")?, "executable")?,
+        })
     }
 }
 
@@ -145,12 +158,24 @@ impl TaskRecord {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     #[must_use]
     pub fn record_digest(&self, factory: &dyn HasherFactory) -> Digest {
-        let _ = factory;
-        panic!("verirun Milestone 2 Stage A: TaskRecord::record_digest is not yet implemented")
+        let framing: Vec<Digest> = self
+            .artifacts
+            .iter()
+            .map(|artifact| artifact.framing_digest(factory))
+            .collect();
+        digest::task_digest(
+            factory,
+            &self.task_id,
+            &self.exec_digest,
+            self.status,
+            self.exit_code,
+            &self.stdout_digest,
+            &self.stderr_digest,
+            &framing,
+        )
     }
 
     /// Every blob digest this record names, deduplicated by
@@ -160,22 +185,60 @@ impl TaskRecord {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     #[must_use]
     pub fn named_digests(&self) -> Vec<Digest> {
-        panic!("verirun Milestone 2 Stage A: TaskRecord::named_digests is not yet implemented")
+        let mut out: Vec<Digest> = Vec::new();
+        for digest in std::iter::once(&self.stdout_digest)
+            .chain(std::iter::once(&self.stderr_digest))
+            .chain(self.artifacts.iter().map(|artifact| &artifact.digest))
+        {
+            if !out.contains(digest) {
+                out.push(*digest);
+            }
+        }
+        out
     }
 
     /// The value form of section 9.1.
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     #[must_use]
     pub fn to_value(&self) -> Value {
-        panic!("verirun Milestone 2 Stage A: TaskRecord::to_value is not yet implemented")
+        let exit_code = self
+            .exit_code
+            .map_or(Value::Null, |code| Value::Number(f64::from(code)));
+        Value::Object(vec![
+            ("task_id".to_string(), Value::String(self.task_id.clone())),
+            (
+                "exec_digest".to_string(),
+                Value::String(self.exec_digest.to_hex()),
+            ),
+            (
+                "status".to_string(),
+                Value::String(self.status.as_str().to_string()),
+            ),
+            ("exit_code".to_string(), exit_code),
+            (
+                "stdout_sha256".to_string(),
+                Value::String(self.stdout_digest.to_hex()),
+            ),
+            (
+                "stderr_sha256".to_string(),
+                Value::String(self.stderr_digest.to_hex()),
+            ),
+            (
+                "artifacts".to_string(),
+                Value::Array(
+                    self.artifacts
+                        .iter()
+                        .map(ArtifactRecord::to_value)
+                        .collect(),
+                ),
+            ),
+        ])
     }
 
     /// Parses the value form back into a record.
@@ -187,11 +250,33 @@ impl TaskRecord {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     pub fn from_value(value: &Value) -> Result<Self, ManifestError> {
-        let _ = value;
-        panic!("verirun Milestone 2 Stage A: TaskRecord::from_value is not yet implemented")
+        let pairs = as_object(value, "task")?;
+        let artifacts = match get(pairs, "artifacts")? {
+            Value::Array(items) => {
+                let mut out = Vec::with_capacity(items.len());
+                for item in items {
+                    out.push(ArtifactRecord::from_value(item)?);
+                }
+                out
+            }
+            _ => {
+                return Err(ManifestError::WrongType {
+                    field: "artifacts",
+                    expected: "an array",
+                });
+            }
+        };
+        Ok(Self::new(
+            as_string(get(pairs, "task_id")?, "task_id")?.to_string(),
+            as_digest(get(pairs, "exec_digest")?, "exec_digest")?,
+            as_status(get(pairs, "status")?)?,
+            as_exit_code(get(pairs, "exit_code")?)?,
+            as_digest(get(pairs, "stdout_sha256")?, "stdout_sha256")?,
+            as_digest(get(pairs, "stderr_sha256")?, "stderr_sha256")?,
+            artifacts,
+        ))
     }
 }
 
@@ -214,12 +299,19 @@ impl Manifest {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     #[must_use]
-    pub fn build(factory: &dyn HasherFactory, records: Vec<TaskRecord>) -> Self {
-        let _ = (factory, records);
-        panic!("verirun Milestone 2 Stage A: Manifest::build is not yet implemented")
+    pub fn build(factory: &dyn HasherFactory, mut records: Vec<TaskRecord>) -> Self {
+        records.sort_by(|left, right| left.task_id.as_bytes().cmp(right.task_id.as_bytes()));
+        let leaves: Vec<Digest> = records
+            .iter()
+            .map(|record| record.record_digest(factory))
+            .collect();
+        let merkle_root = digest::merkle_root(factory, &leaves);
+        Self {
+            tasks: records,
+            merkle_root,
+        }
     }
 
     /// The Merkle root recomputed from the record fields alone,
@@ -228,12 +320,15 @@ impl Manifest {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     #[must_use]
     pub fn recompute_root(&self, factory: &dyn HasherFactory) -> Digest {
-        let _ = factory;
-        panic!("verirun Milestone 2 Stage A: Manifest::recompute_root is not yet implemented")
+        let leaves: Vec<Digest> = self
+            .tasks
+            .iter()
+            .map(|record| record.record_digest(factory))
+            .collect();
+        digest::merkle_root(factory, &leaves)
     }
 
     /// The value form of section 9.1: an object with `format`,
@@ -241,11 +336,23 @@ impl Manifest {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     #[must_use]
     pub fn to_value(&self) -> Value {
-        panic!("verirun Milestone 2 Stage A: Manifest::to_value is not yet implemented")
+        Value::Object(vec![
+            (
+                "format".to_string(),
+                Value::String(MANIFEST_FORMAT.to_string()),
+            ),
+            (
+                "merkle_root".to_string(),
+                Value::String(self.merkle_root.to_hex()),
+            ),
+            (
+                "tasks".to_string(),
+                Value::Array(self.tasks.iter().map(TaskRecord::to_value).collect()),
+            ),
+        ])
     }
 
     /// Parses the value form back into a manifest. The stored
@@ -260,11 +367,37 @@ impl Manifest {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     pub fn from_value(value: &Value) -> Result<Self, ManifestError> {
-        let _ = value;
-        panic!("verirun Milestone 2 Stage A: Manifest::from_value is not yet implemented")
+        let pairs = as_object(value, "manifest")?;
+        let format = as_string(get(pairs, "format")?, "format")?;
+        if format != MANIFEST_FORMAT {
+            return Err(ManifestError::WrongFormat {
+                found: format.to_string(),
+            });
+        }
+        let merkle_root = as_digest(get(pairs, "merkle_root")?, "merkle_root")?;
+        let mut tasks = match get(pairs, "tasks")? {
+            Value::Array(items) => {
+                let mut out = Vec::with_capacity(items.len());
+                for item in items {
+                    out.push(TaskRecord::from_value(item)?);
+                }
+                out
+            }
+            _ => {
+                return Err(ManifestError::WrongType {
+                    field: "tasks",
+                    expected: "an array",
+                });
+            }
+        };
+        // Records are stored sorted by task id, as in a built
+        // manifest. Sorting here means a stored order that differs
+        // re-encodes to different bytes, which verification
+        // reports as a non-canonical manifest (section 9.3).
+        tasks.sort_by(|left, right| left.task_id.as_bytes().cmp(right.task_id.as_bytes()));
+        Ok(Self { tasks, merkle_root })
     }
 
     /// The canonical bytes of the manifest: the bytes that are
@@ -277,10 +410,11 @@ impl Manifest {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the core implementation.
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, CanonicalError> {
-        panic!("verirun Milestone 2 Stage A: Manifest::canonical_bytes is not yet implemented")
+        let mut out = Vec::new();
+        canonical::encode(&self.to_value(), &mut out)?;
+        Ok(out)
     }
 
     /// The manifest digest: the blob digest of the canonical
@@ -288,11 +422,139 @@ impl Manifest {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Panics if a record field falls outside the canonical
+    /// number domain, which construction and parsing both
+    /// prevent: the failure is a programming error, not data.
     #[must_use]
     pub fn digest(&self, factory: &dyn HasherFactory) -> Digest {
-        let _ = factory;
-        panic!("verirun Milestone 2 Stage A: Manifest::digest is not yet implemented")
+        let bytes = self
+            .canonical_bytes()
+            .expect("manifest fields are in the canonical domain by construction");
+        digest::hash_bytes(factory, digest::DomainTag::Blob, &bytes)
+    }
+}
+
+const fn as_object<'a>(
+    value: &'a Value,
+    field: &'static str,
+) -> Result<&'a Vec<(String, Value)>, ManifestError> {
+    match value {
+        Value::Object(pairs) => Ok(pairs),
+        _ => Err(ManifestError::WrongType {
+            field,
+            expected: "an object",
+        }),
+    }
+}
+
+fn get<'a>(pairs: &'a [(String, Value)], field: &'static str) -> Result<&'a Value, ManifestError> {
+    pairs
+        .iter()
+        .find(|(key, _)| key == field)
+        .map(|(_, value)| value)
+        .ok_or(ManifestError::MissingField { field })
+}
+
+fn as_string<'a>(value: &'a Value, field: &'static str) -> Result<&'a str, ManifestError> {
+    match value {
+        Value::String(text) => Ok(text),
+        _ => Err(ManifestError::WrongType {
+            field,
+            expected: "a string",
+        }),
+    }
+}
+
+fn as_digest(value: &Value, field: &'static str) -> Result<Digest, ManifestError> {
+    let text = as_string(value, field)?;
+    Digest::from_hex(text).map_err(|source| ManifestError::InvalidDigest { field, source })
+}
+
+const fn as_bool(value: &Value, field: &'static str) -> Result<bool, ManifestError> {
+    match value {
+        Value::Bool(flag) => Ok(*flag),
+        _ => Err(ManifestError::WrongType {
+            field,
+            expected: "a boolean",
+        }),
+    }
+}
+
+/// The largest magnitude the canonical number domain admits,
+/// 2^53 - 1 (section 4.3).
+const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+
+#[allow(
+    clippy::float_cmp,
+    reason = "the domain checks are exactness tests on parsed values: a field is valid only when the number is exactly integral"
+)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the value is range-checked against 0..=9007199254740991 and exact integrality immediately before the conversion, so the conversion is exact"
+)]
+fn as_bytes(value: &Value, field: &'static str) -> Result<u64, ManifestError> {
+    match value {
+        Value::Number(number) => {
+            if *number < 0.0 || *number > MAX_SAFE_INTEGER || number.fract() != 0.0 {
+                return Err(ManifestError::InvalidNumber {
+                    field,
+                    detail: format!(
+                        "byte length must be an integer between 0 and 9007199254740991, found {number}"
+                    ),
+                });
+            }
+            Ok(*number as u64)
+        }
+        _ => Err(ManifestError::WrongType {
+            field,
+            expected: "a number",
+        }),
+    }
+}
+
+#[allow(
+    clippy::float_cmp,
+    reason = "the domain checks are exactness tests on parsed values: a field is valid only when the number is exactly integral"
+)]
+fn as_exit_code(value: &Value) -> Result<Option<i32>, ManifestError> {
+    match value {
+        Value::Null => Ok(None),
+        Value::Number(number) => {
+            if *number < f64::from(i32::MIN)
+                || *number > f64::from(i32::MAX)
+                || number.fract() != 0.0
+            {
+                return Err(ManifestError::InvalidNumber {
+                    field: "exit_code",
+                    detail: format!(
+                        "exit code must be an integer in the i32 range, found {number}"
+                    ),
+                });
+            }
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "the value was range-checked against the i32 bounds immediately above"
+            )]
+            Ok(Some(*number as i32))
+        }
+        _ => Err(ManifestError::WrongType {
+            field: "exit_code",
+            expected: "an integer or null",
+        }),
+    }
+}
+
+fn as_status(value: &Value) -> Result<TaskStatus, ManifestError> {
+    let text = as_string(value, "status")?;
+    match text {
+        "succeeded" => Ok(TaskStatus::Succeeded),
+        "failed" => Ok(TaskStatus::Failed),
+        "timed_out" => Ok(TaskStatus::TimedOut),
+        "cached" => Ok(TaskStatus::Cached),
+        "skipped" => Ok(TaskStatus::Skipped),
+        _ => Err(ManifestError::UnknownStatus {
+            found: text.to_string(),
+        }),
     }
 }

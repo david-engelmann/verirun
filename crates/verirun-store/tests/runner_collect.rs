@@ -88,8 +88,8 @@ fn fault_symlink_output_rejected() {
     );
     let dangling = task_json(
         "dangling",
-        "ln -s no-such-target outputs/out.txt",
-        &["out.txt"],
+        "ln -s no-such-target outputs/dangling.txt",
+        &["dangling.txt"],
     );
     let spec = format!(r#"{{"tasks":[{final_link},{middle_link},{dangling}]}}"#);
     let value = parse(spec.as_bytes()).expect("spec parses");

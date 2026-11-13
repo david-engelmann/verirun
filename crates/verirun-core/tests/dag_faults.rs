@@ -122,7 +122,7 @@ fn fault_missing_dependency() {
 
     // An id that differs only in trailing whitespace is a
     // different id, and missing.
-    let c = task("c").replace(r#""depends_on":[]}"#, r#""depends_on":["a "]"#);
+    let c = task("c").replace(r#""depends_on":[]}"#, r#""depends_on":["a "]}"#);
     let plain = task("a");
     assert_eq!(
         validate(&run(&[c, plain])),
@@ -148,8 +148,8 @@ fn fault_duplicate_task_id() {
 #[test]
 fn fault_colliding_outputs_incl_normalized() {
     // The same path claimed by two tasks.
-    let a = task("a").replace(r#""outputs":[]}"#, r#""outputs":["out.txt"]}"#);
-    let b = task("b").replace(r#""outputs":[]}"#, r#""outputs":["out.txt"]}"#);
+    let a = task("a").replace(r#""outputs":[]"#, r#""outputs":["out.txt"]"#);
+    let b = task("b").replace(r#""outputs":[]"#, r#""outputs":["out.txt"]"#);
     assert_eq!(
         validate(&run(&[a, b])),
         Err(DagError::CollidingOutput {
@@ -160,7 +160,7 @@ fn fault_colliding_outputs_incl_normalized() {
     );
 
     // The same path claimed twice by one task.
-    let solo = task("solo").replace(r#""outputs":[]}"#, r#""outputs":["x.txt","x.txt"]}"#);
+    let solo = task("solo").replace(r#""outputs":[]"#, r#""outputs":["x.txt","x.txt"]"#);
     assert_eq!(
         validate(&run(&[solo])),
         Err(DagError::CollidingOutput {
@@ -172,8 +172,8 @@ fn fault_colliding_outputs_incl_normalized() {
 
     // A collision that only exists after normalization: the two
     // spellings are one path.
-    let dotted = task("d").replace(r#""outputs":[]}"#, r#""outputs":["a/./b.txt"]}"#);
-    let plain = task("p").replace(r#""outputs":[]}"#, r#""outputs":["a/b.txt"]}"#);
+    let dotted = task("d").replace(r#""outputs":[]"#, r#""outputs":["a/./b.txt"]"#);
+    let plain = task("p").replace(r#""outputs":[]"#, r#""outputs":["a/b.txt"]"#);
     assert_eq!(
         validate(&run(&[dotted, plain])),
         Err(DagError::CollidingOutput {
@@ -184,8 +184,8 @@ fn fault_colliding_outputs_incl_normalized() {
     );
 
     // A leading dot component normalizes away as well.
-    let dotted = task("d").replace(r#""outputs":[]}"#, r#""outputs":["./x.txt"]}"#);
-    let plain = task("p").replace(r#""outputs":[]}"#, r#""outputs":["x.txt"]}"#);
+    let dotted = task("d").replace(r#""outputs":[]"#, r#""outputs":["./x.txt"]"#);
+    let plain = task("p").replace(r#""outputs":[]"#, r#""outputs":["x.txt"]"#);
     assert_eq!(
         validate(&run(&[dotted, plain])),
         Err(DagError::CollidingOutput {
@@ -217,8 +217,8 @@ fn fault_first_error_stable() {
     // (check 4).
     let a = task("a")
         .replace(r#""depends_on":[]}"#, r#""depends_on":["ghost"]}"#)
-        .replace(r#""outputs":[]}"#, r#""outputs":["o.txt"]}"#);
-    let b = task("b").replace(r#""outputs":[]}"#, r#""outputs":["o.txt"]}"#);
+        .replace(r#""outputs":[]"#, r#""outputs":["o.txt"]"#);
+    let b = task("b").replace(r#""outputs":[]"#, r#""outputs":["o.txt"]"#);
     assert_eq!(
         validate(&run(&[a, b])),
         Err(DagError::UnknownDependency {
@@ -242,7 +242,7 @@ fn fault_schema_rejection_table() {
         // A missing required field.
         run(&[r#"{"task_id":"a","executable":"run","env":{},"inputs":[],"outputs":[],"depends_on":[]}"#.to_string()]),
         // A wrong-typed field.
-        run(&[task("a").replace(r#""args":[]}"#, r#""args":"none"}"#)]),
+        run(&[task("a").replace(r#""args":[]"#, r#""args":"none""#)]),
         // An empty task id.
         run(&[task("")]),
         // An empty executable.

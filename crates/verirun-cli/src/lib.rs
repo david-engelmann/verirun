@@ -20,12 +20,15 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
+use verirun_core::dag::validate_run_spec;
 use verirun_core::digest::Digest;
 use verirun_core::error::{DagError, ParseError, VerifyError};
 use verirun_core::manifest::Manifest;
+use verirun_core::parse::parse;
 use verirun_store::cas_fs::Cas;
-use verirun_store::error::RunError;
-use verirun_store::scheduler::RunOutcome;
+use verirun_store::error::{RunError, StoreError};
+use verirun_store::scheduler::{self, RunOutcome};
+use verirun_store::sha256::Sha256Factory;
 
 /// An error at the command boundary. The exit code mapping of
 /// section 12.2 is total over this type: every variant maps to
@@ -64,11 +67,18 @@ impl CliError {
     ///
     /// # Panics
     ///
-    /// Panics in Milestone 2 Stage A: the interface is staged
-    /// ahead of its implementation, which lands in Stage B.
+    /// Never panics in the implementation.
     #[must_use]
-    pub fn exit_code(&self) -> i32 {
-        panic!("verirun Milestone 2 Stage A: CliError::exit_code is not yet implemented")
+    pub const fn exit_code(&self) -> i32 {
+        match self {
+            Self::Parse { .. } | Self::Dag { .. } => 3,
+            Self::Run { source } => match source {
+                RunError::Store {
+                    source: StoreError::Integrity { .. } | StoreError::Missing { .. },
+                } => 2,
+                RunError::Store { .. } | RunError::MissingInput { .. } => 3,
+            },
+        }
     }
 }
 
@@ -132,8 +142,7 @@ impl From<RunError> for CliError {
 ///
 /// # Panics
 ///
-/// Panics in Milestone 2 Stage A: the interface is staged ahead
-/// of its implementation, which lands in Stage B.
+/// Never panics in the implementation.
 pub fn run_spec_bytes(
     spec_bytes: &[u8],
     cas_root: &Path,
@@ -141,8 +150,11 @@ pub fn run_spec_bytes(
     inputs: &BTreeMap<String, Digest>,
     jobs: usize,
 ) -> Result<RunOutcome, CliError> {
-    let _ = (spec_bytes, cas_root, work_root, inputs, jobs);
-    panic!("verirun Milestone 2 Stage A: run_spec_bytes is not yet implemented")
+    let value = parse(spec_bytes)?;
+    let dag = validate_run_spec(&value)?;
+    let cas = Cas::open(cas_root).map_err(RunError::from)?;
+    let outcome = scheduler::run(&cas, &Sha256Factory, work_root, &dag, inputs, jobs)?;
+    Ok(outcome)
 }
 
 /// Verifies the manifest named by `expected` against `cas`.
@@ -160,9 +172,117 @@ pub fn run_spec_bytes(
 ///
 /// # Panics
 ///
-/// Panics in Milestone 2 Stage A: the interface is staged ahead
-/// of its implementation, which lands in Stage B.
+/// Never panics in the implementation.
 pub fn verify_manifest(cas: &Cas, expected: &Digest) -> Result<Manifest, VerifyError> {
-    let _ = (cas, expected);
-    panic!("verirun Milestone 2 Stage A: verify_manifest is not yet implemented")
+    // Check 1: the manifest blob re-hash. The store's verified
+    // read does the hashing; its outcomes map onto the first two
+    // variants. Any other store failure leaves the blob
+    // unretrievable, which this surface reports as missing.
+    let bytes = match cas.read_to_vec(expected) {
+        Ok(bytes) => bytes,
+        Err(StoreError::Integrity { actual, .. }) => {
+            return Err(VerifyError::ManifestDigestMismatch {
+                expected: *expected,
+                actual,
+            });
+        }
+        Err(_) => {
+            return Err(VerifyError::ManifestMissing { digest: *expected });
+        }
+    };
+
+    // Check 2: the canonical re-encode. Bytes that do not parse
+    // have no canonical form; a value that parses but does not
+    // read as a manifest is malformed; a manifest whose stored
+    // bytes differ from the canonical encoding of its content is
+    // non-canonical.
+    let value = parse(&bytes).map_err(|source| VerifyError::NonCanonicalManifest {
+        detail: format!("the manifest bytes do not parse: {source}"),
+    })?;
+    let manifest =
+        Manifest::from_value(&value).map_err(|source| VerifyError::MalformedManifest { source })?;
+    let reencoded =
+        manifest
+            .canonical_bytes()
+            .map_err(|source| VerifyError::NonCanonicalManifest {
+                detail: format!("re-encoding the manifest failed: {source}"),
+            })?;
+    if reencoded != bytes {
+        return Err(VerifyError::NonCanonicalManifest {
+            detail: "the stored bytes differ from the canonical encoding of their content"
+                .to_string(),
+        });
+    }
+
+    // Check 3: the Merkle root recomputation.
+    let recomputed = manifest.recompute_root(cas.factory());
+    if recomputed != manifest.merkle_root {
+        return Err(VerifyError::RootMismatch {
+            stored: manifest.merkle_root,
+            recomputed,
+        });
+    }
+
+    // Check 4: one re-hash of each distinct named blob, in
+    // first-reference order: for each record in stored order,
+    // its artifacts in path order, then its stdout, then its
+    // stderr (INV-LAT-3).
+    let mut references: Vec<(Digest, String, String)> = Vec::new();
+    for record in &manifest.tasks {
+        for artifact in &record.artifacts {
+            push_reference(
+                &mut references,
+                artifact.digest,
+                &record.task_id,
+                &artifact.path,
+            );
+        }
+        push_reference(
+            &mut references,
+            record.stdout_digest,
+            &record.task_id,
+            "stdout",
+        );
+        push_reference(
+            &mut references,
+            record.stderr_digest,
+            &record.task_id,
+            "stderr",
+        );
+    }
+    for (digest, task_id, path) in references {
+        match cas.read_to_vec(&digest) {
+            Ok(_) => {}
+            Err(StoreError::Integrity { actual, .. }) => {
+                return Err(VerifyError::BlobMismatch {
+                    expected: digest,
+                    actual,
+                    task_id,
+                    path,
+                });
+            }
+            Err(_) => {
+                return Err(VerifyError::BlobMissing {
+                    digest,
+                    task_id,
+                    path,
+                });
+            }
+        }
+    }
+    Ok(manifest)
+}
+
+/// Appends one blob reference unless its digest was already
+/// referenced, keeping first-reference order.
+fn push_reference(
+    references: &mut Vec<(Digest, String, String)>,
+    digest: Digest,
+    task_id: &str,
+    path: &str,
+) {
+    if references.iter().any(|(seen, _, _)| *seen == digest) {
+        return;
+    }
+    references.push((digest, task_id.to_string(), path.to_string()));
 }

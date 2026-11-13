@@ -29,7 +29,7 @@
 
 use std::fmt;
 
-use crate::error::PathError;
+use crate::error::{PathError, PathErrorKind};
 
 /// A declared path that passed validation, in normalized form.
 ///
@@ -81,9 +81,54 @@ impl AsRef<str> for NormalizedPath {
 ///
 /// # Panics
 ///
-/// Panics in Milestone 2 Stage A: the interface is staged ahead
-/// of its implementation, which lands in Stage B.
+/// Never panics in the core implementation: every failure is a
+/// [`PathError`].
 pub fn validate_path(declared: &str) -> Result<NormalizedPath, PathError> {
-    let _ = declared;
-    panic!("verirun Milestone 2 Stage A: validate_path is not yet implemented")
+    if declared.is_empty() {
+        return Err(PathError::new(
+            PathErrorKind::Empty,
+            declared.to_string(),
+            "the path is empty".to_string(),
+        ));
+    }
+    let bytes = declared.as_bytes();
+    if declared.starts_with('/')
+        || (bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':')
+    {
+        return Err(PathError::new(
+            PathErrorKind::Absolute,
+            declared.to_string(),
+            "the path is absolute; sandbox paths are relative".to_string(),
+        ));
+    }
+    if declared.contains('\\') {
+        return Err(PathError::new(
+            PathErrorKind::BackslashSeparator,
+            declared.to_string(),
+            "the path contains a backslash; the forward slash is the only separator spelling"
+                .to_string(),
+        ));
+    }
+    let mut components: Vec<&str> = Vec::new();
+    for component in declared.split('/') {
+        match component {
+            "" | "." => {}
+            ".." => {
+                return Err(PathError::new(
+                    PathErrorKind::ParentTraversal,
+                    declared.to_string(),
+                    "the path contains a parent component".to_string(),
+                ));
+            }
+            _ => components.push(component),
+        }
+    }
+    if components.is_empty() {
+        return Err(PathError::new(
+            PathErrorKind::Empty,
+            declared.to_string(),
+            "the path names no file after normalization".to_string(),
+        ));
+    }
+    Ok(NormalizedPath(components.join("/")))
 }
