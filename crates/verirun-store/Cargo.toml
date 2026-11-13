@@ -1,0 +1,20 @@
+[package]
+name = "verirun-store"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "I/O adapters for verirun. SHA-256 behind the core HasherFactory seam, and the crash-safe filesystem content-addressed store."
+keywords = ["content-addressed", "storage", "sha256", "atomic"]
+categories = ["filesystem"]
+
+[dependencies]
+verirun-core = { path = "../verirun-core" }
+sha2.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["crates/verirun-core", "crates/verirun-store"]
+
+[workspace.package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.85"
+repository = "https://github.com/david-engelmann/verirun"
+
+[workspace.dependencies]
+sha2 = "0.10"
+proptest = "1"
+
+[workspace.lints.clippy]
+all = "deny"
+pedantic = "deny"
+nursery = "deny"
+todo = "deny"
+unimplemented = "deny"
+allow_attributes_without_reason = "deny"
+
+[profile.dev]
+# This box is small. Keep dev builds light.
+debug = 1

@@ -1,0 +1,16 @@
+[package]
+name = "verirun-core"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Deterministic core for verirun. RFC 8785 canonical encoding, domain-separated digest framing, and content-addressed store contracts. Standard library only."
+keywords = ["canonicalization", "jcs", "rfc8785", "content-addressed", "deterministic"]
+categories = ["algorithms", "data-structures"]
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
