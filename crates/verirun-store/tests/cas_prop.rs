@@ -49,8 +49,8 @@ impl Drop for TempCas {
                     let entry_path = entry.path();
                     if entry_path.is_dir() {
                         clear_readonly(&entry_path);
-                    } else if let Ok(mut perms) = std::fs::metadata(&entry_path)
-                        .map(|meta| meta.permissions())
+                    } else if let Ok(mut perms) =
+                        std::fs::metadata(&entry_path).map(|meta| meta.permissions())
                     {
                         #[allow(
                             clippy::permissions_set_readonly_false,
@@ -85,7 +85,7 @@ proptest! {
         let digest = store.cas.put_bytes(&bytes).expect("put succeeds");
         prop_assert_eq!(digest, framed_digest(&bytes));
         let back = store.cas.read_to_vec(&digest).expect("get succeeds");
-        prop_assert_eq!(back, bytes.clone());
+        prop_assert_eq!(&back, &bytes);
         let again = store.cas.put_bytes(&bytes).expect("second put succeeds");
         prop_assert_eq!(again, digest);
         prop_assert_eq!(store.object_file_count(), 1);
@@ -99,5 +99,5 @@ fn empty_blob_roundtrip() {
     let digest = store.cas.put_bytes(&[]).expect("empty put succeeds");
     assert_eq!(digest, framed_digest(&[]));
     let back = store.cas.read_to_vec(&digest).expect("empty get succeeds");
-    assert!(back.is_empty());
+    assert_eq!(back.len(), 0);
 }

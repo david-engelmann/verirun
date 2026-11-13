@@ -42,13 +42,9 @@ fn remove_store(root: &Path) {
 
 #[test]
 fn stress_parallel_identical_and_distinct_puts() {
-    let root: PathBuf = std::env::temp_dir().join(format!(
-        "verirun-stress-{}",
-        std::process::id()
-    ));
+    let root: PathBuf = std::env::temp_dir().join(format!("verirun-stress-{}", std::process::id()));
     let cas = Arc::new(Cas::open(&root).expect("opens"));
-    let shared: Arc<Vec<u8>> =
-        Arc::new((0_u32..50_000).map(|i| (i % 249) as u8).collect());
+    let shared: Arc<Vec<u8>> = Arc::new((0_u32..50_000).map(|i| (i % 249) as u8).collect());
 
     let threads = 32;
     let barrier = Arc::new(Barrier::new(threads));
@@ -62,9 +58,7 @@ fn stress_parallel_identical_and_distinct_puts() {
             if index % 2 == 0 {
                 cas.put_bytes(&shared).expect("shared put")
             } else {
-                let distinct = format!("distinct payload {index}")
-                    .into_bytes()
-                    .repeat(200);
+                let distinct = format!("distinct payload {index}").into_bytes().repeat(200);
                 cas.put_bytes(&distinct).expect("distinct put")
             }
         }));
@@ -87,10 +81,10 @@ fn stress_parallel_identical_and_distinct_puts() {
     // digest of its content, and there are exactly 1 + 16 objects.
     let mut count = 0;
     let objects = root.join("objects");
-    for shard in std::fs::read_dir(&objects).expect("objects dir") {
-        let shard = shard.expect("shard");
-        if shard.path().is_dir() {
-            for object in std::fs::read_dir(shard.path()).expect("shard dir") {
+    for dir_entry in std::fs::read_dir(&objects).expect("objects dir") {
+        let dir = dir_entry.expect("shard entry");
+        if dir.path().is_dir() {
+            for object in std::fs::read_dir(dir.path()).expect("shard dir") {
                 let object = object.expect("object");
                 let content = std::fs::read(object.path()).expect("object bytes");
                 let name = object.file_name().to_string_lossy().into_owned();

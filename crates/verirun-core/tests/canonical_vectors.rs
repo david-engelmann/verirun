@@ -25,10 +25,7 @@ fn vec_utf16_discriminating_pair() {
     ])
     .expect("unique keys");
     let bytes = to_vec(&value).expect("encodes");
-    let expected = format!(
-        "{{\"a\":3,\"{}\":2,\"{}\":1}}",
-        "\u{1F600}", "\u{E000}"
-    );
+    let expected = format!("{{\"a\":3,\"{}\":2,\"{}\":1}}", "\u{1F600}", "\u{E000}");
     assert_eq!(String::from_utf8(bytes).expect("UTF-8"), expected);
 }
 
@@ -90,7 +87,10 @@ fn vec_number_domain_boundaries() {
     }
 
     let rejected: &[(f64, CanonicalErrorKind)] = &[
-        (9_007_199_254_740_992.0, CanonicalErrorKind::IntegerOutOfSafeRange),
+        (
+            9_007_199_254_740_992.0,
+            CanonicalErrorKind::IntegerOutOfSafeRange,
+        ),
         (1e20, CanonicalErrorKind::IntegerOutOfSafeRange),
         (1e21, CanonicalErrorKind::IntegerOutOfSafeRange),
         (1.5e21, CanonicalErrorKind::IntegerOutOfSafeRange),
@@ -137,7 +137,8 @@ fn vec_escaping_table() {
             '\u{0C}' => expected.push_str("\\f"),
             '\u{0D}' => expected.push_str("\\r"),
             c if (c as u32) < 0x20 => {
-                expected.push_str(&format!("\\u{:04x}", c as u32));
+                use std::fmt::Write as _;
+                let _ = write!(expected, "\\u{:04x}", c as u32);
             }
             c => expected.push(c),
         }

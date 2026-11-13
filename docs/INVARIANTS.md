@@ -278,7 +278,7 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-CAN-4 | V, P | `canonical_vectors::vec_rfc8785_appendix_b_in_domain`, `canonical_prop::prop_number_layout_matches_oracle` | M1 |
 | INV-CAN-5 | V, P | `canonical_vectors::vec_escaping_table`, `canonical_prop::prop_no_unlisted_escapes` | M1 |
 | INV-CAN-6 | F, P | `canonical_faults::fault_parser_rejection_table`, `canonical_prop::prop_parser_never_panics_on_truncation` | M1 |
-| INV-CAN-7 | F | `canonical_faults::fault_duplicate_env_key_in_run_file` (CLI level, exit 3) | M1, M3 |
+| INV-CAN-7 | F | `canonical_faults::fault_duplicate_key_rejected_at_construction` (core, M1), `canonical_faults::fault_duplicate_env_key_in_run_file` (CLI level, exit 3) | M1, M3 |
 | INV-HASH-1 | V | `digest_vectors::vec_domain_separation_prefixes` | M1 |
 | INV-HASH-2 | P | `digest_prop::prop_tuple_framing_injective` | M1 |
 | INV-HASH-3 | P | `digest_prop::prop_streaming_chunking_invariant` | M1 |

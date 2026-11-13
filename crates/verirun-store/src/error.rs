@@ -34,6 +34,8 @@ pub enum StoreStep {
     CreateLayout,
     /// Opening an object for reading.
     OpenObject,
+    /// Opening a source file for a `put_file`.
+    OpenSource,
     /// Streaming bytes out of an object.
     ReadObject,
     /// Writing bytes to a read destination.
@@ -55,6 +57,7 @@ impl fmt::Display for StoreStep {
             Self::SyncObjects => "sync objects directory",
             Self::CreateLayout => "create store layout",
             Self::OpenObject => "open object",
+            Self::OpenSource => "open source file",
             Self::ReadObject => "read object",
             Self::WriteDestination => "write destination",
             Self::RemoveTemp => "remove temp file",
@@ -107,7 +110,12 @@ impl fmt::Display for StoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io { path, step, source } => {
-                write!(f, "store I/O failure at {} on {}: {source}", step, path.display())
+                write!(
+                    f,
+                    "store I/O failure at {} on {}: {source}",
+                    step,
+                    path.display()
+                )
             }
             Self::CrossDevice {
                 root,
@@ -127,11 +135,9 @@ impl fmt::Display for StoreError {
                 "integrity failure at {}: expected digest {expected}, content hashes to {actual}",
                 path.display()
             ),
-            Self::Missing { digest, path } => write!(
-                f,
-                "missing object {digest} at {}",
-                path.display()
-            ),
+            Self::Missing { digest, path } => {
+                write!(f, "missing object {digest} at {}", path.display())
+            }
         }
     }
 }

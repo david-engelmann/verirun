@@ -7,13 +7,16 @@ use verirun_core::value::Value;
 
 /// In-domain numbers: safe integers, moderate fractions built from
 /// decimal parts, and small magnitudes from scientific construction.
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "test data generation spans the precision boundary on purpose; the generated f64 is the value under test, whatever it rounds to"
+)]
 fn arb_number() -> impl Strategy<Value = f64> {
     prop_oneof![
-        (-9_007_199_254_740_991_i64..=9_007_199_254_740_991_i64)
-            .prop_map(|i| i as f64),
+        (-9_007_199_254_740_991_i64..=9_007_199_254_740_991_i64).prop_map(|i| i as f64),
         (0_i64..1_000_000, 0_u32..1_000_000, 1_u32..7).prop_map(|(whole, frac, digits)| {
             let scale = 10_f64.powi(i32::try_from(digits).expect("small"));
-            whole as f64 + frac as f64 / scale / 1000.0
+            whole as f64 + f64::from(frac) / scale / 1000.0
         }),
         (1_i64..999, 7_u32..30).prop_filter_map("finite small", |(mantissa, exp)| {
             format!("{mantissa}e-{exp}").parse::<f64>().ok()
@@ -34,16 +37,14 @@ fn arb_value() -> impl Strategy<Value = Value> {
     let leaf = prop_oneof![
         Just(Value::Null),
         any::<bool>().prop_map(Value::Bool),
-        arb_number().prop_map(|n| Value::Number(n)),
+        arb_number().prop_map(Value::Number),
         arb_string().prop_map(Value::String),
     ];
     leaf.prop_recursive(4, 48, 6, |inner| {
         prop_oneof![
             prop::collection::vec(inner.clone(), 0..5).prop_map(Value::Array),
-            prop::collection::vec((arb_string(), inner), 0..5).prop_filter_map(
-                "unique keys",
-                |pairs| Value::object(pairs).ok(),
-            ),
+            prop::collection::vec((arb_string(), inner), 0..5)
+                .prop_filter_map("unique keys", |pairs| Value::object(pairs).ok(),),
         ]
     })
 }
@@ -177,13 +178,17 @@ fn oracle_format(value: f64) -> String {
         let zeros = usize::try_from(-n).expect("non-negative");
         format!("0.{}{}", "0".repeat(zeros), digits)
     } else if k == 1 {
-        format!("{digits}e{}{}", if n - 1 >= 0 { "+" } else { "-" }, (n - 1).abs())
+        format!(
+            "{digits}e{}{}",
+            if n > 0 { "+" } else { "-" },
+            (n - 1).abs()
+        )
     } else {
         format!(
             "{}.{}e{}{}",
             &digits[..1],
             &digits[1..],
-            if n - 1 >= 0 { "+" } else { "-" },
+            if n > 0 { "+" } else { "-" },
             (n - 1).abs()
         )
     };

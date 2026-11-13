@@ -29,13 +29,14 @@ impl Sha256Hasher {
 
     /// Feeds bytes, in stream order.
     pub fn update(&mut self, bytes: &[u8]) {
-        unimplemented!("Stage A contract; implemented in Stage B")
+        self.state.update(bytes);
     }
 
     /// Completes the computation and returns the digest.
     #[must_use]
     pub fn finalize(self) -> Digest {
-        unimplemented!("Stage A contract; implemented in Stage B")
+        let bytes: [u8; 32] = self.state.finalize().into();
+        Digest::from_bytes(bytes)
     }
 }
 
@@ -47,11 +48,11 @@ impl Default for Sha256Hasher {
 
 impl StreamingHasher for Sha256Hasher {
     fn update(&mut self, bytes: &[u8]) {
-        Sha256Hasher::update(self, bytes);
+        Self::update(self, bytes);
     }
 
     fn finalize(self: Box<Self>) -> Digest {
-        Sha256Hasher::finalize(*self)
+        Self::finalize(*self)
     }
 }
 
@@ -62,6 +63,6 @@ pub struct Sha256Factory;
 
 impl HasherFactory for Sha256Factory {
     fn new_hasher(&self, _tag: DomainTag) -> Box<dyn StreamingHasher> {
-        unimplemented!("Stage A contract; implemented in Stage B")
+        Box::new(Sha256Hasher::new())
     }
 }

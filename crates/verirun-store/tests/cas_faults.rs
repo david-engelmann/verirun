@@ -4,8 +4,8 @@
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Once;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use verirun_core::cas::PutPhase;
 use verirun_store::cas_fs::{Cas, PutObserver};
@@ -72,9 +72,7 @@ struct CrashAt {
 
 impl PutObserver for CrashAt {
     fn on_phase(&mut self, phase: PutPhase) {
-        if phase == self.phase {
-            panic!("simulated crash at {phase:?}");
-        }
+        assert!(phase != self.phase, "simulated crash at {phase:?}");
     }
 }
 
@@ -145,7 +143,10 @@ fn fault_stored_object_write_attempt() {
     let digest = cas.put_bytes(payload).expect("put succeeds");
     let path = cas.object_path(&digest);
     let metadata = std::fs::metadata(&path).expect("object exists");
-    assert!(metadata.permissions().readonly(), "object file is read-only");
+    assert!(
+        metadata.permissions().readonly(),
+        "object file is read-only"
+    );
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -170,10 +171,7 @@ fn fault_cross_device_tmp_refused() {
     let shm = Path::new("/dev/shm");
     assert!(shm.is_dir(), "this test needs /dev/shm as a second device");
     let root = fresh_root("xdev");
-    let target = shm.join(format!(
-        "verirun-fault-xdev-target-{}",
-        std::process::id()
-    ));
+    let target = shm.join(format!("verirun-fault-xdev-target-{}", std::process::id()));
     std::fs::create_dir_all(root.join("objects")).expect("objects dir");
     std::fs::create_dir_all(&target).expect("shm target dir");
     #[cfg(unix)]

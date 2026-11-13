@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use proptest::prelude::*;
 use verirun_core::digest::{
-    begin, exec_digest, Digest, DomainTag, HasherFactory, StreamingHasher, TupleHasher,
+    Digest, DomainTag, HasherFactory, StreamingHasher, TupleHasher, begin, exec_digest,
 };
 
 #[derive(Default)]
@@ -133,13 +133,6 @@ fn prop_exec_tuple_sensitivity() {
             "/bin/echo",
             &base_args,
             &env,
-            &[("other.txt".to_string(), input_entry)],
-            &base_outputs,
-        ),
-        frame(
-            "/bin/echo",
-            &base_args,
-            &env,
             &[("in.txt".to_string(), Digest::from_bytes(other_input))],
             &base_outputs,
         ),
@@ -149,13 +142,40 @@ fn prop_exec_tuple_sensitivity() {
     for variant in &variants {
         assert_ne!(&base, variant, "every field change moves the framing");
     }
-    // Insertion order of inputs and outputs does not move the framing.
-    let shuffled = frame(
+    // Paths bind through the pairing: with two inputs, swapping which
+    // digest belongs to which path moves the framing, while listing
+    // the same pairing in a different order does not.
+    let other_entry = Digest::from_bytes([0x99; 32]);
+    let paired = frame(
         "/bin/echo",
         &base_args,
         &env,
-        &base_inputs,
+        &[
+            ("a.txt".to_string(), input_entry),
+            ("b.txt".to_string(), other_entry),
+        ],
         &base_outputs,
     );
-    assert_eq!(base, shuffled);
+    let swapped = frame(
+        "/bin/echo",
+        &base_args,
+        &env,
+        &[
+            ("a.txt".to_string(), other_entry),
+            ("b.txt".to_string(), input_entry),
+        ],
+        &base_outputs,
+    );
+    assert_ne!(paired, swapped);
+    let reordered = frame(
+        "/bin/echo",
+        &base_args,
+        &env,
+        &[
+            ("b.txt".to_string(), other_entry),
+            ("a.txt".to_string(), input_entry),
+        ],
+        &base_outputs,
+    );
+    assert_eq!(paired, reordered);
 }

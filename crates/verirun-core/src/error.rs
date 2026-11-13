@@ -31,7 +31,7 @@ pub struct CanonicalError {
 impl CanonicalError {
     /// Creates an error with no source offset.
     #[must_use]
-    pub fn new(kind: CanonicalErrorKind, detail: String) -> Self {
+    pub const fn new(kind: CanonicalErrorKind, detail: String) -> Self {
         Self {
             kind,
             offset: None,
@@ -41,7 +41,7 @@ impl CanonicalError {
 
     /// Creates an error tied to a byte offset in a parsed source.
     #[must_use]
-    pub fn at_offset(kind: CanonicalErrorKind, offset: usize, detail: String) -> Self {
+    pub const fn at_offset(kind: CanonicalErrorKind, offset: usize, detail: String) -> Self {
         Self {
             kind,
             offset: Some(offset),
@@ -71,7 +71,11 @@ impl CanonicalError {
 impl fmt::Display for CanonicalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.offset {
-            Some(offset) => write!(f, "canonicalization error at byte {offset}: {}", self.detail),
+            Some(offset) => write!(
+                f,
+                "canonicalization error at byte {offset}: {}",
+                self.detail
+            ),
             None => write!(f, "canonicalization error: {}", self.detail),
         }
     }
@@ -125,7 +129,7 @@ pub struct ParseError {
 impl ParseError {
     /// Creates a parse error at a byte offset.
     #[must_use]
-    pub fn new(kind: ParseErrorKind, offset: usize, detail: String) -> Self {
+    pub const fn new(kind: ParseErrorKind, offset: usize, detail: String) -> Self {
         Self {
             kind,
             offset,
@@ -179,7 +183,7 @@ pub struct DigestError {
 impl DigestError {
     /// Creates a digest error.
     #[must_use]
-    pub fn new(kind: DigestErrorKind, detail: String) -> Self {
+    pub const fn new(kind: DigestErrorKind, detail: String) -> Self {
         Self { kind, detail }
     }
 

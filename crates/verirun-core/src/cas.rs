@@ -18,20 +18,24 @@ pub const STREAM_BUFFER_BYTES: usize = 64 * 1024;
 /// device only and carries no meaning.
 #[must_use]
 pub fn shard_prefix(digest: &Digest) -> String {
-    unimplemented!("Stage A contract; implemented in Stage B")
+    digest.to_hex()[..2].to_string()
 }
 
 /// The store-relative path of an object: `objects/<xx>/<digest>`.
 #[must_use]
 pub fn object_relative_path(digest: &Digest) -> PathBuf {
-    unimplemented!("Stage A contract; implemented in Stage B")
+    PathBuf::from("objects")
+        .join(shard_prefix(digest))
+        .join(digest.to_hex())
 }
 
 /// The store-relative path of a by-exec cache entry:
 /// `by-exec/<xx>/<exec digest>`.
 #[must_use]
 pub fn by_exec_relative_path(exec_digest: &Digest) -> PathBuf {
-    unimplemented!("Stage A contract; implemented in Stage B")
+    PathBuf::from("by-exec")
+        .join(shard_prefix(exec_digest))
+        .join(exec_digest.to_hex())
 }
 
 /// The temporary file name for a put whose digest is already known:
@@ -39,21 +43,22 @@ pub fn by_exec_relative_path(exec_digest: &Digest) -> PathBuf {
 /// Temporary names never enter any digest.
 #[must_use]
 pub fn temp_file_name_known(digest: &Digest, pid: u32, worker: u32, counter: u64) -> String {
-    unimplemented!("Stage A contract; implemented in Stage B")
+    format!("{}.{pid}.{worker}.{counter}.tmp", digest.to_hex())
 }
 
 /// The temporary file name for a streamed put, whose digest is known
 /// only at end of stream: `stream-<pid>.<worker>.<counter>.tmp`.
 #[must_use]
 pub fn temp_file_name_stream(pid: u32, worker: u32, counter: u64) -> String {
-    unimplemented!("Stage A contract; implemented in Stage B")
+    format!("stream-{pid}.{worker}.{counter}.tmp")
 }
 
-/// One phase of the put state machine of docs/ARCHITECTURE.md
-/// section 6.2. `verirun-store` drives a put through `Writing`,
-/// `FileSynced`, and `Renamed` to `Durable`. A put abandoned at any
-/// point before `Durable` leaves at most a temporary file for garbage
-/// collection.
+/// One phase of the put state machine.
+///
+/// The state machine is docs/ARCHITECTURE.md section 6.2.
+/// `verirun-store` drives a put through `Writing`, `FileSynced`, and
+/// `Renamed` to `Durable`. A put abandoned at any point before
+/// `Durable` leaves at most a temporary file for garbage collection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PutPhase {
     /// Bytes are streaming into the temporary file.
