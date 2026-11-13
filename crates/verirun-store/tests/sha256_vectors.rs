@@ -3,7 +3,7 @@
 //! chunking invariance through the factory seam.
 
 use sha2::Digest as _;
-use verirun_core::digest::{begin, hash_bytes, DomainTag};
+use verirun_core::digest::{DomainTag, begin, hash_bytes};
 use verirun_store::sha256::{Sha256Factory, Sha256Hasher};
 
 #[test]

@@ -99,8 +99,11 @@ jobs:
       - name: Print active seed
         if: steps.detect.outputs.has_cargo == 'true'
         run: echo "SIM_SEED=$SIM_SEED PROPTEST_CASES=$PROPTEST_CASES"
-      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+      - name: Install the pinned toolchain
         if: steps.detect.outputs.has_cargo == 'true'
+        run: |
+          rustup toolchain install
+          rustup show active-toolchain
       - name: Format
         if: steps.detect.outputs.has_cargo == 'true'
         run: cargo fmt --all -- --check

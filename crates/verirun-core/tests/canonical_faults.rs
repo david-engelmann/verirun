@@ -2,7 +2,7 @@
 
 use verirun_core::canonical::to_vec;
 use verirun_core::error::{CanonicalErrorKind, ParseErrorKind};
-use verirun_core::parse::{parse, MAX_DEPTH};
+use verirun_core::parse::{MAX_DEPTH, parse};
 use verirun_core::value::Value;
 
 #[test]

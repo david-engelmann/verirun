@@ -4,8 +4,8 @@
 use std::sync::{Arc, Mutex};
 
 use verirun_core::digest::{
-    begin, env_digest, exec_digest, task_digest, Digest, DomainTag, HasherFactory,
-    StreamingHasher, TaskStatus,
+    Digest, DomainTag, HasherFactory, StreamingHasher, TaskStatus, begin, env_digest, exec_digest,
+    task_digest,
 };
 
 #[derive(Default)]
@@ -188,12 +188,18 @@ fn digest_hex_roundtrip_and_rejection() {
     let digest = Digest::from_bytes([0x0A; 32]);
     let hex = digest.to_hex();
     assert_eq!(hex.len(), 64);
-    assert!(hex.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+    assert!(
+        hex.chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    );
     assert_eq!(Digest::from_hex(&hex).expect("roundtrip"), digest);
     assert_eq!(format!("{digest}"), hex);
 
     let err = Digest::from_hex("AB").expect_err("too short");
-    assert_eq!(err.kind(), verirun_core::error::DigestErrorKind::InvalidLength);
+    assert_eq!(
+        err.kind(),
+        verirun_core::error::DigestErrorKind::InvalidLength
+    );
     let upper = "AB".repeat(32);
     let err = Digest::from_hex(&upper).expect_err("uppercase rejected");
     assert_eq!(
