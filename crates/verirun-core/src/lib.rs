@@ -18,17 +18,22 @@
 //!   the execution tuple encoding.
 //! - [`cas`]: content-addressed store contracts. Path derivation and
 //!   temporary file naming as pure functions, plus the put phase model.
+//! - [`dag`]: task specifications, graph validation in the fixed order
+//!   of section 7.1, and Kahn ordering.
+//! - [`paths`]: sandbox relative path validation (section 8.4).
+//! - [`manifest`]: task records, manifests, and the Merkle construction
+//!   of section 9.
 //! - [`error`]: all core error types, each carrying diagnostic context.
-//!
-//! The `dag`, `paths`, and `manifest` modules of the architecture land
-//! in Milestone 2 with the scheduler.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 pub mod canonical;
 pub mod cas;
+pub mod dag;
 pub mod digest;
 pub mod error;
+pub mod manifest;
 pub mod parse;
+pub mod paths;
 pub mod value;

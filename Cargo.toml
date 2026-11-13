@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/verirun-core", "crates/verirun-store"]
+members = ["crates/verirun-core", "crates/verirun-store", "crates/verirun-cli"]
 
 [workspace.package]
 edition = "2024"

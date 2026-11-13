@@ -150,3 +150,58 @@ impl std::error::Error for StoreError {
         }
     }
 }
+
+/// A run failure: what aborts a run rather than failing one task
+/// (docs/ARCHITECTURE.md sections 7, 8, and 11).
+///
+/// Task-level failures (a nonzero exit, a spawn failure, a missing
+/// or linked output at collection) are outcomes recorded in the
+/// manifest, never errors on this type. This type carries the
+/// failures that stop the run itself: store failures, including
+/// the integrity failure a corrupted input blob raises before its
+/// task starts (section 6.4), and inputs that no producer and no
+/// caller binding resolves.
+#[derive(Debug)]
+pub enum RunError {
+    /// A store failure during the run.
+    Store {
+        /// The store failure.
+        source: StoreError,
+    },
+    /// A task declares an input path that no dependency produced
+    /// and the caller did not bind. Raised before any task in the
+    /// run executes, so a run never starts on unresolvable inputs.
+    MissingInput {
+        /// The task declaring the input.
+        task_id: String,
+        /// The normalized input path that resolves nowhere.
+        path: String,
+    },
+}
+
+impl fmt::Display for RunError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Store { source } => write!(f, "run aborted by a store failure: {source}"),
+            Self::MissingInput { task_id, path } => write!(
+                f,
+                "task {task_id:?} declares input {path:?}, which no dependency produced and the caller did not bind"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for RunError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Store { source } => Some(source),
+            Self::MissingInput { .. } => None,
+        }
+    }
+}
+
+impl From<StoreError> for RunError {
+    fn from(source: StoreError) -> Self {
+        Self::Store { source }
+    }
+}
