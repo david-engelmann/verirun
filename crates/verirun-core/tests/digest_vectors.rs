@@ -120,7 +120,7 @@ fn vec_task_framing_fixed() {
     let stdout = Digest::from_bytes([0x55; 32]);
     let stderr = Digest::from_bytes([0x66; 32]);
     let artifact = Digest::from_bytes([0x77; 32]);
-    task_digest(
+    let _framed = task_digest(
         &factory,
         "build",
         &exec,
@@ -144,7 +144,7 @@ fn vec_task_framing_fixed() {
     // With an exit code present, the presence byte is 1 and the i32
     // follows in little-endian.
     let factory = RecordingFactory::default();
-    task_digest(
+    let _framed = task_digest(
         &factory,
         "build",
         &exec,
@@ -173,7 +173,7 @@ fn vec_env_sorting_and_framing() {
         ("A".to_string(), "1".to_string()),
     ];
     let factory = RecordingFactory::default();
-    env_digest(&factory, &pairs);
+    let _framed = env_digest(&factory, &pairs);
     let mut expected = framed(DomainTag::Env);
     expected.extend_from_slice(&2_u64.to_le_bytes());
     push_text(&mut expected, "A");

@@ -56,7 +56,7 @@ fn frame_fields(fields: &[String]) -> Vec<u8> {
     for field in fields {
         tuple.write_text(field);
     }
-    tuple.finalize();
+    let _framed = tuple.finalize();
     factory.take()
 }
 
@@ -101,7 +101,7 @@ fn prop_exec_tuple_sensitivity() {
                  inputs: &[(String, Digest)],
                  outputs: &[String]| {
         let factory = RecordingFactory::default();
-        exec_digest(&factory, executable, args, env, inputs, outputs);
+        let _framed = exec_digest(&factory, executable, args, env, inputs, outputs);
         factory.take()
     };
     let base_args = vec!["a".to_string(), "b".to_string()];

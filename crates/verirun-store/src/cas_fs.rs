@@ -22,7 +22,7 @@ use verirun_core::cas::{
     PutPhase, STREAM_BUFFER_BYTES, object_relative_path, temp_file_name_known,
     temp_file_name_stream,
 };
-use verirun_core::digest::{Digest, DomainTag, HasherFactory, begin, hash_bytes};
+use verirun_core::digest::{Digest, DomainTag, begin, hash_bytes};
 
 use crate::error::{StoreError, StoreStep};
 use crate::sha256::Sha256Factory;
