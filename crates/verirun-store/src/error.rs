@@ -42,6 +42,21 @@ pub enum StoreStep {
     WriteDestination,
     /// Removing a discarded temporary file.
     RemoveTemp,
+    /// Creating a manifest pin file.
+    CreatePin,
+    /// Syncing the pins directory after a pin change.
+    SyncPin,
+    /// Removing a manifest pin file.
+    RemovePin,
+    /// Listing the pins directory.
+    ListPins,
+    /// Listing the objects or temporary directories for a
+    /// collection plan.
+    ListObjects,
+    /// Removing an object during a collection sweep.
+    RemoveObject,
+    /// Creating the collection lock file.
+    CreateLock,
 }
 
 impl fmt::Display for StoreStep {
@@ -61,6 +76,13 @@ impl fmt::Display for StoreStep {
             Self::ReadObject => "read object",
             Self::WriteDestination => "write destination",
             Self::RemoveTemp => "remove temp file",
+            Self::CreatePin => "create pin file",
+            Self::SyncPin => "sync pins directory",
+            Self::RemovePin => "remove pin file",
+            Self::ListPins => "list pins directory",
+            Self::ListObjects => "list objects",
+            Self::RemoveObject => "remove object",
+            Self::CreateLock => "create collection lock",
         };
         f.write_str(name)
     }

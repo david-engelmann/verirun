@@ -32,12 +32,16 @@ pub fn run(
     work_root: &Path,
     jobs: usize,
 ) -> Result<RunOutcome, CliError> {
-    // Stage A stub: the pipeline composition lands in Stage B.
-    let _ = cas_root;
-    let _ = work_root;
-    let _ = jobs;
-    Err(CliError::SpecIo {
-        path: spec_path.to_path_buf(),
-        source: std::io::Error::other("the run command lands in Milestone 3 Stage B"),
-    })
+    let dag = crate::spec_io::load_run_spec(spec_path)?;
+    let cas =
+        verirun_store::cas_fs::Cas::open(cas_root).map_err(verirun_store::error::RunError::from)?;
+    let outcome = verirun_store::scheduler::run(
+        &cas,
+        &verirun_store::sha256::Sha256Factory,
+        work_root,
+        &dag,
+        &std::collections::BTreeMap::new(),
+        jobs,
+    )?;
+    Ok(outcome)
 }

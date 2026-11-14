@@ -106,10 +106,19 @@ pub fn reachable_objects(
     pinned: &[(Digest, Manifest)],
     by_exec_records: &BTreeMap<Digest, Digest>,
 ) -> BTreeSet<Digest> {
-    // Stage A stub: the reachability walk lands in Stage B.
-    let _ = pinned;
-    let _ = by_exec_records;
-    BTreeSet::new()
+    let mut reachable = BTreeSet::new();
+    for (manifest_digest, manifest) in pinned {
+        reachable.insert(*manifest_digest);
+        for record in &manifest.tasks {
+            for digest in record.named_digests() {
+                reachable.insert(digest);
+            }
+            if let Some(record_blob) = by_exec_records.get(&record.exec_digest) {
+                reachable.insert(*record_blob);
+            }
+        }
+    }
+    reachable
 }
 
 /// Selects the sweep candidates among the stored objects
@@ -132,11 +141,11 @@ pub fn sweep_candidates(
     reachable: &BTreeSet<Digest>,
     grace_secs: u64,
 ) -> Vec<Digest> {
-    // Stage A stub: the candidate filter lands in Stage B.
-    let _ = objects;
-    let _ = reachable;
-    let _ = grace_secs;
-    Vec::new()
+    objects
+        .iter()
+        .filter(|(digest, age)| !reachable.contains(digest) && **age > grace_secs)
+        .map(|(digest, _)| *digest)
+        .collect()
 }
 
 /// Whether a temporary file of this age is stale (section 10,
@@ -148,8 +157,5 @@ pub fn sweep_candidates(
 /// same strict one as for objects.
 #[must_use]
 pub const fn temp_is_stale(age_secs: u64, grace_secs: u64) -> bool {
-    // Stage A stub: the comparison lands in Stage B.
-    let _ = age_secs;
-    let _ = grace_secs;
-    false
+    age_secs > grace_secs
 }

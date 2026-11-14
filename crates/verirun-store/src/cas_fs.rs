@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use verirun_core::cas::{
-    PutPhase, STREAM_BUFFER_BYTES, object_relative_path, temp_file_name_known,
+    PutPhase, STREAM_BUFFER_BYTES, object_relative_path, pin_relative_path, temp_file_name_known,
     temp_file_name_stream,
 };
 use verirun_core::digest::{Digest, DomainTag, begin, hash_bytes};
@@ -165,9 +165,20 @@ impl Cas {
         reason = "the implementation performs filesystem I/O; it cannot be const"
     )]
     pub fn pin_manifest(&self, digest: &Digest) -> Result<(), StoreError> {
-        // Stage A stub: pin file creation lands in Stage B.
-        let _ = digest;
-        Ok(())
+        let path = self.root.join(pin_relative_path(digest));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => {
+                file.sync_all()
+                    .map_err(|err| io_error(&path, StoreStep::SyncFile, err))?;
+                sync_directory(path.parent().unwrap_or(&self.root), StoreStep::SyncPin)
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+            Err(err) => Err(io_error(&path, StoreStep::CreatePin, err)),
+        }
     }
 
     /// Removes a manifest's pin. Unpinning a manifest that is
@@ -187,9 +198,12 @@ impl Cas {
         reason = "the implementation performs filesystem I/O; it cannot be const"
     )]
     pub fn unpin_manifest(&self, digest: &Digest) -> Result<(), StoreError> {
-        // Stage A stub: pin file removal lands in Stage B.
-        let _ = digest;
-        Ok(())
+        let path = self.root.join(pin_relative_path(digest));
+        match std::fs::remove_file(&path) {
+            Ok(()) => sync_directory(path.parent().unwrap_or(&self.root), StoreStep::SyncPin),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(io_error(&path, StoreStep::RemovePin, err)),
+        }
     }
 
     /// Lists the digests of all pinned manifests, in digest
@@ -212,8 +226,25 @@ impl Cas {
         reason = "the implementation performs filesystem I/O; it cannot be const"
     )]
     pub fn pinned_manifests(&self) -> Result<Vec<Digest>, StoreError> {
-        // Stage A stub: the pin listing lands in Stage B.
-        Ok(Vec::new())
+        let pins_dir = self.root.join("pins");
+        let entries = std::fs::read_dir(&pins_dir)
+            .map_err(|err| io_error(&pins_dir, StoreStep::ListPins, err))?;
+        let mut digests = Vec::new();
+        for entry in entries {
+            let entry = entry.map_err(|err| io_error(&pins_dir, StoreStep::ListPins, err))?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let Some(stem) = name.strip_suffix(".pin") else {
+                continue;
+            };
+            if let Ok(digest) = Digest::from_hex(stem) {
+                digests.push(digest);
+            }
+        }
+        digests.sort();
+        Ok(digests)
     }
 
     /// Puts in-memory bytes, whose digest is computed before the temp

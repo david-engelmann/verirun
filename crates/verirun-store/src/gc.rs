@@ -14,10 +14,21 @@
 //! determinism boundary: it changes what is stored, never what
 //! a digest means.
 
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use verirun_core::cas::{
+    by_exec_relative_path, reachable_objects, sweep_candidates, temp_is_stale,
+};
+use verirun_core::digest::Digest;
+use verirun_core::manifest::Manifest;
+use verirun_core::parse::parse;
+
 use crate::cas_fs::Cas;
-use crate::error::GcError;
+use crate::clock;
+use crate::error::{GcError, StoreError, StoreStep};
 
 /// The outcome of one collection: what was deleted, or on a
 /// dry run what would be deleted.
@@ -99,9 +110,214 @@ pub fn collect(
     dry_run: bool,
     now: SystemTime,
 ) -> Result<GcReport, GcError> {
-    // Stage A stub: the three phases land in Stage B.
-    let _ = cas;
-    let _ = grace_secs;
-    let _ = now;
-    Ok(GcReport::new(dry_run))
+    // Phase 1, mark: read and parse every pinned manifest,
+    // with the by-exec record blobs those manifests use.
+    let pinned = read_pinned_manifests(cas)?;
+    let by_exec_records = read_by_exec_entries(cas, &pinned);
+    let reachable = reachable_objects(&pinned, &by_exec_records);
+
+    // Phase 2, plan: age every object and temporary file
+    // against the one clock read.
+    let mut report = GcReport::new(dry_run);
+    report.reachable = reachable.len();
+    let objects_dir = cas.root().join("objects");
+    let mut ages: BTreeMap<Digest, u64> = BTreeMap::new();
+    let mut sizes: BTreeMap<Digest, u64> = BTreeMap::new();
+    for shard in list_dir(&objects_dir)? {
+        if !shard.is_dir() {
+            continue;
+        }
+        for file in list_dir(&shard)? {
+            let Some(name) = file
+                .file_name()
+                .and_then(|name| name.to_str().map(str::to_owned))
+            else {
+                continue;
+            };
+            let Ok(digest) = Digest::from_hex(&name) else {
+                continue;
+            };
+            let (age, size) = age_and_size(&file, now)?;
+            ages.insert(digest, age);
+            sizes.insert(digest, size);
+        }
+    }
+    let candidates = sweep_candidates(&ages, &reachable, grace_secs);
+    report.objects = candidates.len();
+    report.object_bytes = candidates
+        .iter()
+        .filter_map(|digest| sizes.get(digest))
+        .sum();
+
+    let tmp_dir = cas.root().join("tmp");
+    let mut tmp_plan: Vec<PathBuf> = Vec::new();
+    for file in list_dir(&tmp_dir)? {
+        if !file.is_file() {
+            continue;
+        }
+        let (age, size) = age_and_size(&file, now)?;
+        if temp_is_stale(age, grace_secs) {
+            tmp_plan.push(file);
+            report.tmp_bytes += size;
+        }
+    }
+    report.tmp_files = tmp_plan.len();
+
+    if dry_run {
+        return Ok(report);
+    }
+
+    // Phase 3, sweep: under the lock, delete exactly the plan.
+    let _lock = LockGuard::take(&cas.root().join("gc.lock"))?;
+    for digest in &candidates {
+        let path = cas.object_path(digest);
+        fs::remove_file(&path).map_err(|source| GcError::Store {
+            source: StoreError::Io {
+                path: path.clone(),
+                step: StoreStep::RemoveObject,
+                source,
+            },
+        })?;
+    }
+    for path in &tmp_plan {
+        fs::remove_file(path).map_err(|source| GcError::Store {
+            source: StoreError::Io {
+                path: path.clone(),
+                step: StoreStep::RemoveTemp,
+                source,
+            },
+        })?;
+    }
+    Ok(report)
+}
+
+/// Reads and parses every pinned manifest. A pin whose
+/// manifest cannot be produced stops the sweep: deleting
+/// around a broken pin could destroy exactly the reachability
+/// the pin protects (INV-GC-1).
+fn read_pinned_manifests(cas: &Cas) -> Result<Vec<(Digest, Manifest)>, GcError> {
+    let mut pinned: Vec<(Digest, Manifest)> = Vec::new();
+    for digest in cas.pinned_manifests()? {
+        let bytes = match cas.read_to_vec(&digest) {
+            Ok(bytes) => bytes,
+            Err(StoreError::Missing { .. }) => {
+                return Err(GcError::MissingPinnedManifest { digest });
+            }
+            Err(StoreError::Integrity { actual, .. }) => {
+                return Err(GcError::InvalidPinnedManifest {
+                    digest,
+                    detail: format!("the stored bytes hash to {actual}"),
+                });
+            }
+            Err(source) => return Err(GcError::Store { source }),
+        };
+        let value = parse(&bytes).map_err(|source| GcError::InvalidPinnedManifest {
+            digest,
+            detail: format!("the stored bytes do not parse: {source}"),
+        })?;
+        let manifest =
+            Manifest::from_value(&value).map_err(|source| GcError::InvalidPinnedManifest {
+                digest,
+                detail: format!("the stored bytes are not a manifest: {source}"),
+            })?;
+        pinned.push((digest, manifest));
+    }
+    Ok(pinned)
+}
+
+/// The by-exec entries the pinned records use. An absent or
+/// malformed entry names nothing, exactly as the cache lookup
+/// treats it: a miss, never an error.
+fn read_by_exec_entries(cas: &Cas, pinned: &[(Digest, Manifest)]) -> BTreeMap<Digest, Digest> {
+    let mut by_exec_records: BTreeMap<Digest, Digest> = BTreeMap::new();
+    for (_, manifest) in pinned {
+        for record in &manifest.tasks {
+            let entry_path = cas.root().join(by_exec_relative_path(&record.exec_digest));
+            if let Ok(text) = fs::read_to_string(&entry_path) {
+                if let Ok(record_blob) = Digest::from_hex(text.trim()) {
+                    by_exec_records.insert(record.exec_digest, record_blob);
+                }
+            }
+        }
+    }
+    by_exec_records
+}
+
+/// Lists one directory's entries as paths.
+fn list_dir(dir: &Path) -> Result<Vec<PathBuf>, GcError> {
+    let entries = fs::read_dir(dir).map_err(|source| GcError::Store {
+        source: StoreError::Io {
+            path: dir.to_path_buf(),
+            step: StoreStep::ListObjects,
+            source,
+        },
+    })?;
+    let mut paths = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|source| GcError::Store {
+            source: StoreError::Io {
+                path: dir.to_path_buf(),
+                step: StoreStep::ListObjects,
+                source,
+            },
+        })?;
+        paths.push(entry.path());
+    }
+    Ok(paths)
+}
+
+/// One file's age against `now` and its byte size, from its
+/// metadata.
+fn age_and_size(path: &Path, now: SystemTime) -> Result<(u64, u64), GcError> {
+    let metadata = fs::metadata(path).map_err(|source| GcError::Store {
+        source: StoreError::Io {
+            path: path.to_path_buf(),
+            step: StoreStep::ListObjects,
+            source,
+        },
+    })?;
+    let modified = metadata.modified().map_err(|source| GcError::Store {
+        source: StoreError::Io {
+            path: path.to_path_buf(),
+            step: StoreStep::ListObjects,
+            source,
+        },
+    })?;
+    Ok((clock::age_secs(now, modified), metadata.len()))
+}
+
+/// The held `gc.lock`: an exclusive create-new file whose
+/// removal on drop ends the sweep, however it ends.
+struct LockGuard {
+    path: PathBuf,
+}
+
+impl LockGuard {
+    fn take(path: &Path) -> Result<Self, GcError> {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+        {
+            Ok(_file) => Ok(Self {
+                path: path.to_path_buf(),
+            }),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Err(GcError::LockHeld {
+                path: path.to_path_buf(),
+            }),
+            Err(source) => Err(GcError::Store {
+                source: StoreError::Io {
+                    path: path.to_path_buf(),
+                    step: StoreStep::CreateLock,
+                    source,
+                },
+            }),
+        }
+    }
+}
+
+impl Drop for LockGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
 }

@@ -489,6 +489,8 @@ Swapping two digest pointers inside a manifest, editing a status, or flipping on
 
 `verirun diff <run_a> <run_b>` loads two manifests, verifies both under section 9.3, then compares records by task id. It reports tasks present on one side only, tasks whose status or exit code changed, and tasks whose artifact or log digests changed, in task id order. Exit code is 0 when the runs are equivalent in all compared fields, 1 when they differ, and 2 when either side fails verification. Machine output with `--json` carries the same comparison as structured data.
 
+Comparison covers exactly the fields named above. Two records whose execution digests differ while every compared field matches are equivalent under diff. The execution digest is a cause, and diff reports effects. The comparison itself is pure core code (`manifest::diff_manifests`); the command verifies both sides first and maps a verification failure to exit 2, never to a mere difference.
+
 ## 10. Garbage collection
 
 `verirun gc` works in three phases, and `--dry-run` stops after the second:
@@ -498,6 +500,10 @@ Swapping two digest pointers inside a manifest, editing a status, or flipping on
 3. Sweep. Take `gc.lock` by create-new, failing cleanly when another sweep holds it. Delete the planned files. Report counts and reclaimed bytes. Dry run prints the same plan and deletes nothing.
 
 GC reads wall-clock time for ages. That is why GC planning takes ages as inputs in core and reads the clock only in the adapter (`verirun-store::clock`). Deterministic code never decides anything from a clock. GC itself is a maintenance operation outside the determinism boundary: it changes what is stored, never what a digest means.
+
+Pins are files created through the store API (`Cas::pin_manifest`). Nothing pins automatically. In particular a run does not pin its own manifest, so an unpinned manifest and the blobs only it names become sweep candidates once they age past the grace threshold. A file in `pins/` whose name is not a digest with the `.pin` suffix is ignored by the pin listing.
+
+A pin whose manifest is missing, or whose bytes fail verification or parsing, stops the collection before anything is swept (`GcError::MissingPinnedManifest` or `GcError::InvalidPinnedManifest`, exit 2). Deleting around a broken pin could destroy exactly the reachability the pin protects. By-exec entries are read for reachability only when a pinned record names the execution digest, and an absent or malformed entry names nothing. Entries themselves are never swept. Objects are never re-hashed during planning. The name is the index.
 
 ## 11. Error model
 
@@ -529,6 +535,8 @@ verirun gc --cas <dir> [--grace-secs <u64>] [--dry-run] [--json]
 
 `run` prints the manifest digest on stdout on success. Every command prints the active seed to stderr on every run, where the seed comes from `--seed`, else the `SIM_SEED` environment variable, else the default 0. Execution itself does not consume randomness today. The seed governs property runners, simulation tooling, and any future randomized scheduling experiments, and printing it always keeps the reproduction habit in place before it is needed. `--json` renders a structured result object with the same information content as the text output.
 
+The `--seed` argument is global. It may appear before or after the subcommand, and the seed line prints after argument parsing succeeds, before the command runs. A `SIM_SEED` value that is not an unsigned integer is a configuration error and exits 3. Help and version output exit 0. A run that produces a manifest prints the manifest digest on stdout even when tasks failed, with the failed tasks named on stderr and the exit code carrying the verdict. The run command passes no caller input bindings, so a declared input that no task in the run produces fails as a missing input and exits 3.
+
 ### 12.2 Exit codes
 
 | Code | Meaning | Raised by |
@@ -539,6 +547,8 @@ verirun gc --cas <dir> [--grace-secs <u64>] [--dry-run] [--json]
 | 3 | Invalid input. | Schema and DAG validation, canonicalization and parse errors, path rule violations, argument parsing errors, CAS layout misconfiguration such as a cross-device `tmp/`. |
 
 Argument parsing needs one deliberate override. The argument library's default exit code for usage errors is 2, which would collide with the integrity code. The CLI intercepts parse failures and exits 3. There is no path by which a usage error reports as tampering.
+
+A verify or diff argument that is a well-formed digest naming no object is an integrity failure and exits 2, because the first check of section 9.3 cannot produce the manifest. A malformed digest argument is invalid input and exits 3. A collection stopped by a broken pin exits 2. A collection that finds `gc.lock` already held exits 3, a store state rather than tampering.
 
 ## 13. Verification strategy
 

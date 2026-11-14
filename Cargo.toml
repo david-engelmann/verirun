@@ -11,6 +11,7 @@ repository = "https://github.com/david-engelmann/verirun"
 [workspace.dependencies]
 sha2 = "0.10"
 proptest = "1"
+clap = "4"
 serde_json = "1"
 
 [workspace.lints.clippy]

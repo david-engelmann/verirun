@@ -29,9 +29,11 @@ use crate::CliError;
 ///
 /// Never panics in the implementation.
 pub fn load_run_spec(path: &Path) -> Result<ValidatedDag, CliError> {
-    // Stage A stub: the load lands in Stage B.
-    Err(CliError::SpecIo {
+    let bytes = std::fs::read(path).map_err(|source| CliError::SpecIo {
         path: path.to_path_buf(),
-        source: std::io::Error::other("run file loading lands in Milestone 3 Stage B"),
-    })
+        source,
+    })?;
+    let value = verirun_core::parse::parse(&bytes)?;
+    let dag = verirun_core::dag::validate_run_spec(&value)?;
+    Ok(dag)
 }

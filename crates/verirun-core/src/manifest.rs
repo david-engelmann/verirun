@@ -629,8 +629,49 @@ pub struct TaskDiff {
 )]
 #[must_use]
 pub fn diff_manifests(first: &Manifest, second: &Manifest) -> Vec<TaskDiff> {
-    // Stage A stub: the comparison lands in Stage B.
-    let _ = first;
-    let _ = second;
-    Vec::new()
+    let first_by_id: std::collections::BTreeMap<&str, &TaskRecord> = first
+        .tasks
+        .iter()
+        .map(|record| (record.task_id.as_str(), record))
+        .collect();
+    let second_by_id: std::collections::BTreeMap<&str, &TaskRecord> = second
+        .tasks
+        .iter()
+        .map(|record| (record.task_id.as_str(), record))
+        .collect();
+    let ids: std::collections::BTreeSet<&str> = first_by_id
+        .keys()
+        .chain(second_by_id.keys())
+        .copied()
+        .collect();
+    let mut differences = Vec::new();
+    for task_id in ids {
+        match (first_by_id.get(task_id), second_by_id.get(task_id)) {
+            (Some(_), None) => differences.push(TaskDiff {
+                task_id: task_id.to_string(),
+                difference: TaskDifference::OnlyInFirst,
+            }),
+            (None, Some(_)) => differences.push(TaskDiff {
+                task_id: task_id.to_string(),
+                difference: TaskDifference::OnlyInSecond,
+            }),
+            (Some(left), Some(right)) => {
+                let fields = ChangedFields {
+                    status: left.status != right.status,
+                    exit_code: left.exit_code != right.exit_code,
+                    artifacts: left.artifacts != right.artifacts,
+                    stdout: left.stdout_digest != right.stdout_digest,
+                    stderr: left.stderr_digest != right.stderr_digest,
+                };
+                if fields.any() {
+                    differences.push(TaskDiff {
+                        task_id: task_id.to_string(),
+                        difference: TaskDifference::Changed(fields),
+                    });
+                }
+            }
+            (None, None) => {}
+        }
+    }
+    differences
 }

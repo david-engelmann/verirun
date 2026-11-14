@@ -180,11 +180,14 @@ fn fault_gc_preserves_pinned_reachability() {
 fn fault_gc_grace_boundary() {
     let root = fresh_dir("grace");
     let cas = Cas::open(&root).expect("open store");
-    let base = SystemTime::now();
     let blob = cas.put_bytes(b"unreachable").expect("put");
+    // The base instant is taken after the write, so the blob's
+    // modification time is never after the base: at base plus
+    // 3601 the age is at least 3601 whole seconds, and at base
+    // plus 3599 it is below the threshold by the same margin.
+    let base = SystemTime::now();
 
-    // One second below the threshold (within write jitter):
-    // kept.
+    // One second below the threshold: kept.
     let report = collect(&cas, 3600, false, base + Duration::from_secs(3599)).expect("collect");
     assert_eq!(report.objects, 0);
     assert!(cas.contains(&blob));
