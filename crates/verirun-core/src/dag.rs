@@ -322,6 +322,13 @@ const fn as_object(value: &Value) -> Option<&Vec<(String, Value)>> {
     }
 }
 
+/// A task id names one directory under the run's tasks folder,
+/// so it must be a single safe path component: non-empty, no
+/// slash, no backslash, and neither "." nor "..".
+fn is_safe_task_id(text: &str) -> bool {
+    !text.is_empty() && text != "." && text != ".." && !text.contains(['/', '\\'])
+}
+
 fn field<'a>(pairs: &'a [(String, Value)], name: &str) -> Option<&'a Value> {
     pairs
         .iter()
@@ -402,7 +409,13 @@ fn parse_task(item: &Value) -> Result<TaskSpec, DagError> {
         _ => None,
     });
     let task_id = match required(pairs, "task_id", named.as_ref())? {
-        Value::String(text) if !text.is_empty() => text.clone(),
+        Value::String(text) if is_safe_task_id(text) => text.clone(),
+        Value::String(_) => {
+            return Err(schema(
+                named.clone(),
+                "\"task_id\" must be a single path component: no slash, no backslash, and not \".\" or \"..\"",
+            ));
+        }
         _ => {
             return Err(schema(
                 named.clone(),

@@ -46,7 +46,7 @@ Inside its working folder, a task reads its input files under `inputs` and write
 ## What you can rely on
 
 - The same description produces the same manifest. Worker count and folder layout do not change the result.
-- A task that runs past its time limit is stopped together with every process it started.
+- A task that runs past its time limit is stopped, together with every process in its process group. A process that leaves the group by starting its own session cannot be killed this way. Its output is cut off after a short grace period, and the task is recorded as timed out.
 - Output files that arrive through symbolic links are refused. A stored object whose bytes no longer match its hash is reported rather than used.
 - When a task fails, the tasks that depend on it do not run. The manifest records them as skipped, and the run reports a failing exit code.
 
@@ -83,4 +83,4 @@ The Rust version is pinned in `rust-toolchain.toml`, and rustup selects it autom
 
 ## Licence
 
-verirun is dual licensed under the MIT licence and the Apache License 2.0. You may use it under either one.
+verirun is dual licensed under the [MIT licence](LICENSE-MIT) and the [Apache License 2.0](LICENSE-APACHE). You may use it under either one.

@@ -245,6 +245,14 @@ fn fault_schema_rejection_table() {
         run(&[task("a").replace(r#""args":[]"#, r#""args":"none""#)]),
         // An empty task id.
         run(&[task("")]),
+        // A task id that is not a single safe path component: the
+        // scheduler names the task's sandbox directory with it, so
+        // separators and dot components would escape the layout.
+        run(&[task("../escape")]),
+        run(&[task("a/b")]),
+        run(&[task(".")]),
+        run(&[task("..")]),
+        run(&[r#"{"task_id":"a\\b","executable":"run","args":[],"env":{},"inputs":[],"outputs":[],"depends_on":[]}"#.to_string()]),
         // An empty executable.
         run(&[task("a").replace(r#""executable":"run""#, r#""executable":"""#)]),
         // A declared fixed-default env key, with the default's own
@@ -270,8 +278,10 @@ fn fault_schema_rejection_table() {
     }
 
     // Controls: timeout_ms of exactly 1 is accepted, and so is a
-    // plain task with no timeout.
+    // plain task with no timeout. A task id with dots and dashes
+    // inside it is a single component and is accepted.
     assert!(validate(&run(&[task_with("a", r#""timeout_ms":1"#)])).is_ok());
     assert!(validate(&run(&[task("a")])).is_ok());
+    assert!(validate(&run(&[task("a.b-c_d")])).is_ok());
     assert!(validate(r#"{"tasks":[]}"#).is_ok());
 }

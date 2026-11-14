@@ -114,7 +114,7 @@ A run file is a JSON object with one field, `tasks`, an array of task objects. E
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `task_id` | string | Non-empty. Unique across the run. Byte order defines sort order everywhere. |
+| `task_id` | string | Non-empty, and a single safe path component: no slash, no backslash, and not "." or "..". The id names the task's sandbox directory under the run's tasks folder, so anything else would escape the layout. Unique across the run. Byte order defines sort order everywhere. |
 | `executable` | string | Non-empty. Recorded verbatim in the execution digest. Section 8.2 covers resolution. |
 | `args` | array of strings | Ordered. May be empty. Order is part of the execution digest. |
 | `env` | object of string to string | Declared environment pairs. May be empty. The fixed default keys of section 8.1 MUST NOT appear here. |

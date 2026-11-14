@@ -1,6 +1,6 @@
 # verirun Invariants and Traceability Matrix
 
-Status: Milestone 0 design. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
+Status: current through Milestone 2. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
 
 ## How enforcement works
 
@@ -117,8 +117,8 @@ For a spec with several violations, validation always reports the same first err
 Edge case: a spec that is simultaneously cyclic and has a duplicate id reports the duplicate, in every process and at every seed.
 
 ### INV-DAG-6. Schema strictness
-Unknown task fields, a missing required field, a wrong-typed field, an empty `task_id` or `executable`, a declared fixed-default env key (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`), and `timeout_ms` below 1 are each rejected with exit code 3 before execution.
-Edge case: `timeout_ms` of exactly 1 (accepted) and 0 (rejected), an env object declaring `TZ` with the same value as the default (still rejected: fixed means fixed).
+Unknown task fields, a missing required field, a wrong-typed field, an empty `task_id` or `executable`, a `task_id` that is not a single safe path component (it contains a slash or a backslash, or it is exactly "." or ".."), a declared fixed-default env key (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`), and `timeout_ms` below 1 are each rejected with exit code 3 before execution.
+Edge case: `timeout_ms` of exactly 1 (accepted) and 0 (rejected), an env object declaring `TZ` with the same value as the default (still rejected: fixed means fixed). A task id of `../escape` is rejected (it would name a directory outside the tasks folder); an id with interior dots such as `a.b-c` is accepted (it is a single component).
 
 ## 5. Execution invariants (RUN)
 
@@ -326,4 +326,4 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-LAT-1 | B | `canonical_bench::bench_encode_throughput`, `cas_bench::bench_hash_throughput` in the owning crates' `benches/` | M4 |
 | INV-LAT-2 | F | `runner_pipes::stress_unbounded_output_under_deadline` | M4 |
 | INV-LAT-3 | F, B | `manifest_faults::fault_verify_single_pass_counting_reader`, benchmark `cas_bench::bench_verify_throughput` | M4 |
-| INV-LAT-4 | F | `dag_faults::fault_invalid_run_leaves_store_untouched` | M2 |
+| INV-LAT-4 | F | `dag_faults::fault_invalid_run_leaves_store_untouched` (in crates/verirun-cli/tests/) | M2 |
