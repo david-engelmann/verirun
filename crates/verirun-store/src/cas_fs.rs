@@ -147,6 +147,75 @@ impl Cas {
         self.object_path(digest).is_file()
     }
 
+    /// Pins a manifest: creates its empty pin file under `pins/`
+    /// (section 6.1), marking the manifest and everything it
+    /// reaches as preserved for garbage collection (INV-GC-1).
+    /// Pinning is idempotent: an existing pin is success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError`] when the pin file cannot be
+    /// created.
+    ///
+    /// # Panics
+    ///
+    /// Never panics in the implementation.
+    #[allow(
+        clippy::missing_const_for_fn,
+        reason = "the implementation performs filesystem I/O; it cannot be const"
+    )]
+    pub fn pin_manifest(&self, digest: &Digest) -> Result<(), StoreError> {
+        // Stage A stub: pin file creation lands in Stage B.
+        let _ = digest;
+        Ok(())
+    }
+
+    /// Removes a manifest's pin. Unpinning a manifest that is
+    /// not pinned is success: the post-state is what the caller
+    /// asked for.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError`] when an existing pin file cannot
+    /// be removed.
+    ///
+    /// # Panics
+    ///
+    /// Never panics in the implementation.
+    #[allow(
+        clippy::missing_const_for_fn,
+        reason = "the implementation performs filesystem I/O; it cannot be const"
+    )]
+    pub fn unpin_manifest(&self, digest: &Digest) -> Result<(), StoreError> {
+        // Stage A stub: pin file removal lands in Stage B.
+        let _ = digest;
+        Ok(())
+    }
+
+    /// Lists the digests of all pinned manifests, in digest
+    /// order.
+    ///
+    /// Files under `pins/` whose names are not a digest followed
+    /// by `.pin` are not pins and are skipped: the pin directory
+    /// is a listing, and a listing may hold foreign files.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError`] when the pin directory cannot be
+    /// read.
+    ///
+    /// # Panics
+    ///
+    /// Never panics in the implementation.
+    #[allow(
+        clippy::missing_const_for_fn,
+        reason = "the implementation performs filesystem I/O; it cannot be const"
+    )]
+    pub fn pinned_manifests(&self) -> Result<Vec<Digest>, StoreError> {
+        // Stage A stub: the pin listing lands in Stage B.
+        Ok(Vec::new())
+    }
+
     /// Puts in-memory bytes, whose digest is computed before the temp
     /// file is named, through the full put protocol.
     ///

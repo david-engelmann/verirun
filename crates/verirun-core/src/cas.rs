@@ -4,9 +4,11 @@
 //! naming as functions of digests and attempt identity, and the put
 //! phase model. All I/O lives in `verirun-store`.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use crate::digest::Digest;
+use crate::manifest::Manifest;
 
 /// The fixed streaming buffer size for store transfers, in bytes.
 /// Memory use of a put or a get is bounded by this buffer, independent
@@ -72,4 +74,82 @@ pub enum PutPhase {
     Durable,
     /// The put was abandoned before `Durable`.
     Abandoned,
+}
+
+/// The store relative path of the pin file for a manifest:
+/// `pins/<manifest digest>.pin` (section 6.1). A pin file is
+/// empty; its existence in the listing is the whole signal.
+#[must_use]
+pub fn pin_relative_path(digest: &Digest) -> PathBuf {
+    PathBuf::from("pins").join(format!("{digest}.pin"))
+}
+
+/// The set of object digests reachable from the pinned manifests
+/// (section 10, phase 1; INV-GC-1).
+///
+/// The set holds, for each pinned manifest: the manifest blob
+/// itself, every artifact and log digest its records name, and
+/// the task record blob that the by-exec entry for a record's
+/// execution digest names, for every record whose execution
+/// digest appears in `by_exec_records`. The caller reads the
+/// pins, the manifests, and the entries; this function is the
+/// pure reachability computation over what was read. Record
+/// blobs reachable only through by-exec entries are part of the
+/// set by design: sweeping one would silently destroy the cache
+/// history of pinned work.
+#[allow(
+    clippy::missing_const_for_fn,
+    reason = "the implementation walks manifests and inserts into a set; it cannot be const"
+)]
+#[must_use]
+pub fn reachable_objects(
+    pinned: &[(Digest, Manifest)],
+    by_exec_records: &BTreeMap<Digest, Digest>,
+) -> BTreeSet<Digest> {
+    // Stage A stub: the reachability walk lands in Stage B.
+    let _ = pinned;
+    let _ = by_exec_records;
+    BTreeSet::new()
+}
+
+/// Selects the sweep candidates among the stored objects
+/// (section 10, phase 2; INV-GC-2).
+///
+/// `objects` maps every object digest in the store to its age
+/// in whole seconds, computed by the caller from modification
+/// times and the one wall clock read in the adapter. An object
+/// is a candidate exactly when it is not in `reachable` and its
+/// age is strictly greater than `grace_secs`: an object at
+/// exactly the threshold is kept. Candidates come back in
+/// digest order.
+#[allow(
+    clippy::missing_const_for_fn,
+    reason = "the implementation iterates the object map; it cannot be const"
+)]
+#[must_use]
+pub fn sweep_candidates(
+    objects: &BTreeMap<Digest, u64>,
+    reachable: &BTreeSet<Digest>,
+    grace_secs: u64,
+) -> Vec<Digest> {
+    // Stage A stub: the candidate filter lands in Stage B.
+    let _ = objects;
+    let _ = reachable;
+    let _ = grace_secs;
+    Vec::new()
+}
+
+/// Whether a temporary file of this age is stale (section 10,
+/// phase 2; INV-GC-3).
+///
+/// Temporary files take no reachability test: any temp file
+/// older than the grace threshold is reclaimed, whatever put
+/// left it and whatever its name embeds. The comparison is the
+/// same strict one as for objects.
+#[must_use]
+pub const fn temp_is_stale(age_secs: u64, grace_secs: u64) -> bool {
+    // Stage A stub: the comparison lands in Stage B.
+    let _ = age_secs;
+    let _ = grace_secs;
+    false
 }

@@ -558,3 +558,79 @@ fn as_status(value: &Value) -> Result<TaskStatus, ManifestError> {
         }),
     }
 }
+
+/// Which compared fields of one task record differ between two
+/// manifests (section 9.4).
+///
+/// The compared fields are exactly the ones section 9.4 names:
+/// the status, the exit code, the artifact list, and the two
+/// log digests. A record whose execution digest differs while
+/// every compared field matches is equivalent under the diff
+/// semantics: the execution digest is a cause, and the diff
+/// reports effects.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "the five compared fields of section 9.4 are independent by design; the struct is the field-by-field report"
+)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChangedFields {
+    /// The terminal status differs.
+    pub status: bool,
+    /// The exit code differs.
+    pub exit_code: bool,
+    /// The artifact list differs in path, digest, length, or
+    /// executable flag.
+    pub artifacts: bool,
+    /// The stdout blob digest differs.
+    pub stdout: bool,
+    /// The stderr blob digest differs.
+    pub stderr: bool,
+}
+
+impl ChangedFields {
+    /// Whether any compared field differs.
+    #[must_use]
+    pub const fn any(&self) -> bool {
+        self.status || self.exit_code || self.artifacts || self.stdout || self.stderr
+    }
+}
+
+/// How one task differs between two manifests (section 9.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskDifference {
+    /// The task appears only in the first manifest.
+    OnlyInFirst,
+    /// The task appears only in the second manifest.
+    OnlyInSecond,
+    /// The task appears in both, with differing compared fields.
+    Changed(ChangedFields),
+}
+
+/// One task's difference between two manifests.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskDiff {
+    /// The task the difference belongs to.
+    pub task_id: String,
+    /// The difference.
+    pub difference: TaskDifference,
+}
+
+/// Compares two manifests record by record, by task id
+/// (section 9.4; INV-CLI-4).
+///
+/// The result is in task id order and holds one entry per task
+/// that is present on one side only or whose compared fields
+/// differ. An empty result means the runs are equivalent in
+/// every compared field. Both manifests are assumed verified
+/// by the caller; comparison itself is pure.
+#[allow(
+    clippy::missing_const_for_fn,
+    reason = "the implementation walks both manifests' records; it cannot be const"
+)]
+#[must_use]
+pub fn diff_manifests(first: &Manifest, second: &Manifest) -> Vec<TaskDiff> {
+    // Stage A stub: the comparison lands in Stage B.
+    let _ = first;
+    let _ = second;
+    Vec::new()
+}

@@ -205,3 +205,73 @@ impl From<StoreError> for RunError {
         Self::Store { source }
     }
 }
+
+/// A garbage collection failure (docs/ARCHITECTURE.md section 10).
+///
+/// Collection is deliberately conservative: a pin whose manifest
+/// cannot be produced and verified stops the sweep entirely,
+/// because deleting around a broken pin could destroy exactly
+/// the reachability the pin exists to protect (INV-GC-1). A held
+/// `gc.lock` likewise fails cleanly and deletes nothing.
+#[derive(Debug)]
+pub enum GcError {
+    /// A pin names a manifest object that is not in the store.
+    MissingPinnedManifest {
+        /// The manifest digest the pin names.
+        digest: Digest,
+    },
+    /// A pinned manifest blob exists but does not verify against
+    /// its name, does not parse, or is not a manifest.
+    InvalidPinnedManifest {
+        /// The manifest digest the pin names.
+        digest: Digest,
+        /// What is wrong with the pinned manifest.
+        detail: String,
+    },
+    /// Another sweep holds the store's `gc.lock`.
+    LockHeld {
+        /// The lock file path.
+        path: PathBuf,
+    },
+    /// A store failure during collection.
+    Store {
+        /// The store failure.
+        source: StoreError,
+    },
+}
+
+impl fmt::Display for GcError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingPinnedManifest { digest } => write!(
+                f,
+                "a pin names manifest {digest}, which is not in the store; refusing to sweep"
+            ),
+            Self::InvalidPinnedManifest { digest, detail } => write!(
+                f,
+                "the pinned manifest {digest} is invalid: {detail}; refusing to sweep"
+            ),
+            Self::LockHeld { path } => {
+                write!(f, "another collection holds the lock at {}", path.display())
+            }
+            Self::Store { source } => write!(f, "collection aborted by a store failure: {source}"),
+        }
+    }
+}
+
+impl std::error::Error for GcError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Store { source } => Some(source),
+            Self::MissingPinnedManifest { .. }
+            | Self::InvalidPinnedManifest { .. }
+            | Self::LockHeld { .. } => None,
+        }
+    }
+}
+
+impl From<StoreError> for GcError {
+    fn from(source: StoreError) -> Self {
+        Self::Store { source }
+    }
+}
