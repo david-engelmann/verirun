@@ -13,6 +13,11 @@
 //! - [`scheduler`]: the worker pool over a validated DAG. Lexicographic
 //!   ready order, failure propagation, the by-exec execution cache,
 //!   and manifest production (section 7.3).
+//! - [`gc`]: garbage collection execution. Mark from pins, plan
+//!   against the grace threshold, sweep under the lock, with a dry
+//!   run that deletes nothing (section 10).
+//! - [`clock`]: the single wall clock read in the workspace, used
+//!   only for garbage collection ages.
 //! - [`error`]: the store and run error types, carrying the CAS path
 //!   and the protocol step in progress on every failure.
 
@@ -20,7 +25,9 @@
 #![warn(missing_docs)]
 
 pub mod cas_fs;
+pub mod clock;
 pub mod error;
+pub mod gc;
 pub mod runner;
 pub mod scheduler;
 pub mod sha256;

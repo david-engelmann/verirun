@@ -17,8 +17,14 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod cmd_diff;
+pub mod cmd_gc;
+pub mod cmd_run;
+pub mod cmd_verify;
+pub mod spec_io;
+
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use verirun_core::dag::validate_run_spec;
 use verirun_core::digest::Digest;
@@ -26,7 +32,7 @@ use verirun_core::error::{DagError, ParseError, VerifyError};
 use verirun_core::manifest::Manifest;
 use verirun_core::parse::parse;
 use verirun_store::cas_fs::Cas;
-use verirun_store::error::{RunError, StoreError};
+use verirun_store::error::{GcError, RunError, StoreError};
 use verirun_store::scheduler::{self, RunOutcome};
 use verirun_store::sha256::Sha256Factory;
 
@@ -52,6 +58,33 @@ pub enum CliError {
         /// The run failure.
         source: RunError,
     },
+    /// The run file could not be read (exit 3).
+    SpecIo {
+        /// The run file path.
+        path: PathBuf,
+        /// The read failure.
+        source: std::io::Error,
+    },
+    /// A store failure outside a run: opening the store for
+    /// `verify`, `diff`, or `gc`. Integrity and missing object
+    /// failures exit 2; layout and configuration failures exit
+    /// 3.
+    Store {
+        /// The store failure.
+        source: StoreError,
+    },
+    /// Manifest verification failed (exit 2).
+    Verify {
+        /// The verification failure.
+        source: VerifyError,
+    },
+    /// Garbage collection failed. A pin whose manifest is
+    /// missing or invalid is an integrity failure: exit 2. A
+    /// held lock and other failures exit 3.
+    Gc {
+        /// The collection failure.
+        source: GcError,
+    },
 }
 
 impl CliError {
@@ -71,12 +104,25 @@ impl CliError {
     #[must_use]
     pub const fn exit_code(&self) -> i32 {
         match self {
-            Self::Parse { .. } | Self::Dag { .. } => 3,
+            Self::Parse { .. } | Self::Dag { .. } | Self::SpecIo { .. } => 3,
             Self::Run { source } => match source {
                 RunError::Store {
                     source: StoreError::Integrity { .. } | StoreError::Missing { .. },
                 } => 2,
                 RunError::Store { .. } | RunError::MissingInput { .. } => 3,
+            },
+            Self::Store { source } => match source {
+                StoreError::Integrity { .. } | StoreError::Missing { .. } => 2,
+                _ => 3,
+            },
+            Self::Verify { .. } => 2,
+            Self::Gc { source } => match source {
+                GcError::MissingPinnedManifest { .. }
+                | GcError::InvalidPinnedManifest { .. }
+                | GcError::Store {
+                    source: StoreError::Integrity { .. } | StoreError::Missing { .. },
+                } => 2,
+                GcError::LockHeld { .. } | GcError::Store { .. } => 3,
             },
         }
     }
@@ -88,6 +134,12 @@ impl std::fmt::Display for CliError {
             Self::Parse { source } => write!(f, "{source}"),
             Self::Dag { source } => write!(f, "{source}"),
             Self::Run { source } => write!(f, "{source}"),
+            Self::SpecIo { path, source } => {
+                write!(f, "cannot read the run file {}: {source}", path.display())
+            }
+            Self::Store { source } => write!(f, "{source}"),
+            Self::Verify { source } => write!(f, "{source}"),
+            Self::Gc { source } => write!(f, "{source}"),
         }
     }
 }
@@ -98,6 +150,10 @@ impl std::error::Error for CliError {
             Self::Parse { source } => Some(source),
             Self::Dag { source } => Some(source),
             Self::Run { source } => Some(source),
+            Self::SpecIo { source, .. } => Some(source),
+            Self::Store { source } => Some(source),
+            Self::Verify { source } => Some(source),
+            Self::Gc { source } => Some(source),
         }
     }
 }
@@ -118,6 +174,94 @@ impl From<RunError> for CliError {
     fn from(source: RunError) -> Self {
         Self::Run { source }
     }
+}
+
+impl From<StoreError> for CliError {
+    fn from(source: StoreError) -> Self {
+        Self::Store { source }
+    }
+}
+
+impl From<VerifyError> for CliError {
+    fn from(source: VerifyError) -> Self {
+        Self::Verify { source }
+    }
+}
+
+impl From<GcError> for CliError {
+    fn from(source: GcError) -> Self {
+        Self::Gc { source }
+    }
+}
+
+/// Renders an error as the `--json` failure object (INV-CLI-2).
+///
+/// The object always carries the same human readable `error`
+/// text the text form prints, the `exit_code` the process will
+/// use, and, for verification failures, the same digests and
+/// referencing task and path the text form names, as structured
+/// fields. The JSON form is therefore never the only place a
+/// failure is explained, and never explains less than the text.
+#[must_use]
+pub fn error_json(error: &CliError) -> serde_json::Value {
+    let mut object = serde_json::Map::new();
+    object.insert(
+        "error".to_string(),
+        serde_json::Value::String(error.to_string()),
+    );
+    object.insert(
+        "exit_code".to_string(),
+        serde_json::Value::Number(error.exit_code().into()),
+    );
+    if let CliError::Verify { source } = error {
+        match source {
+            VerifyError::ManifestMissing { digest } => {
+                object.insert("kind".to_string(), "manifest_missing".into());
+                object.insert("digest".to_string(), digest.to_hex().into());
+            }
+            VerifyError::ManifestDigestMismatch { expected, actual } => {
+                object.insert("kind".to_string(), "manifest_digest_mismatch".into());
+                object.insert("expected".to_string(), expected.to_hex().into());
+                object.insert("actual".to_string(), actual.to_hex().into());
+            }
+            VerifyError::NonCanonicalManifest { detail } => {
+                object.insert("kind".to_string(), "non_canonical_manifest".into());
+                object.insert("detail".to_string(), detail.clone().into());
+            }
+            VerifyError::MalformedManifest { source } => {
+                object.insert("kind".to_string(), "malformed_manifest".into());
+                object.insert("detail".to_string(), source.to_string().into());
+            }
+            VerifyError::RootMismatch { stored, recomputed } => {
+                object.insert("kind".to_string(), "root_mismatch".into());
+                object.insert("stored".to_string(), stored.to_hex().into());
+                object.insert("recomputed".to_string(), recomputed.to_hex().into());
+            }
+            VerifyError::BlobMissing {
+                digest,
+                task_id,
+                path,
+            } => {
+                object.insert("kind".to_string(), "blob_missing".into());
+                object.insert("digest".to_string(), digest.to_hex().into());
+                object.insert("task_id".to_string(), task_id.clone().into());
+                object.insert("path".to_string(), path.clone().into());
+            }
+            VerifyError::BlobMismatch {
+                expected,
+                actual,
+                task_id,
+                path,
+            } => {
+                object.insert("kind".to_string(), "blob_mismatch".into());
+                object.insert("expected".to_string(), expected.to_hex().into());
+                object.insert("actual".to_string(), actual.to_hex().into());
+                object.insert("task_id".to_string(), task_id.clone().into());
+                object.insert("path".to_string(), path.clone().into());
+            }
+        }
+    }
+    serde_json::Value::Object(object)
 }
 
 /// Runs one run file, given as raw bytes, end to end: strict

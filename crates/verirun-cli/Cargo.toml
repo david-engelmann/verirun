@@ -16,6 +16,8 @@ path = "src/main.rs"
 [dependencies]
 verirun-core = { path = "../verirun-core" }
 verirun-store = { path = "../verirun-store" }
+clap.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

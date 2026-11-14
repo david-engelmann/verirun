@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use verirun_core::cas::{
-    PutPhase, STREAM_BUFFER_BYTES, object_relative_path, temp_file_name_known,
+    PutPhase, STREAM_BUFFER_BYTES, object_relative_path, pin_relative_path, temp_file_name_known,
     temp_file_name_stream,
 };
 use verirun_core::digest::{Digest, DomainTag, begin, hash_bytes};
@@ -145,6 +145,106 @@ impl Cas {
     #[must_use]
     pub fn contains(&self, digest: &Digest) -> bool {
         self.object_path(digest).is_file()
+    }
+
+    /// Pins a manifest: creates its empty pin file under `pins/`
+    /// (section 6.1), marking the manifest and everything it
+    /// reaches as preserved for garbage collection (INV-GC-1).
+    /// Pinning is idempotent: an existing pin is success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError`] when the pin file cannot be
+    /// created.
+    ///
+    /// # Panics
+    ///
+    /// Never panics in the implementation.
+    #[allow(
+        clippy::missing_const_for_fn,
+        reason = "the implementation performs filesystem I/O; it cannot be const"
+    )]
+    pub fn pin_manifest(&self, digest: &Digest) -> Result<(), StoreError> {
+        let path = self.root.join(pin_relative_path(digest));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => {
+                file.sync_all()
+                    .map_err(|err| io_error(&path, StoreStep::SyncFile, err))?;
+                sync_directory(path.parent().unwrap_or(&self.root), StoreStep::SyncPin)
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+            Err(err) => Err(io_error(&path, StoreStep::CreatePin, err)),
+        }
+    }
+
+    /// Removes a manifest's pin. Unpinning a manifest that is
+    /// not pinned is success: the post-state is what the caller
+    /// asked for.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError`] when an existing pin file cannot
+    /// be removed.
+    ///
+    /// # Panics
+    ///
+    /// Never panics in the implementation.
+    #[allow(
+        clippy::missing_const_for_fn,
+        reason = "the implementation performs filesystem I/O; it cannot be const"
+    )]
+    pub fn unpin_manifest(&self, digest: &Digest) -> Result<(), StoreError> {
+        let path = self.root.join(pin_relative_path(digest));
+        match std::fs::remove_file(&path) {
+            Ok(()) => sync_directory(path.parent().unwrap_or(&self.root), StoreStep::SyncPin),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(io_error(&path, StoreStep::RemovePin, err)),
+        }
+    }
+
+    /// Lists the digests of all pinned manifests, in digest
+    /// order.
+    ///
+    /// Files under `pins/` whose names are not a digest followed
+    /// by `.pin` are not pins and are skipped: the pin directory
+    /// is a listing, and a listing may hold foreign files.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError`] when the pin directory cannot be
+    /// read.
+    ///
+    /// # Panics
+    ///
+    /// Never panics in the implementation.
+    #[allow(
+        clippy::missing_const_for_fn,
+        reason = "the implementation performs filesystem I/O; it cannot be const"
+    )]
+    pub fn pinned_manifests(&self) -> Result<Vec<Digest>, StoreError> {
+        let pins_dir = self.root.join("pins");
+        let entries = std::fs::read_dir(&pins_dir)
+            .map_err(|err| io_error(&pins_dir, StoreStep::ListPins, err))?;
+        let mut digests = Vec::new();
+        for entry in entries {
+            let entry = entry.map_err(|err| io_error(&pins_dir, StoreStep::ListPins, err))?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let Some(stem) = name.strip_suffix(".pin") else {
+                continue;
+            };
+            if let Ok(digest) = Digest::from_hex(stem) {
+                digests.push(digest);
+            }
+        }
+        digests.sort();
+        Ok(digests)
     }
 
     /// Puts in-memory bytes, whose digest is computed before the temp
