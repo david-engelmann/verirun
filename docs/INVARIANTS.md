@@ -1,6 +1,6 @@
 # verirun Invariants and Traceability Matrix
 
-Status: current through Milestone 2. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
+Status: current through Milestone 3. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
 
 ## How enforcement works
 
