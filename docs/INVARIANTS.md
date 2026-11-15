@@ -1,6 +1,6 @@
 # verirun Invariants and Traceability Matrix
 
-Status: current through Milestone 3. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
+Status: current through Milestone 4. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
 
 ## How enforcement works
 
@@ -283,7 +283,7 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-HASH-2 | P | `digest_prop::prop_tuple_framing_injective` | M1 |
 | INV-HASH-3 | P | `digest_prop::prop_streaming_chunking_invariant` | M1 |
 | INV-HASH-4 | P, V | `digest_prop::prop_exec_tuple_sensitivity`, `digest_vectors::vec_exec_tuple_fixed` | M1 |
-| INV-CAS-1 | F | `cas_faults::fault_crash_at_each_put_step` in `crates/verirun-store/tests/` | M1 |
+| INV-CAS-1 | F | `cas_faults::fault_crash_at_each_put_step` in `crates/verirun-store/tests/`, plus the recovery half `crash_recovery::fault_crash_recovery_store_stays_consistent` and `crash_recovery::fault_crash_recovery_pinned_manifest_survives` in `crates/verirun-store/tests/` | M1, M4 |
 | INV-CAS-2 | F | `cas_faults::fault_put_call_order_recorded` | M1 |
 | INV-CAS-3 | F | `cas_faults::fault_stored_object_write_attempt` | M1 |
 | INV-CAS-4 | P | `cas_prop::prop_put_get_identity` | M1 |

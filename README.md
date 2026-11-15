@@ -72,8 +72,8 @@ The Rust version is pinned in `rust-toolchain.toml`, and rustup selects it autom
 - Milestone 0 was the design. It is complete.
 - Milestone 1 built the hashing and storage core. It is complete and reviewed.
 - Milestone 2 added the task graph checks, the runner, the scheduler, and the result cache. It is complete and reviewed.
-- Milestone 3 added the command line program with the full command set, JSON output, and garbage collection. It has landed on the main branch and is in final review.
-- Milestone 4 brings the tamper and crash recovery suites, larger stress runs, and recorded benchmark numbers. This README arrived ahead of that milestone because the repo needed a front door.
+- Milestone 3 added the command line program with the full command set, JSON output, and garbage collection. It is complete and reviewed.
+- Milestone 4 added the tamper suite, the crash recovery suite, pipe and timeout stress at volume, and the benchmark suite. It has landed on the main branch and is in final review.
 
 ## Read more
 

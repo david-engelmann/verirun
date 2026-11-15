@@ -447,10 +447,9 @@ impl Cas {
     pub fn read_to_vec_observed(
         &self,
         digest: &Digest,
-        _observer: &mut dyn ReadObserver,
+        observer: &mut dyn ReadObserver,
     ) -> Result<Vec<u8>, StoreError> {
-        // Stage A stub: the observer is not notified yet, so the
-        // single-pass counting fault fails against this body.
+        observer.on_read(digest);
         self.read_to_vec(digest)
     }
 
