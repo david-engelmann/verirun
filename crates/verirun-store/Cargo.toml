@@ -18,3 +18,7 @@ workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+
+[[bench]]
+name = "cas_bench"
+harness = false

@@ -31,7 +31,7 @@ use verirun_core::digest::Digest;
 use verirun_core::error::{DagError, ParseError, VerifyError};
 use verirun_core::manifest::Manifest;
 use verirun_core::parse::parse;
-use verirun_store::cas_fs::Cas;
+use verirun_store::cas_fs::{Cas, ReadObserver};
 use verirun_store::error::{GcError, RunError, StoreError};
 use verirun_store::scheduler::{self, RunOutcome};
 use verirun_store::sha256::Sha256Factory;
@@ -415,6 +415,26 @@ pub fn verify_manifest(cas: &Cas, expected: &Digest) -> Result<Manifest, VerifyE
         }
     }
     Ok(manifest)
+}
+
+/// Verifies a manifest, reporting every object read to `observer`.
+///
+/// The work is exactly [`verify_manifest`]'s; the observer (see
+/// [`ReadObserver`]) only watches. The single-pass fault suite
+/// uses it to prove that each distinct object is read exactly
+/// once (INV-LAT-3).
+///
+/// # Errors
+///
+/// Returns the [`VerifyError`] of [`verify_manifest`].
+pub fn verify_manifest_observed(
+    cas: &Cas,
+    expected: &Digest,
+    _observer: &mut dyn ReadObserver,
+) -> Result<Manifest, VerifyError> {
+    // Stage A stub: reads are not reported yet, so the single-pass
+    // counting fault fails against this body.
+    verify_manifest(cas, expected)
 }
 
 /// Appends one blob reference unless its digest was already
