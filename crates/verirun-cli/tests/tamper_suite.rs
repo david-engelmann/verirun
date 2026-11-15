@@ -117,7 +117,6 @@ const LEAF_SPEC: &str = r#"{"tasks":[{
 }]}"#;
 
 #[test]
-#[ignore = "M4 bisection round 2"]
 fn fault_bitflip_leaf_blobs() {
     let root = fresh_root("leaf");
     let (cas, outcome) = run_spec(&root, LEAF_SPEC);
@@ -183,7 +182,6 @@ fn fault_bitflip_leaf_blobs() {
 }
 
 #[test]
-#[ignore = "M4 bisection round 2"]
 fn fault_bitflip_manifest_exhaustive_small() {
     let root = fresh_root("manifest");
     let spec = r#"{"tasks":[{
@@ -235,7 +233,6 @@ fn swapped_manifest(manifest: &Manifest) -> Manifest {
 }
 
 #[test]
-#[ignore = "M4 bisection round 2"]
 fn fault_digest_pointer_swaps() {
     // (a) The swap written over the original manifest object is
     // caught at the manifest blob re-hash.
@@ -288,7 +285,6 @@ fn fault_digest_pointer_swaps() {
 }
 
 #[test]
-#[ignore = "M4 bisection round 2"]
 fn fault_root_field_edited() {
     let root = fresh_root("root-edit");
     let (cas, outcome) = run_spec(&root, SWAP_SPEC);

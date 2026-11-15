@@ -112,7 +112,6 @@ fn tmp_file_count(root: &Path) -> usize {
 }
 
 #[test]
-#[ignore = "M4 bisection round 3"]
 fn fault_crash_recovery_store_stays_consistent() {
     let payload = b"recovery payload, first attempt";
     let second = b"recovery payload, second attempt";
@@ -162,7 +161,7 @@ fn fault_crash_recovery_store_stays_consistent() {
 }
 
 #[test]
-#[ignore = "M4 bisection round 3"]
+#[ignore = "M4 bisection: isolating the pinned recovery failure"]
 fn fault_crash_recovery_pinned_manifest_survives() {
     let root = fresh_root("pinned");
     let cas = Cas::open(&root).expect("opens");

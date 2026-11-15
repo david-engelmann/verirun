@@ -133,7 +133,6 @@ fn pattern(unit: &[u8], total: usize) -> Vec<u8> {
 }
 
 #[test]
-#[ignore = "M4 bisection: isolating the hosted-only failure"]
 fn stress_unbounded_output_under_deadline() {
     let root = fresh_root("unbounded");
     // Four mebibytes on stdout and three on stderr at once, many
@@ -169,7 +168,6 @@ fn stress_unbounded_output_under_deadline() {
 }
 
 #[test]
-#[ignore = "M4 bisection: isolating the hosted-only failure"]
 fn stress_timeout_volume_with_grandchildren() {
     let root = fresh_root("timeouts");
     // Twelve tasks, each holding a background grandchild inside
@@ -206,7 +204,6 @@ fn stress_timeout_volume_with_grandchildren() {
 }
 
 #[test]
-#[ignore = "M4 bisection: isolating the hosted-only failure"]
 fn stress_escaped_grandchild_output_collected() {
     let root = fresh_root("escaped");
     // The documented INV-RUN-4 corner: a grandchild escapes into
