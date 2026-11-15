@@ -91,12 +91,16 @@ fn audit_store(cas: &Cas, root: &Path) -> usize {
         let shard = shard.expect("shard entry reads");
         for entry in std::fs::read_dir(shard.path()).expect("shard dir reads") {
             let entry = entry.expect("object entry reads");
-            let hex = format!(
-                "{}{}",
-                shard.file_name().to_string_lossy(),
-                entry.file_name().to_string_lossy()
-            );
+            // The layout is objects/<xx>/<full digest hex>: the
+            // file name alone is the digest, and the shard
+            // directory repeats its first two characters.
+            let hex = entry.file_name().to_string_lossy().into_owned();
             let digest = Digest::from_hex(&hex).expect("object name is a digest");
+            assert_eq!(
+                shard.file_name().to_string_lossy(),
+                hex[..2],
+                "the shard directory is the digest prefix"
+            );
             cas.read_to_vec(&digest)
                 .expect("every visible object verifies against its name");
             audited += 1;
@@ -161,7 +165,6 @@ fn fault_crash_recovery_store_stays_consistent() {
 }
 
 #[test]
-#[ignore = "M4 bisection: isolating the pinned recovery failure"]
 fn fault_crash_recovery_pinned_manifest_survives() {
     let root = fresh_root("pinned");
     let cas = Cas::open(&root).expect("opens");
