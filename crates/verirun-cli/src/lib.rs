@@ -31,7 +31,7 @@ use verirun_core::digest::Digest;
 use verirun_core::error::{DagError, ParseError, VerifyError};
 use verirun_core::manifest::Manifest;
 use verirun_core::parse::parse;
-use verirun_store::cas_fs::Cas;
+use verirun_store::cas_fs::{Cas, NoopReadObserver, ReadObserver};
 use verirun_store::error::{GcError, RunError, StoreError};
 use verirun_store::scheduler::{self, RunOutcome};
 use verirun_store::sha256::Sha256Factory;
@@ -306,7 +306,9 @@ pub fn run_spec_bytes(
 /// The checks follow section 9.3 in order: the manifest blob
 /// re-hash, the canonical re-encode check, the Merkle root
 /// recomputation, and one re-hash of each distinct blob the
-/// manifest names.
+/// manifest names. Every object read is reported to `observer`
+/// (see [`ReadObserver`]); [`verify_manifest`] is this function
+/// with a no-op observer.
 ///
 /// # Errors
 ///
@@ -317,12 +319,16 @@ pub fn run_spec_bytes(
 /// # Panics
 ///
 /// Never panics in the implementation.
-pub fn verify_manifest(cas: &Cas, expected: &Digest) -> Result<Manifest, VerifyError> {
+pub fn verify_manifest_observed(
+    cas: &Cas,
+    expected: &Digest,
+    observer: &mut dyn ReadObserver,
+) -> Result<Manifest, VerifyError> {
     // Check 1: the manifest blob re-hash. The store's verified
     // read does the hashing; its outcomes map onto the first two
     // variants. Any other store failure leaves the blob
     // unretrievable, which this surface reports as missing.
-    let bytes = match cas.read_to_vec(expected) {
+    let bytes = match cas.read_to_vec_observed(expected, observer) {
         Ok(bytes) => bytes,
         Err(StoreError::Integrity { actual, .. }) => {
             return Err(VerifyError::ManifestDigestMismatch {
@@ -395,7 +401,7 @@ pub fn verify_manifest(cas: &Cas, expected: &Digest) -> Result<Manifest, VerifyE
         );
     }
     for (digest, task_id, path) in references {
-        match cas.read_to_vec(&digest) {
+        match cas.read_to_vec_observed(&digest, observer) {
             Ok(_) => {}
             Err(StoreError::Integrity { actual, .. }) => {
                 return Err(VerifyError::BlobMismatch {
@@ -415,6 +421,17 @@ pub fn verify_manifest(cas: &Cas, expected: &Digest) -> Result<Manifest, VerifyE
         }
     }
     Ok(manifest)
+}
+
+/// Verifies the manifest named by `expected` against `cas`.
+///
+/// This is [`verify_manifest_observed`] with a no-op observer.
+///
+/// # Errors
+///
+/// Returns the [`VerifyError`] of [`verify_manifest_observed`].
+pub fn verify_manifest(cas: &Cas, expected: &Digest) -> Result<Manifest, VerifyError> {
+    verify_manifest_observed(cas, expected, &mut NoopReadObserver)
 }
 
 /// Appends one blob reference unless its digest was already

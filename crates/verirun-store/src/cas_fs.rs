@@ -56,6 +56,23 @@ pub struct NoopObserver;
 
 impl PutObserver for NoopObserver {}
 
+/// Observes a read in progress.
+///
+/// The fault suites use this seam to prove that verification reads
+/// each distinct object exactly once (INV-LAT-3). Production
+/// callers use [`NoopReadObserver`] through the plain read methods.
+pub trait ReadObserver {
+    /// Called once for each object read, with the object's digest,
+    /// before the read begins.
+    fn on_read(&mut self, _digest: &Digest) {}
+}
+
+/// A [`ReadObserver`] that records nothing.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopReadObserver;
+
+impl ReadObserver for NoopReadObserver {}
+
 /// An open content-addressed store. Cheap to share by reference:
 /// concurrent puts through one `&Cas` are safe by the protocol design
 /// (unique temp names, atomic renames, identical bytes per digest).
@@ -418,6 +435,22 @@ impl Cas {
         let mut out = Vec::new();
         self.copy_to(digest, &mut out)?;
         Ok(out)
+    }
+
+    /// Reads and verifies one object exactly as
+    /// [`Cas::read_to_vec`] does, reporting the read to `observer`
+    /// (see [`ReadObserver`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`StoreError`] of [`Cas::read_to_vec`].
+    pub fn read_to_vec_observed(
+        &self,
+        digest: &Digest,
+        observer: &mut dyn ReadObserver,
+    ) -> Result<Vec<u8>, StoreError> {
+        observer.on_read(digest);
+        self.read_to_vec(digest)
     }
 
     /// Streams an object to `writer`, verifying its digest during the
