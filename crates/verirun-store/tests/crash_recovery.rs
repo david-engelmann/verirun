@@ -9,15 +9,20 @@
 //! work, a second crash during recovery changes nothing, and a
 //! pinned manifest survives the whole sequence untouched.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Once;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
 use verirun_core::cas::PutPhase;
+use verirun_core::dag::validate_run_spec;
 use verirun_core::digest::Digest;
+use verirun_core::parse::parse;
 use verirun_store::cas_fs::{Cas, PutObserver};
 use verirun_store::gc;
+use verirun_store::scheduler;
+use verirun_store::sha256::Sha256Factory;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 static HOOK: Once = Once::new();
@@ -159,15 +164,33 @@ fn fault_crash_recovery_store_stays_consistent() {
 fn fault_crash_recovery_pinned_manifest_survives() {
     let root = fresh_root("pinned");
     let cas = Cas::open(&root).expect("opens");
-    let manifest = cas
-        .put_bytes(b"pinned manifest bytes")
-        .expect("manifest stores");
+    // A genuine manifest from a real run: collection parses every
+    // pinned manifest during its mark phase, so only a real one
+    // can stand in for a pinned run.
+    let spec = r#"{"tasks":[{
+        "task_id": "only", "executable": "sh",
+        "args": ["-c", "printf kept > outputs/kept.txt"],
+        "env": {}, "inputs": [], "outputs": ["kept.txt"], "depends_on": []
+    }]}"#;
+    let value = parse(spec.as_bytes()).expect("spec parses");
+    let dag = validate_run_spec(&value).expect("spec validates");
+    let outcome = scheduler::run(
+        &cas,
+        &Sha256Factory,
+        &root.join("work"),
+        &dag,
+        &BTreeMap::new(),
+        1,
+    )
+    .expect("run completes");
+    let manifest = outcome.manifest_digest;
+    let artifact = outcome.manifest.tasks[0].artifacts[0].digest;
     cas.pin_manifest(&manifest).expect("manifest pins");
     drop(cas);
 
     // A crash mid-put, then a collection aged past every grace:
-    // the pinned manifest is reachable and survives; the crashed
-    // put's debris does not.
+    // the pinned manifest and everything it names are reachable
+    // and survive; the crashed put's debris does not.
     let cas = Cas::open(&root).expect("reopens");
     crash_put(&cas, b"unrelated crashed put", PutPhase::Writing);
     drop(cas);
@@ -175,9 +198,13 @@ fn fault_crash_recovery_pinned_manifest_survives() {
     let future = SystemTime::now() + Duration::from_secs(7200);
     gc::collect(&cas, 0, false, future).expect("collection succeeds");
     assert!(cas.contains(&manifest), "the pinned manifest survives");
+    assert!(
+        cas.contains(&artifact),
+        "the pinned run's artifact survives"
+    );
     assert_eq!(
-        cas.read_to_vec(&manifest).expect("pinned manifest reads"),
-        b"pinned manifest bytes"
+        cas.read_to_vec(&artifact).expect("pinned artifact reads"),
+        b"kept"
     );
     assert_eq!(tmp_file_count(&root), 0, "the crash debris is collected");
     remove_store(&root);
