@@ -146,3 +146,25 @@ jobs:
         run: cargo build --workspace --all-features
       - name: Test at the declared rust-version
         run: cargo test --workspace --all-features --no-fail-fast
+
+  windows:
+    name: windows
+    runs-on: windows-latest
+    env:
+      # Roadmap lane R6: compile coverage on a second platform for the
+      # crates that claim portability. Compatibility is the point of
+      # this job, not volume; the rust job owns the case-count policy.
+      PROPTEST_CASES: "100"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install the pinned toolchain
+        shell: bash
+        run: |
+          rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
+          rustup show active-toolchain
+      - name: Check the portable crates
+        shell: bash
+        run: cargo check -p verirun-core -p verirun-store
+      - name: Test the core crate
+        shell: bash
+        run: cargo test -p verirun-core
