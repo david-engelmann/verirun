@@ -286,6 +286,23 @@ impl Cas {
         observer: &mut dyn PutObserver,
     ) -> Result<Digest, StoreError> {
         let digest = hash_bytes(&self.factory, DomainTag::Blob, bytes);
+        // Presence pre-check. The digest is computed from the
+        // caller's bytes before this check, and an object stored
+        // under a content address is only ever trusted through
+        // the read path, which rehashes what it returns. A hit
+        // therefore asserts nothing new; it only skips paying
+        // the temp write and sync for bytes already durable. A
+        // miss, or a race that removes the object afterwards,
+        // falls through to the full protocol below, and a put
+        // that returns Ok has either found the object present
+        // or made it durable itself.
+        if self.contains(&digest) {
+            observer.on_phase(PutPhase::Writing);
+            observer.on_phase(PutPhase::FileSynced);
+            observer.on_phase(PutPhase::Renamed);
+            observer.on_phase(PutPhase::Durable);
+            return Ok(digest);
+        }
         let temp_path = self.fresh_temp_path(&temp_file_name_known(
             &digest,
             std::process::id(),

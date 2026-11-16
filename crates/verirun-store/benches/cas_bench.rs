@@ -68,6 +68,28 @@ fn bench_put_throughput(smoke: bool) {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// The repeat workload: the same payload put again and
+/// again, which is what a warm cache does all day. The first
+/// put pays the full protocol; every later put is a repeat,
+/// so this bench is the one that prices the presence
+/// pre-check in `put_bytes`.
+fn bench_put_repeat_throughput(smoke: bool) {
+    let root = fresh_root("put-repeat");
+    let cas = Cas::open(&root).expect("store opens");
+    let data = payload(64 * 1024, 7);
+    let iterations: u32 = if smoke { 1 } else { 500 };
+    let started = Instant::now();
+    for _ in 0..iterations {
+        cas.put_bytes(&data).expect("put succeeds");
+    }
+    let elapsed = started.elapsed().as_secs_f64();
+    let puts_per_sec = f64::from(iterations) / elapsed;
+    println!(
+        "bench_put_repeat_throughput: {iterations} repeat 64 KiB puts in {elapsed:.3}s = {puts_per_sec:.1} puts/s"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
 #[allow(
     clippy::cast_precision_loss,
     reason = "byte counts here are far below the exact-integer range of f64"
@@ -96,5 +118,6 @@ fn main() {
     let smoke = std::env::args().any(|arg| arg == "--test");
     bench_hash_throughput(smoke);
     bench_put_throughput(smoke);
+    bench_put_repeat_throughput(smoke);
     bench_verify_throughput(smoke);
 }
