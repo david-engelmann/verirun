@@ -94,6 +94,7 @@ The commands were `cargo bench -p verirun-core --bench canonical_bench` and `car
 - [The invariant list](docs/INVARIANTS.md) states every rule the system keeps. Each rule names the test that enforces it.
 - [The decisions file](DECISIONS.md) records the locked project choices, including the licence and the dependency rules.
 - [The roadmap](docs/ROADMAP.md) is the ordered forward program after Milestone 4, with the direction calls only the project owner can settle recorded at its end.
+- [The tutorial](docs/TUTORIAL.md) walks a first run from the run file to verification, a cached rerun, a diff, and a collection dry run, with real captured output.
 
 ## Licence
 

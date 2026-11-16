@@ -18,9 +18,9 @@ Gate: cargo package is clean for all three crates with contents reviewed and the
 
 The audit found no examples anywhere in the repo and no lint that holds public documentation to completeness. A new user can read the architecture document but cannot run a five-line program against any crate.
 
-Scope: an examples directory in each crate, covering canonical encoding and digest framing in core, put, read, and collection in store, and a guided run in cli. A tutorial under docs/ that walks one run file from writing it to verifying and diffing its manifests. The missing_docs lint denied workspace-wide, with every gap it exposes documented. Intra-doc links exercised by the existing doc gate.
+Scope: an examples directory in each library crate, covering canonical encoding and digest framing in core and put, read, and collection in store. The command line program's guided run is carried by the tutorial instead of an example, because an example binary cannot invoke the shipped binary without path tricks an example should not teach. A tutorial under docs/ that walks one run file from writing it to verifying and diffing its manifests, with output captured from the real program. The missing_docs lint denied workspace-wide, with every gap it exposes documented. Intra-doc links exercised by the existing doc gate.
 
-Gate: CI compiles and runs the examples, the doc gate passes with missing_docs denied, and the full suite stays green.
+Gate: CI compiles and runs the examples, the doc gate passes with missing_docs denied, and the full suite stays green. Lane R2 found the public API already fully documented, so the lint landed with zero fallout and a positive control proving it fires.
 
 ## R3. Fault and stress growth
 
