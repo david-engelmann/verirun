@@ -93,6 +93,7 @@ The commands were `cargo bench -p verirun-core --bench canonical_bench` and `car
 - [The architecture document](docs/ARCHITECTURE.md) explains the design in full, including the store layout, the hashing rules, and the timeout behaviour.
 - [The invariant list](docs/INVARIANTS.md) states every rule the system keeps. Each rule names the test that enforces it.
 - [The decisions file](DECISIONS.md) records the locked project choices, including the licence and the dependency rules.
+- [The roadmap](docs/ROADMAP.md) is the ordered forward program after Milestone 4, with the direction calls only the project owner can settle recorded at its end.
 
 ## Licence
 
