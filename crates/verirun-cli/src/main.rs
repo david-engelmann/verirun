@@ -87,6 +87,17 @@ fn build_cli() -> Command {
                 .arg(json.clone()),
         )
         .subcommand(
+            Command::new("show")
+                .about("Verify a manifest and print its task records")
+                .arg(
+                    Arg::new("digest")
+                        .value_name("MANIFEST_DIGEST")
+                        .required(true),
+                )
+                .arg(cas.clone())
+                .arg(json.clone()),
+        )
+        .subcommand(
             Command::new("diff")
                 .about("Verify two manifests and compare their records")
                 .arg(Arg::new("first").value_name("MANIFEST_A").required(true))
@@ -175,6 +186,7 @@ fn real_main() -> i32 {
     match name {
         "run" => run_command(sub, json),
         "verify" => verify_command(sub, json),
+        "show" => show_command(sub, json),
         "diff" => diff_command(sub, json),
         "gc" => gc_command(sub, json),
         _ => 3,
@@ -286,6 +298,93 @@ fn verify_command(sub: &clap::ArgMatches, json: bool) -> i32 {
         }
         Err(error) => fail(&error, json),
     }
+}
+
+fn show_command(sub: &clap::ArgMatches, json: bool) -> i32 {
+    let Some(text) = sub.get_one::<String>("digest") else {
+        return 3;
+    };
+    let Some(cas) = sub.get_one::<PathBuf>("cas") else {
+        return 3;
+    };
+    let digest = match parse_digest(text) {
+        Ok(digest) => digest,
+        Err(message) => {
+            eprintln!("error: {message}");
+            return 3;
+        }
+    };
+    match verirun_cli::cmd_show::show(cas, &digest) {
+        Ok(manifest) => {
+            if json {
+                println!("{}", show_json(&digest, &manifest));
+            } else {
+                println!("manifest {}", digest.to_hex());
+                println!("merkle root {}", manifest.merkle_root.to_hex());
+                for record in &manifest.tasks {
+                    match record.exit_code {
+                        Some(code) => println!(
+                            "task {}: {}, exit code {code}",
+                            record.task_id,
+                            record.status.as_str()
+                        ),
+                        None => println!("task {}: {}", record.task_id, record.status.as_str()),
+                    }
+                    println!("  exec {}", record.exec_digest.to_hex());
+                    println!("  stdout {}", record.stdout_digest.to_hex());
+                    println!("  stderr {}", record.stderr_digest.to_hex());
+                    for artifact in &record.artifacts {
+                        println!(
+                            "  artifact {} {} ({} bytes)",
+                            artifact.path,
+                            artifact.digest.to_hex(),
+                            artifact.bytes
+                        );
+                    }
+                }
+            }
+            0
+        }
+        Err(error) => fail(&error, json),
+    }
+}
+
+/// The `--json` form of a show result: the manifest digest,
+/// its Merkle root, and every task record with the same
+/// fields the text form prints (INV-CLI-2).
+fn show_json(digest: &Digest, manifest: &verirun_core::manifest::Manifest) -> serde_json::Value {
+    let tasks: Vec<serde_json::Value> = manifest
+        .tasks
+        .iter()
+        .map(|record| {
+            let artifacts: Vec<serde_json::Value> = record
+                .artifacts
+                .iter()
+                .map(|artifact| {
+                    serde_json::json!({
+                        "path": artifact.path,
+                        "digest": artifact.digest.to_hex(),
+                        "bytes": artifact.bytes,
+                        "executable": artifact.executable,
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "task_id": record.task_id,
+                "status": record.status.as_str(),
+                "exit_code": record.exit_code,
+                "exec_digest": record.exec_digest.to_hex(),
+                "stdout": record.stdout_digest.to_hex(),
+                "stderr": record.stderr_digest.to_hex(),
+                "artifacts": artifacts,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "manifest": digest.to_hex(),
+        "merkle_root": manifest.merkle_root.to_hex(),
+        "tasks": tasks,
+    })
 }
 
 fn diff_command(sub: &clap::ArgMatches, json: bool) -> i32 {
