@@ -1,6 +1,6 @@
 # verirun Invariants and Traceability Matrix
 
-Status: current through Milestone 4 and roadmap lane R3. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
+Status: current through Milestone 4 and roadmap lanes R3 and R5. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
 
 ## How enforcement works
 
@@ -242,6 +242,10 @@ Edge case: the same seed passed once through `--seed` and once through `SIM_SEED
 `verirun diff` exits 0 for equivalent runs, 1 for runs that differ in any compared field, and 2 when either side fails verification. Its report names the differing tasks in task id order.
 Edge cases: a task present on one side only, a status change with identical digests, identical runs (exit 0), a corrupted side (exit 2, never reported as a mere difference).
 
+### INV-CLI-5. Show verifies first
+`verirun show` renders a manifest only after the verification of section 9.3 has passed over it in full. A manifest that fails any check, or is absent from the store, is never rendered in whole or in part; the command reports the verification failure and exits 2. A malformed digest argument exits 3, like every argument error.
+Edge cases: a tampered artifact blob under a sound manifest (exit 2, empty stdout), an absent manifest (exit 2), a malformed digest (exit 3).
+
 ## 10. Latency and resource invariants (LAT)
 
 ### INV-LAT-1. Streaming throughput shape
@@ -333,6 +337,7 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-CLI-2 | F | `cli_exit_codes::fault_json_parity_on_failure` | M3 |
 | INV-CLI-3 | P | `cli_seed::prop_seed_trace_reproducibility` | M3 |
 | INV-CLI-4 | F | `cli_diff::fault_diff_semantics_table` | M3 |
+| INV-CLI-5 | F | `cli_show::fault_show_verifies_before_display` | R5 |
 | INV-LAT-1 | B | `canonical_bench::bench_encode_throughput`, `cas_bench::bench_hash_throughput` in the owning crates' `benches/` | M4 |
 | INV-LAT-2 | F | `runner_pipes::stress_unbounded_output_under_deadline`, `runner_pipes::stress_never_closes_pipes_at_full_size` | M4, R3 |
 | INV-LAT-3 | F, B | `manifest_faults::fault_verify_single_pass_counting_reader`, benchmark `cas_bench::bench_verify_throughput` | M4 |

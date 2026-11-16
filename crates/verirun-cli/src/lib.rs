@@ -20,6 +20,7 @@
 pub mod cmd_diff;
 pub mod cmd_gc;
 pub mod cmd_run;
+pub mod cmd_show;
 pub mod cmd_verify;
 pub mod spec_io;
 

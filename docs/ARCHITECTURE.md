@@ -529,6 +529,7 @@ Exit code mapping is total. Every error the CLI can surface maps to exactly one 
 ```text
 verirun run <run-file> --cas <dir> --work <dir> [--jobs <n>] [--seed <u64>] [--json]
 verirun verify <manifest-digest> --cas <dir> [--json]
+verirun show <manifest-digest> --cas <dir> [--json]
 verirun diff <run-a> <run-b> --cas <dir> [--json]
 verirun gc --cas <dir> [--grace-secs <u64>] [--dry-run] [--json]
 ```
