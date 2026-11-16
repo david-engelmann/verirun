@@ -1,5 +1,5 @@
 //! Garbage collection fault oracles (INV-GC-1 through
-//! INV-GC-4; docs/ARCHITECTURE.md section 10).
+//! INV-GC-5; docs/ARCHITECTURE.md section 10).
 //!
 //! Ages are deterministic without touching file times: the
 //! collector takes its `now` as an input, so a test captures a
@@ -267,5 +267,64 @@ fn fault_gc_dry_run_deletes_nothing() {
     assert!(!cas.contains(&stale));
     assert!(!stray.exists());
     assert!(cas.contains(&manifest) && cas.contains(&kept));
+    fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn fault_gc_interrupted_sweep_rerun_completes() {
+    let root = fresh_dir("interrupted");
+    let cas = Cas::open(&root).expect("open store");
+    let base = SystemTime::now();
+
+    // A pinned manifest whose graph must survive every stage.
+    let kept = cas.put_bytes(b"pinned artifact").expect("put");
+    let manifest = store_manifest(
+        &cas,
+        vec![record("t", 30, kept, kept, vec![artifact("out/a", kept)])],
+    );
+    cas.pin_manifest(&manifest).expect("pin");
+
+    // Six unreachable objects. The sweep visits its plan in
+    // digest order, so an interruption is simulated exactly by
+    // deleting a strict prefix of the plan by hand, which is
+    // the state a killed sweep leaves behind.
+    let mut doomed: Vec<Digest> = (0..6)
+        .map(|i| {
+            cas.put_bytes(format!("doomed {i}").as_bytes())
+                .expect("put")
+        })
+        .collect();
+    doomed.sort();
+    let later = base + Duration::from_secs(7200);
+    let plan = collect(&cas, 3600, true, later).expect("plan");
+    assert_eq!(plan.objects, 6, "the plan names all six");
+    for prefix in &doomed[..2] {
+        fs::remove_file(cas.object_path(prefix)).expect("simulate the interruption");
+    }
+
+    // The store is still consistent: the pinned graph reads
+    // back whole, and the unswept remainder of the plan is
+    // untouched.
+    assert!(cas.contains(&manifest) && cas.contains(&kept));
+    assert_eq!(
+        cas.read_to_vec(&kept).expect("read kept"),
+        b"pinned artifact"
+    );
+    for rest in &doomed[2..] {
+        assert!(cas.contains(rest), "unswept object {rest} must be intact");
+    }
+
+    // A rerun replans from the live store and completes
+    // exactly the remaining work.
+    let report = collect(&cas, 3600, false, later).expect("rerun collect");
+    assert_eq!(report.objects, 4, "only the remainder is swept");
+    for gone in &doomed {
+        assert!(!cas.contains(gone), "object {gone} must be swept");
+    }
+    assert!(cas.contains(&manifest) && cas.contains(&kept));
+
+    // A third run has nothing left to do.
+    let report = collect(&cas, 3600, false, later).expect("third collect");
+    assert_eq!(report.objects, 0);
     fs::remove_dir_all(&root).ok();
 }

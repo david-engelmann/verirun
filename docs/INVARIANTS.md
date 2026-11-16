@@ -1,6 +1,6 @@
 # verirun Invariants and Traceability Matrix
 
-Status: current through Milestone 4. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
+Status: current through Milestone 4 and roadmap lane R3. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
 
 ## How enforcement works
 
@@ -216,6 +216,10 @@ Edge case: a temp file whose name embeds a digest that is also a pinned blob. Th
 `verirun gc --dry-run` prints the exact plan a real run would execute and deletes no file. The store tree is byte-identical before and after a dry run.
 Edge case: dry run followed by a real run on an unchanged store executes exactly the printed plan.
 
+### INV-GC-5. An interrupted sweep is safe to rerun
+A collection stopped at any point, by a crash, a kill, or an error, leaves a consistent store. The deletions already made are exactly a prefix of the plan in the sweep's deterministic order, every object not yet deleted is intact, and no reachable object is ever in the plan. A later collection replans from the live store and completes exactly the remaining work, and a collection after that finds nothing to do.
+Edge case: a sweep interrupted after two of six planned deletions, simulated by deleting the plan's prefix directly, then rerun to completion with the pinned graph verified intact at every stage.
+
 ## 9. CLI invariants (CLI)
 
 ### INV-CLI-1. Exit code totality
@@ -319,11 +323,12 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-GC-2 | F | `gc_faults::fault_gc_grace_boundary` | M3 |
 | INV-GC-3 | F | `gc_faults::fault_gc_reclaims_stale_tmp_only` | M3 |
 | INV-GC-4 | F | `gc_faults::fault_gc_dry_run_deletes_nothing` | M3 |
+| INV-GC-5 | F | `gc_faults::fault_gc_interrupted_sweep_rerun_completes` | R3 |
 | INV-CLI-1 | F | `cli_exit_codes::fault_exit_code_table` in `crates/verirun-cli/tests/` | M3 |
 | INV-CLI-2 | F | `cli_exit_codes::fault_json_parity_on_failure` | M3 |
 | INV-CLI-3 | P | `cli_seed::prop_seed_trace_reproducibility` | M3 |
 | INV-CLI-4 | F | `cli_diff::fault_diff_semantics_table` | M3 |
 | INV-LAT-1 | B | `canonical_bench::bench_encode_throughput`, `cas_bench::bench_hash_throughput` in the owning crates' `benches/` | M4 |
-| INV-LAT-2 | F | `runner_pipes::stress_unbounded_output_under_deadline` | M4 |
+| INV-LAT-2 | F | `runner_pipes::stress_unbounded_output_under_deadline`, `runner_pipes::stress_never_closes_pipes_at_full_size` | M4, R3 |
 | INV-LAT-3 | F, B | `manifest_faults::fault_verify_single_pass_counting_reader`, benchmark `cas_bench::bench_verify_throughput` | M4 |
 | INV-LAT-4 | F | `dag_faults::fault_invalid_run_leaves_store_untouched` (in crates/verirun-cli/tests/) | M2 |
