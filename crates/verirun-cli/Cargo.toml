@@ -21,6 +21,10 @@ verirun-store = { version = "0.1.0", path = "../verirun-store" }
 clap.workspace = true
 serde_json.workspace = true
 
+[[bench]]
+name = "verify_bench"
+harness = false
+
 [lints]
 workspace = true
 
