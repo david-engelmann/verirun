@@ -152,6 +152,14 @@ fn fault_show_argument_and_absence_codes() {
     assert_eq!(code(&malformed), 3, "malformed digest exits 3");
 
     let absent = invoke(&["show", &"0".repeat(64), "--cas", cas_text]);
-    assert_eq!(code(&absent), 2, "an absent manifest is an integrity failure");
-    assert_eq!(stdout(&absent), "", "nothing renders for an absent manifest");
+    assert_eq!(
+        code(&absent),
+        2,
+        "an absent manifest is an integrity failure"
+    );
+    assert_eq!(
+        stdout(&absent),
+        "",
+        "nothing renders for an absent manifest"
+    );
 }
