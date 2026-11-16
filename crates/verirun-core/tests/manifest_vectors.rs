@@ -48,7 +48,7 @@ impl StreamingHasher for ShapeHasher {
     fn finalize(self: Box<Self>) -> Digest {
         let mut state = self.acc ^ self.len.wrapping_mul(0x9e37_79b9_7f4a_7c15);
         let mut out = [0u8; 32];
-        for chunk in out.chunks_exact_mut(8) {
+        for chunk in out.as_chunks_mut::<8>().0 {
             chunk.copy_from_slice(&splitmix(&mut state).to_le_bytes());
         }
         Digest::from_bytes(out)

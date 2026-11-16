@@ -299,10 +299,10 @@ fn transitive_dependents(dag: &ValidatedDag, task_id: &str) -> BTreeSet<String> 
         direct.iter().map(String::as_str).collect()
     });
     while let Some(current) = stack.pop() {
-        if found.insert(current.to_string()) {
-            if let Some(next) = dag.dependents.get(current) {
-                stack.extend(next.iter().map(String::as_str));
-            }
+        if found.insert(current.to_string())
+            && let Some(next) = dag.dependents.get(current)
+        {
+            stack.extend(next.iter().map(String::as_str));
         }
     }
     found
