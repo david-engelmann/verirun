@@ -413,6 +413,8 @@ Before executing a ready task, the scheduler looks up its execution digest in `b
 
 ## 8. Hermetic execution
 
+The runner is POSIX by design, and the boundary is a fence in the code, not a hope. It spawns shells, leads process groups, and kills whole groups on timeout, so `runner` and the `scheduler` that drives it compile only on Unix (`cfg(unix)` in the store crate). Everything outside them, the content-addressed store, garbage collection, the clock, and the whole of the core crate, is platform-independent and carries Windows compile coverage in CI (roadmap lane R6). Running workloads on Windows is a separate question, recorded as direction call D3 in the roadmap; this section's rules describe the Unix runner as it ships.
+
 ### 8.1 Environment
 
 The child process environment is built from nothing, via `env_clear()`, then populated with exactly:

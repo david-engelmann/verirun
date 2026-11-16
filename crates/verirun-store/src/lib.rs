@@ -9,10 +9,14 @@
 //! - [`runner`]: hermetic subprocess execution. Environment
 //!   construction, executable resolution, concurrent pipe drains,
 //!   timeout enforcement, and output collection under the sandbox
-//!   rules of section 8.
+//!   rules of section 8. Unix only: process groups and shell
+//!   execution are POSIX by design, so the module is fenced
+//!   behind `cfg(unix)` and the rest of the crate compiles on
+//!   any platform.
 //! - [`scheduler`]: the worker pool over a validated DAG. Lexicographic
 //!   ready order, failure propagation, the by-exec execution cache,
-//!   and manifest production (section 7.3).
+//!   and manifest production (section 7.3). Unix only, because it
+//!   drives the runner.
 //! - [`gc`]: garbage collection execution. Mark from pins, plan
 //!   against the grace threshold, sweep under the lock, with a dry
 //!   run that deletes nothing (section 10).
@@ -28,6 +32,8 @@ pub mod cas_fs;
 pub mod clock;
 pub mod error;
 pub mod gc;
+#[cfg(unix)]
 pub mod runner;
+#[cfg(unix)]
 pub mod scheduler;
 pub mod sha256;
