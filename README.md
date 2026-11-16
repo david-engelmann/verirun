@@ -52,11 +52,11 @@ Inside its working folder, a task reads its input files under `inputs` and write
 
 ## Using verirun today
 
-verirun is a Rust workspace with three library crates. The command line program is the next milestone and is not built yet. Today the pieces are used as libraries, and the test suites exercise them end to end.
+verirun is a Rust workspace with three library crates and a command line program. The program runs a description, verifies a manifest, compares two runs, and collects garbage from the store. The libraries work on their own as well, and the test suites exercise everything end to end.
 
 - `verirun-core` holds the data model. It parses and checks run descriptions, puts JSON into one canonical form, computes the hashes, and builds manifests. It has no dependencies outside the Rust standard library.
 - `verirun-store` holds the machinery. It keeps the content store on disk, runs tasks under the sandbox rules, and schedules tasks in parallel up to the worker count you ask for.
-- `verirun-cli` holds the library the command line will sit on. It can already run a description from bytes and verify a manifest against a store.
+- `verirun-cli` holds the command line program and the library under it. It runs a description from bytes, verifies a manifest against a store, compares two runs, and drives garbage collection, with JSON output and the exit codes the architecture document promises.
 
 ## Building and testing
 
@@ -75,7 +75,7 @@ Measured on 2026-11-16 on a small shared virtual machine with two cores, from fu
 
 - Canonical encoding of a 193,835-byte document with 256 task-shaped entries, 200 iterations in 1.416 seconds, 26.1 MiB/s.
 - Hashing and storing distinct 4 MiB blobs, 20 iterations in 8.629 seconds, 9.3 MiB/s.
-- Storing 500 distinct 64 KiB blobs through the full crash-safe put protocol, 76.015 seconds, 6.6 puts per second. The put protocol syncs the file and its directories before an object counts as stored, and that durability work is most of the cost at this size.
+- Storing 500 64 KiB blobs through the full crash-safe put protocol, 76.015 seconds, 6.6 puts per second. The put protocol syncs the file and its directories before an object counts as stored, and that durability work is most of the cost at this size.
 - Verified reads of a 4 MiB blob, 50 iterations in 1.534 seconds, 130.4 MiB/s.
 
 The commands were `cargo bench -p verirun-core --bench canonical_bench` and `cargo bench -p verirun-store --bench cas_bench`.
@@ -86,7 +86,7 @@ The commands were `cargo bench -p verirun-core --bench canonical_bench` and `car
 - Milestone 1 built the hashing and storage core. It is complete and reviewed.
 - Milestone 2 added the task graph checks, the runner, the scheduler, and the result cache. It is complete and reviewed.
 - Milestone 3 added the command line program with the full command set, JSON output, and garbage collection. It is complete and reviewed.
-- Milestone 4 added the tamper suite, the crash recovery suite, pipe and timeout stress at volume, and the benchmark suite. It has landed on the main branch and is in final review.
+- Milestone 4 added the tamper suite, the crash recovery suite, pipe and timeout stress at volume, and the benchmark suite. It is complete and reviewed.
 
 ## Read more
 
