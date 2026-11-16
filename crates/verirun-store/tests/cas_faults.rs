@@ -1,15 +1,19 @@
 //! CAS fault oracles: crash states at each put step, call order,
 //! read-only objects, cross-device refusal, source mutation after
-//! put, and the streaming chunk bound.
+//! put, the streaming chunk bound, and the disk-full write
+//! failure.
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Once;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use verirun_core::cas::PutPhase;
+use verirun_core::digest::{DomainTag, hash_bytes};
 use verirun_store::cas_fs::{Cas, PutObserver};
-use verirun_store::error::StoreError;
+use verirun_store::error::{StoreError, StoreStep};
+use verirun_store::sha256::Sha256Factory;
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 static HOOK: Once = Once::new();
@@ -213,6 +217,80 @@ fn fault_source_mutation_after_put() {
             .ino();
         assert_ne!(source_ino, object_ino, "copy, not hardlink");
     }
+    remove_store(&root);
+}
+
+/// The payload the disk-full child tries to store: far larger
+/// than the file-size limit the child runs under, so the temp
+/// write runs out of room partway through the first chunk.
+fn disk_full_payload() -> Vec<u8> {
+    (0_u32..262_144).map(|i| (i % 251) as u8).collect()
+}
+
+#[test]
+#[cfg(unix)]
+fn fault_put_disk_full_at_write_step() {
+    // The bounded store is arranged by a child process, because
+    // a file-size limit is process-wide: the child runs this
+    // same test with the marker set, under a shell that ignores
+    // SIGXFSZ and caps file sizes, and reports the put's
+    // outcome on its standard output. A full disk refuses the
+    // temp write with exactly the error this produces.
+    if std::env::var_os("VERIRUN_DISK_FULL_CHILD").is_some() {
+        let root = std::env::var("VERIRUN_DISK_FULL_ROOT").expect("child root is set");
+        let cas = Cas::open(&root).expect("child opens the store");
+        match cas.put_bytes(&disk_full_payload()) {
+            Ok(_) => println!("PUT-OK"),
+            Err(StoreError::Io { step, .. }) => {
+                println!(
+                    "PUT-STEP:{}",
+                    match step {
+                        StoreStep::Write => "Write",
+                        _ => "Other",
+                    }
+                );
+            }
+            Err(_) => println!("PUT-ERR"),
+        }
+        return;
+    }
+
+    let root = fresh_root("disk-full");
+    let payload = disk_full_payload();
+    let digest = hash_bytes(&Sha256Factory, DomainTag::Blob, &payload);
+    let exe = std::env::current_exe().expect("test binary path");
+    let output = Command::new("sh")
+        .args(["-c", "trap \"\" XFSZ; ulimit -f 4; exec \"$@\"", "sh"])
+        .arg(&exe)
+        .args([
+            "--exact",
+            "fault_put_disk_full_at_write_step",
+            "--test-threads=1",
+            "--nocapture",
+        ])
+        .env("VERIRUN_DISK_FULL_CHILD", "1")
+        .env("VERIRUN_DISK_FULL_ROOT", &root)
+        .output()
+        .expect("the child runs");
+    assert!(
+        output.status.success(),
+        "the child reports and exits cleanly: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("PUT-STEP:Write"),
+        "the put fails at the write step, child said: {stdout}"
+    );
+
+    // No object became visible, and the store is fully usable
+    // afterwards: the same payload put without the limit lands
+    // and verifies.
+    let cas = Cas::open(&root).expect("store reopens");
+    assert!(!cas.contains(&digest), "no partial object is visible");
+    let landed = cas.put_bytes(&payload).expect("the retry put succeeds");
+    assert_eq!(landed, digest);
+    assert_eq!(cas.read_to_vec(&digest).expect("reads back"), payload);
     remove_store(&root);
 }
 

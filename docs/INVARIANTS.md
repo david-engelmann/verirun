@@ -94,6 +94,10 @@ Edge case: put a file, then rewrite the source file in place and append to it. T
 Putting or getting a blob of any size uses a bounded buffer (64 KiB). Peak memory of the transfer is independent of blob size. No code path reads a whole blob into memory to hash, copy, or verify it.
 Edge case: a generated blob far larger than the buffer, transferred through a counting sink that records chunk sizes and asserts the bound on every call.
 
+### INV-CAS-9. A refused write leaves no partial object
+When the filesystem refuses a put's temp write, a full disk being the natural case, the put fails as a store error naming the write step. No object becomes visible under the digest, any partial temp file is debris for the collector under INV-GC-3, and the store stays fully usable: the same payload put again without the refusal lands and verifies.
+Edge case: a child process under a file-size limit far below the payload size attempts the put, so the refusal arrives partway through the first chunk, and reports the failing step to the parent test.
+
 ## 4. DAG invariants (DAG)
 
 ### INV-DAG-1. Cycles rejected upfront
@@ -295,6 +299,7 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-CAS-6 | F | `cas_faults::fault_cross_device_tmp_refused` | M1 |
 | INV-CAS-7 | F | `cas_faults::fault_source_mutation_after_put` | M1 |
 | INV-CAS-8 | F, B | `cas_faults::fault_counting_sink_chunk_bound`, benchmark `cas_bench::bench_put_throughput` | M1, M4 |
+| INV-CAS-9 | F | `cas_faults::fault_put_disk_full_at_write_step` | R3 |
 | INV-DAG-1 | F | `dag_faults::fault_cycle_table` in `crates/verirun-core/tests/` | M2 |
 | INV-DAG-2 | F | `dag_faults::fault_missing_dependency` | M2 |
 | INV-DAG-3 | F | `dag_faults::fault_duplicate_task_id` | M2 |

@@ -1,0 +1,48 @@
+name: stress
+
+# Roadmap lane R3: the weekly stress tier.
+# The pull request gate (ci.yml) runs every test once at
+# 1,000 property cases. This workflow runs the same suite at
+# ten times the main-push volume on a schedule: the property
+# tests at 100,000 cases, and the pipe and timeout stress
+# suite, admitted to this tier by name, ten times back to
+# back. Repetition is the volume knob for fixed-size stress
+# tests; a flake that needs nine clean runs to hide shows up
+# here. workflow_dispatch allows the same run on demand.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stress-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  SIM_SEED: "20261112"
+  CARGO_TERM_COLOR: always
+  PROPTEST_CASES: "100000"
+
+jobs:
+  stress:
+    name: stress
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install the pinned toolchain
+        run: |
+          rustup toolchain install
+          rustup show active-toolchain
+      - name: Full suite at 100,000 property cases
+        run: cargo test --workspace --all-features --no-fail-fast
+      - name: The stress suite, ten times
+        run: |
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            echo "stress repetition $i of 10"
+            cargo test -p verirun-store --test runner_pipes --no-fail-fast
+          done
