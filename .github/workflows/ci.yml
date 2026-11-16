@@ -119,3 +119,25 @@ jobs:
       - name: Bench compile and smoke run
         if: steps.detect.outputs.has_cargo == 'true'
         run: cargo bench --workspace -- --test
+
+  msrv:
+    name: msrv
+    runs-on: ubuntu-latest
+    env:
+      # Roadmap lane R1: the declared rust-version is a promise, so CI
+      # builds and tests at exactly that version. RUSTUP_TOOLCHAIN
+      # overrides the development pin in rust-toolchain.toml.
+      RUSTUP_TOOLCHAIN: "1.88.0"
+      # Compatibility is the point of this job, not volume. The rust
+      # job owns the case-count policy.
+      PROPTEST_CASES: "100"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install the declared rust-version
+        run: |
+          rustup toolchain install 1.88.0
+          rustup show active-toolchain
+      - name: Build at the declared rust-version
+        run: cargo build --workspace --all-features
+      - name: Test at the declared rust-version
+        run: cargo test --workspace --all-features --no-fail-fast
