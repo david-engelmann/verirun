@@ -1,0 +1,52 @@
+name: release
+
+# Roadmap lane R7. Cutting a release is a deliberate act by the
+# project owner (roadmap direction call D1), so this workflow is
+# dispatch-only. It creates the GitHub release for one published
+# version, tagged v<version>, with that version's CHANGELOG
+# section as the notes. It publishes nothing to any registry;
+# the crates.io publication step stays a manual act until D1
+# settles its shape.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, matching the crate versions"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Extract the changelog section
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib, sys
+          version = os.environ["VERSION"]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          marker = f"## {version}"
+          start = text.find(marker)
+          if start == -1:
+              print(f"no changelog section for {version}")
+              sys.exit(1)
+          rest = text[start + len(marker):]
+          nxt = rest.find("\n## ")
+          section = rest if nxt == -1 else rest[:nxt]
+          pathlib.Path("release-notes.md").write_text(
+              section.strip() + "\n", encoding="utf-8")
+          print(f"notes for {version}: {len(section)} chars")
+          PY
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: gh release create "v$VERSION" --title "v$VERSION" --notes-file release-notes.md
