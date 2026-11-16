@@ -168,3 +168,19 @@ jobs:
       - name: Test the core crate
         shell: bash
         run: cargo test -p verirun-core
+
+  audit:
+    name: audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install the pinned toolchain
+        run: |
+          rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
+          rustup show active-toolchain
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit the dependency set
+        # Roadmap lane R7. A vulnerability in the locked
+        # dependency set fails this job and therefore the gate.
+        run: cargo audit

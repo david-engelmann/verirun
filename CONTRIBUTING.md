@@ -36,6 +36,14 @@ Signed-off-by: David Engelmann <81196676+david-engelmann@users.noreply.github.co
 
 Push the branch early and let the hosted workflow run while you keep working. A milestone lands on the main branch only after the branch head is green in the hosted workflow, and the landing is verified on the main branch itself afterwards.
 
+## Versioning
+
+The four crates version in lockstep, so one version number names the whole workspace state and the inter-crate requirements always match the workspace version. Releases are tagged with that version and carry the matching changelog section as their notes.
+
+Some surfaces are forever, and no version bump may move them. The domain tags and digest framing, the canonical encoding rules, and the manifest semantics defined in the architecture document are the product's memory. A manifest written by any published version verifies under every later version, because a store that outlives the binary that wrote it is the point of the design. If a format change ever became unavoidable, it would arrive as a new domain era alongside the old one, never as a silent change under the same tags.
+
+Before 1.0, a minor bump may break library APIs and command line details, and a patch bump carries fixes that change no behaviour a test pins. The forever surfaces are already frozen in this period, from the first published version onward. From 1.0 onward, plain semantic versioning applies to everything outside the forever set. Breaking changes take a major bump, new capability takes a minor bump, and fixes take a patch bump.
+
 ## Checkpoints
 
 Before a milestone is called done, the finished state gets three reviews. An independent re-audit of the finished tree against every claim in the report, a line-by-line review of the diff on two axes at once (whether it implements the spec, and whether it meets the standards above), and the owner's own verification pass with the key commands re-run firsthand. Findings get fixed before the landing, not after.
