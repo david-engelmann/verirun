@@ -63,7 +63,7 @@ fn bench_put_throughput(smoke: bool) {
     let elapsed = started.elapsed().as_secs_f64();
     let puts_per_sec = f64::from(iterations) / elapsed;
     println!(
-        "bench_put_throughput: {iterations} distinct 64 KiB puts in {elapsed:.3}s = {puts_per_sec:.1} puts/s"
+        "bench_put_throughput: {iterations} 64 KiB puts in {elapsed:.3}s = {puts_per_sec:.1} puts/s"
     );
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -7,7 +7,7 @@ Status: current through Milestone 4. This document is the formal invariant regis
 - Property test: a `proptest` property over generated inputs. Volume comes from `PROPTEST_CASES`, 1000 on pull requests and 10000 on main. No test hardcodes its own case count.
 - Fault oracle: a test that injects a specific corruption, crash point, or hostile input and asserts the specified failure, including exit code and named digests.
 - Unit and vector test: a fixed case with an expected byte string or digest, including the RFC 8785 Appendix B vectors.
-- Benchmark: a `criterion` benchmark that must compile and run under `cargo bench --workspace -- --test` in CI. Benchmarks prove the streaming and throughput shape of an implementation. CI never gates on wall-clock numbers.
+- Benchmark: a hand-rolled benchmark harness built on `std::time::Instant` that must compile and run under `cargo bench --workspace -- --test` in CI. Benchmarks prove the streaming and throughput shape of an implementation. CI never gates on wall-clock numbers.
 - Every seeded runner prints its active seed (`--seed`, else `SIM_SEED`, else 0) on every run, and a failure reproduces from that seed alone.
 
 Test locations: core tests live in `crates/verirun-core/tests/`, store tests in `crates/verirun-store/tests/`, CLI tests in `crates/verirun-cli/tests/`. Benchmarks live in the owning crate's `benches/` directory.
@@ -237,7 +237,7 @@ Edge cases: a task present on one side only, a status change with identical dige
 ## 10. Latency and resource invariants (LAT)
 
 ### INV-LAT-1. Streaming throughput shape
-Canonical encoding, hashing, and CAS transfer all stream in bounded chunks, so throughput benchmarks scale linearly with bytes and peak memory stays flat. The `criterion` benchmarks for encoding, hashing, and put throughput run with `Throughput::Bytes` and `black_box` on inputs and outputs.
+Canonical encoding, hashing, and CAS transfer all stream in bounded chunks, so throughput benchmarks scale linearly with bytes and peak memory stays flat. The benchmarks for encoding, hashing, and put throughput are hand-rolled harnesses that time each workload with `std::time::Instant` and report throughput from the measured byte totals.
 Edge case: benchmark inputs at two sizes an order of magnitude apart show the flat memory shape through the counting sink assertions of INV-CAS-8.
 
 ### INV-LAT-2. Pipe drain deadlock bound
