@@ -376,7 +376,11 @@ pub fn verify_manifest_observed(
     // Check 4: one re-hash of each distinct named blob, in
     // first-reference order: for each record in stored order,
     // its artifacts in path order, then its stdout, then its
-    // stderr (INV-LAT-3).
+    // stderr (INV-LAT-3). The reads run in parallel (see
+    // read_references); the observer is notified once per
+    // reference in that same order, and the first failure in
+    // that order is the one reported, so the verdict and its
+    // wording are exactly what a sequential pass produces.
     let mut references: Vec<(Digest, String, String)> = Vec::new();
     for record in &manifest.tasks {
         for artifact in &record.artifacts {
@@ -400,27 +404,79 @@ pub fn verify_manifest_observed(
             "stderr",
         );
     }
-    for (digest, task_id, path) in references {
-        match cas.read_to_vec_observed(&digest, observer) {
-            Ok(_) => {}
+    for (digest, _, _) in &references {
+        observer.on_read(digest);
+    }
+    let outcomes = read_references(cas, &references);
+    for ((digest, task_id, path), outcome) in references.iter().zip(outcomes) {
+        match outcome {
+            Ok(()) => {}
             Err(StoreError::Integrity { actual, .. }) => {
                 return Err(VerifyError::BlobMismatch {
-                    expected: digest,
+                    expected: *digest,
                     actual,
-                    task_id,
-                    path,
+                    task_id: task_id.clone(),
+                    path: path.clone(),
                 });
             }
             Err(_) => {
                 return Err(VerifyError::BlobMissing {
-                    digest,
-                    task_id,
-                    path,
+                    digest: *digest,
+                    task_id: task_id.clone(),
+                    path: path.clone(),
                 });
             }
         }
     }
     Ok(manifest)
+}
+
+/// Reads every referenced blob and returns one outcome per
+/// reference, in reference order. With at least eight
+/// references the reads spread over scoped worker threads;
+/// below that the pass is sequential, exactly as it always
+/// was. A worker that panics has its chunk re-read on the
+/// calling thread, so this function never panics either.
+fn read_references(
+    cas: &Cas,
+    references: &[(Digest, String, String)],
+) -> Vec<Result<(), StoreError>> {
+    const PARALLEL_THRESHOLD: usize = 8;
+    if references.len() < PARALLEL_THRESHOLD {
+        return references
+            .iter()
+            .map(|(digest, _, _)| cas.read_to_vec(digest).map(|_| ()))
+            .collect();
+    }
+    let workers = std::thread::available_parallelism()
+        .map_or(2, std::num::NonZero::get)
+        .min(8);
+    let chunk_len = references.len().div_ceil(workers);
+    let mut outcomes: Vec<Result<(), StoreError>> = Vec::with_capacity(references.len());
+    std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for part in references.chunks(chunk_len) {
+            handles.push(scope.spawn(move || {
+                part.iter()
+                    .map(|(digest, _, _)| cas.read_to_vec(digest).map(|_| ()))
+                    .collect::<Vec<_>>()
+            }));
+        }
+        for (index, handle) in handles.into_iter().enumerate() {
+            if let Ok(part) = handle.join() {
+                outcomes.extend(part);
+            } else {
+                let start = index * chunk_len;
+                let end = (start + chunk_len).min(references.len());
+                outcomes.extend(
+                    references[start..end]
+                        .iter()
+                        .map(|(digest, _, _)| cas.read_to_vec(digest).map(|_| ())),
+                );
+            }
+        }
+    });
+    outcomes
 }
 
 /// Verifies the manifest named by `expected` against `cas`.
