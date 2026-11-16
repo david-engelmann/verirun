@@ -8,11 +8,11 @@ Lanes run in order, one at a time. A lane lands through the normal gate: a branc
 
 ## R1. Publication readiness
 
-The audit found the manifests close to publishable. Versions, descriptions, keywords, categories, licence, and repository are all present. Four gaps remain. The inter-crate dependencies name a path and no version, so packaging warns that the published dependency will resolve from the registry instead of the workspace. No crate package carries a readme, so the crates.io pages would render bare. The declared rust-version of 1.85 has never been verified by a build. There is no changelog. The names verirun, verirun-core, verirun-store, and verirun-cli were all free on crates.io when checked on 2026-11-16.
+The audit found the manifests close to publishable. Versions, descriptions, keywords, categories, licence, and repository are all present. Four gaps remain. The inter-crate dependencies name a path and no version, so packaging warns that the published dependency will resolve from the registry instead of the workspace. No crate package carries a readme, so the crates.io pages would render bare. The declared rust-version of 1.85 has never been verified by a build. Lane R1 verified it and found it false in both directions: the store uses let-chains, stable since Rust 1.88, and the locked proptest requires 1.88, so the declared floor is now 1.88, proven by a full local suite run at that version (80 passed, 0 failed). There is no changelog. The names verirun, verirun-core, verirun-store, and verirun-cli were all free on crates.io when checked on 2026-11-16.
 
 Scope: put an explicit version on every inter-crate dependency alongside its path. Wire a readme into each crate package and add documentation and homepage fields. Start CHANGELOG.md with a 0.1.0 entry that summarizes what Milestones 1 to 4 shipped. Add a CI job that builds and tests at the declared rust-version. Rehearse publication with cargo package for all three crates, a review of each package's contents, and cargo publish in dry-run mode up to the authentication step, in dependency order.
 
-Gate: cargo package is clean for all three crates with contents reviewed, the dry-run rehearsal passes, and CI is green including the rust-version job. The publication act itself is direction call D1.
+Gate: cargo package is clean for all three crates with contents reviewed and the dry-run rehearsal passes. For store and cli the registry side of that verification completes in dependency order at publication, because the registry cannot resolve an unpublished sibling. CI is green including the rust-version job. The publication act itself is direction call D1.
 
 ## R2. Examples and documentation depth
 

@@ -233,10 +233,10 @@ fn read_by_exec_entries(cas: &Cas, pinned: &[(Digest, Manifest)]) -> BTreeMap<Di
     for (_, manifest) in pinned {
         for record in &manifest.tasks {
             let entry_path = cas.root().join(by_exec_relative_path(&record.exec_digest));
-            if let Ok(text) = fs::read_to_string(&entry_path) {
-                if let Ok(record_blob) = Digest::from_hex(text.trim()) {
-                    by_exec_records.insert(record.exec_digest, record_blob);
-                }
+            if let Ok(text) = fs::read_to_string(&entry_path)
+                && let Ok(record_blob) = Digest::from_hex(text.trim())
+            {
+                by_exec_records.insert(record.exec_digest, record_blob);
             }
         }
     }

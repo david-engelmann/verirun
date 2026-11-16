@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
+readme.workspace = true
+documentation = "https://docs.rs/verirun-cli"
 description = "The verirun executable and its library surface. A thin shell over the deterministic core and the store adapters: run file validation, scheduling, hermetic execution, and manifest verification."
 keywords = ["deterministic", "execution", "content-addressed", "manifest", "verification"]
 categories = ["command-line-utilities"]
@@ -14,8 +16,8 @@ name = "verirun"
 path = "src/main.rs"
 
 [dependencies]
-verirun-core = { path = "../verirun-core" }
-verirun-store = { path = "../verirun-store" }
+verirun-core = { version = "0.1.0", path = "../verirun-core" }
+verirun-store = { version = "0.1.0", path = "../verirun-store" }
 clap.workspace = true
 serde_json.workspace = true
 
