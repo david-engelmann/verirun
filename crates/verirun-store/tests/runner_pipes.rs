@@ -168,6 +168,45 @@ fn stress_unbounded_output_under_deadline() {
 }
 
 #[test]
+fn stress_never_closes_pipes_at_full_size() {
+    let root = fresh_root("never-closes");
+    // The INV-LAT-2 edge case at its named size: 16 MiB split
+    // across both streams from a child that then holds both
+    // streams open and never closes them. Only the task
+    // timeout can end the run, and the drain must deliver
+    // every written byte before the kill, never deadlocking
+    // against the full pipes.
+    let spec = r#"{"tasks":[{
+        "task_id": "holding",
+        "executable": "sh",
+        "args": ["-c", "yes ABCDEFGH | head -c 8388608; yes 12345678 | head -c 8388608 >&2; sleep 60"],
+        "env": {}, "inputs": [], "outputs": [], "depends_on": [], "timeout_ms": 5000
+    }]}"#;
+    let outcome = run_under_deadline(&root, spec, 1, Duration::from_secs(60));
+    assert_eq!(outcome.exit_code, 1, "the run reports the timeout");
+    let cas = Cas::open(root.join("cas")).expect("store reopens");
+    let record = &outcome.manifest.tasks[0];
+    assert_eq!(record.status, TaskStatus::TimedOut);
+    let stdout = cas
+        .read_to_vec(&record.stdout_digest)
+        .expect("stdout blob reads");
+    assert_eq!(
+        stdout,
+        pattern(b"ABCDEFGH\n", 8_388_608),
+        "stdout is byte exact at 8 MiB"
+    );
+    let stderr = cas
+        .read_to_vec(&record.stderr_digest)
+        .expect("stderr blob reads");
+    assert_eq!(
+        stderr,
+        pattern(b"12345678\n", 8_388_608),
+        "stderr is byte exact at 8 MiB"
+    );
+    remove_tree(&root);
+}
+
+#[test]
 fn stress_timeout_volume_with_grandchildren() {
     let root = fresh_root("timeouts");
     // Twelve tasks, each holding a background grandchild inside
