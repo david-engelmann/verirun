@@ -98,24 +98,31 @@ pub fn format_number(value: f64) -> Result<String, CanonicalError> {
     };
     // The value is DIGITS * 10^exp10, where DIGITS is the integer
     // formed by concatenating the integer and fraction digits.
-    let mut digits: Vec<u8> = Vec::with_capacity(int_part.len() + frac_part.len());
-    digits.extend_from_slice(int_part.as_bytes());
-    digits.extend_from_slice(frac_part.as_bytes());
+    // The digits are ASCII, so the trimming below works on the
+    // string directly; an earlier shape detoured through a byte
+    // vector and a collect, two allocations the layout never
+    // needed.
+    let mut digit_text = String::with_capacity(int_part.len() + frac_part.len());
+    digit_text.push_str(int_part);
+    digit_text.push_str(frac_part);
     let mut exp10 = -i32::try_from(frac_part.len()).unwrap_or(i32::MAX);
     // Leading zeros do not change the integer or the exponent.
-    let leading_zeros = digits.iter().take_while(|byte| **byte == b'0').count();
-    digits.drain(..leading_zeros);
+    let leading_zeros = digit_text.bytes().take_while(|byte| *byte == b'0').count();
+    digit_text.drain(..leading_zeros);
     // Each trailing zero removed raises the exponent by one.
-    while digits.len() > 1 && digits.last() == Some(&b'0') {
-        digits.pop();
+    while digit_text.len() > 1 && digit_text.ends_with('0') {
+        digit_text.pop();
         exp10 += 1;
     }
-    let digit_text: String = digits.iter().map(|byte| char::from(*byte)).collect();
     let k = i32::try_from(digit_text.len()).unwrap_or(i32::MAX);
     // ECMA-262 works with n such that value = 0.digits * 10^n.
     let n = exp10 + k;
     let body = layout(&digit_text, k, n);
-    Ok(format!("{sign}{body}"))
+    if sign.is_empty() {
+        Ok(body)
+    } else {
+        Ok(format!("{sign}{body}"))
+    }
 }
 
 /// The four ECMA-262 layout cases over a digit string `s` of length
@@ -202,24 +209,24 @@ fn encode_object<S: ByteSink + ?Sized>(
 ) -> Result<(), CanonicalError> {
     // Sort by the UTF-16 code unit sequence of each name. Rust string
     // order is code point order, which disagrees with UTF-16 order
-    // around the BMP boundary, so the sort key is computed explicitly.
-    let mut keyed: Vec<(Vec<u16>, &String, &Value)> = pairs
-        .iter()
-        .map(|(key, value)| (key.encode_utf16().collect(), key, value))
-        .collect();
-    keyed.sort_by(|left, right| left.0.cmp(&right.0));
+    // around the BMP boundary, so the comparison runs over the
+    // encode_utf16 iterators directly. That keeps the pass to one
+    // allocation, the reference vector; an earlier shape collected
+    // a UTF-16 buffer per key before it could compare anything.
+    let mut refs: Vec<(&String, &Value)> = pairs.iter().map(|pair| (&pair.0, &pair.1)).collect();
+    refs.sort_by(|left, right| left.0.encode_utf16().cmp(right.0.encode_utf16()));
     // Equal names have equal UTF-16 sequences, so duplicates are
     // adjacent after the sort.
-    for window in keyed.windows(2) {
-        if window[0].1 == window[1].1 {
+    for window in refs.windows(2) {
+        if window[0].0 == window[1].0 {
             return Err(CanonicalError::new(
                 CanonicalErrorKind::DuplicateKey,
-                format!("duplicate object key {:?}", window[0].1),
+                format!("duplicate object key {:?}", window[0].0),
             ));
         }
     }
     sink.write_bytes(b"{")?;
-    for (index, (_, key, value)) in keyed.iter().enumerate() {
+    for (index, (key, value)) in refs.iter().enumerate() {
         if index > 0 {
             sink.write_bytes(b",")?;
         }
@@ -235,26 +242,48 @@ fn encode_object<S: ByteSink + ?Sized>(
 /// U+0020 are escaped, the five named control characters by their
 /// short forms and the rest as `\u00xx` with lowercase hex.
 fn encode_string<S: ByteSink + ?Sized>(text: &str, sink: &mut S) -> Result<(), CanonicalError> {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('"');
-    for ch in text.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\u{08}' => out.push_str("\\b"),
-            '\u{09}' => out.push_str("\\t"),
-            '\u{0A}' => out.push_str("\\n"),
-            '\u{0C}' => out.push_str("\\f"),
-            '\u{0D}' => out.push_str("\\r"),
+    // Written to the sink in runs: plain spans cross as slices
+    // of the source and only escaped characters produce their
+    // own writes, so no intermediate string is built, however
+    // long the text. An earlier shape buffered every string
+    // whole before writing it once.
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let bytes = text.as_bytes();
+    sink.write_bytes(b"\"")?;
+    let mut run_start = 0;
+    for (index, ch) in text.char_indices() {
+        let escape: &[u8] = match ch {
+            '"' => b"\\\"",
+            '\\' => b"\\\\",
+            '\u{08}' => b"\\b",
+            '\u{09}' => b"\\t",
+            '\u{0A}' => b"\\n",
+            '\u{0C}' => b"\\f",
+            '\u{0D}' => b"\\r",
             control if (control as u32) < 0x20 => {
-                use core::fmt::Write as _;
-                let _ = write!(out, "\\u{:04x}", control as u32);
+                sink.write_bytes(&bytes[run_start..index])?;
+                let code = control as u32;
+                let escape = [
+                    b'\\',
+                    b'u',
+                    b'0',
+                    b'0',
+                    HEX[usize::try_from((code >> 4) & 0xF).unwrap_or(0)],
+                    HEX[usize::try_from(code & 0xF).unwrap_or(0)],
+                ];
+                sink.write_bytes(&escape)?;
+                // A character below U+0020 is one byte in UTF-8.
+                run_start = index + 1;
+                continue;
             }
-            plain => out.push(plain),
-        }
+            _ => continue,
+        };
+        sink.write_bytes(&bytes[run_start..index])?;
+        sink.write_bytes(escape)?;
+        run_start = index + ch.len_utf8();
     }
-    out.push('"');
-    sink.write_bytes(out.as_bytes())
+    sink.write_bytes(&bytes[run_start..])?;
+    sink.write_bytes(b"\"")
 }
 
 /// Encodes a value to a fresh byte vector. Convenience wrapper over
