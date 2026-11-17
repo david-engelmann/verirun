@@ -434,6 +434,12 @@ pub fn verify_manifest_observed(
     Ok(manifest)
 }
 
+/// Verifies one referenced blob by streaming it to a sink, so
+/// no whole blob is ever held in memory on this path.
+fn verify_reference(cas: &Cas, digest: &Digest) -> Result<(), StoreError> {
+    cas.copy_to(digest, std::io::sink()).map(|_| ())
+}
+
 /// Reads every referenced blob and returns one outcome per
 /// reference, in reference order. With at least eight
 /// references the reads spread over scoped worker threads;
@@ -448,7 +454,7 @@ fn read_references(
     if references.len() < PARALLEL_THRESHOLD {
         return references
             .iter()
-            .map(|(digest, _, _)| cas.read_to_vec(digest).map(|_| ()))
+            .map(|(digest, _, _)| verify_reference(cas, digest))
             .collect();
     }
     let workers = std::thread::available_parallelism()
@@ -461,7 +467,7 @@ fn read_references(
         for part in references.chunks(chunk_len) {
             handles.push(scope.spawn(move || {
                 part.iter()
-                    .map(|(digest, _, _)| cas.read_to_vec(digest).map(|_| ()))
+                    .map(|(digest, _, _)| verify_reference(cas, digest))
                     .collect::<Vec<_>>()
             }));
         }
@@ -474,7 +480,7 @@ fn read_references(
                 outcomes.extend(
                     references[start..end]
                         .iter()
-                        .map(|(digest, _, _)| cas.read_to_vec(digest).map(|_| ())),
+                        .map(|(digest, _, _)| verify_reference(cas, digest)),
                 );
             }
         }

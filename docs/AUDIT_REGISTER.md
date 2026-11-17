@@ -213,7 +213,14 @@ copy_to into a sink. The fix streams check 4 the same way. The first
 check legitimately needs the manifest bytes themselves and is
 unchanged.
 
-Disposition. LAND in Round 4.
+Disposition. LANDED in Round 4. Check 4 now streams every
+referenced blob through copy_to into a sink, in the sequential
+pass, the worker chunks, and the panic fallback alike, so a
+worker's memory is one stream buffer rather than one whole blob.
+The error surface is unchanged because read_to_vec was itself a
+copy_to into a vector. No new test pins the change: it is
+structural, and the tamper and verification suites pin the
+semantics it preserves.
 
 ### F14. Run planning is quadratic in the graph size
 
@@ -224,7 +231,20 @@ time. Planning cost therefore grows faster than the graph it plans.
 The fix builds the producer map and the ancestor information once
 per run, and proves the change with a many task benchmark.
 
-Disposition. LAND in Round 4.
+Disposition. LANDED in Round 4, with the proof amended on the
+record. plan_inputs now builds the producer map once and
+accumulates every task's transitive dependency set once, in the
+dag's topological order, so a dependency's set is final before
+any dependent reads it; each input then resolves with two map
+lookups, and the per-input graph walk is deleted. The benchmark
+clause is amended because planning is an internal step with no
+public surface to time: through scheduler::run its cost is
+swamped by process spawns at every graph size, so a wall clock
+figure would measure the spawns, not the planning. The proof is
+the complexity change itself plus a scale test that plans and
+runs a chain of a thousand tasks, each consuming its
+predecessor's output, and checks the content arrives intact at
+the end of the chain.
 
 ### F15. The runner supervises and drains by polling
 
