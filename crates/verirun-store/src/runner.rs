@@ -418,7 +418,10 @@ impl<'a> Runner<'a> {
 /// delivered by then.
 fn spawn_pipe_reader(
     mut pipe: impl Read + Send + 'static,
-) -> (mpsc::Receiver<io::Result<Vec<u8>>>, std::sync::Arc<AtomicBool>) {
+) -> (
+    mpsc::Receiver<io::Result<Vec<u8>>>,
+    std::sync::Arc<AtomicBool>,
+) {
     let (sender, receiver) = mpsc::channel();
     let cutoff = std::sync::Arc::new(AtomicBool::new(false));
     std::thread::spawn(move || {
