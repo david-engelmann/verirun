@@ -21,18 +21,20 @@ jobs:
         run: |
           rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
           rustup show active-toolchain
-      - name: Package the three crates
-        run: |
-          cargo package -p verirun-core --no-verify
-          cargo package -p verirun-store --no-verify
-          cargo package -p verirun-cli --no-verify
-          ls -la target/package/
+      - name: Package verirun-core
+        run: cargo package -p verirun-core --no-verify
+      - name: Package verirun-store
+        run: cargo package -p verirun-store --no-verify
+      - name: Package verirun-cli
+        run: cargo package -p verirun-cli --no-verify
       - name: Push the packages to the pkg-artifacts branch
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           mkdir -p /tmp/crates-out
-          cp target/package/*.crate /tmp/crates-out/
+          cp target/package/*.crate /tmp/crates-out/ || true
+          ls -la /tmp/crates-out/
           git checkout --orphan pkg-artifacts
           git rm -rf . > /dev/null 2>&1 || true
           cp /tmp/crates-out/*.crate .
