@@ -130,6 +130,16 @@ pub struct TaskRecord {
 impl TaskRecord {
     /// Builds a record, sorting `artifacts` by path so the
     /// framing order of section 5.2 holds by construction.
+    ///
+    /// # Panics
+    ///
+    /// Panics if two artifacts share a path. No run can produce
+    /// that, because collection holds one entry per declared
+    /// output, so a duplicate here is a programming error rather
+    /// than data, the same assignment [`Manifest::digest`] makes
+    /// for its domain. The parse path reports the same shape as
+    /// [`ManifestError::DuplicateArtifactPath`] instead, because
+    /// there it is data.
     #[must_use]
     pub fn new(
         task_id: String,
@@ -142,6 +152,13 @@ impl TaskRecord {
     ) -> Self {
         let mut artifacts = artifacts;
         artifacts.sort_by(|left, right| left.path.as_bytes().cmp(right.path.as_bytes()));
+        for window in artifacts.windows(2) {
+            assert!(
+                window[0].path != window[1].path,
+                "duplicate artifact path {:?} in a built record",
+                window[0].path
+            );
+        }
         Self {
             task_id,
             exec_digest,
@@ -254,7 +271,7 @@ impl TaskRecord {
     /// Never panics in the core implementation.
     pub fn from_value(value: &Value) -> Result<Self, ManifestError> {
         let pairs = as_object(value, "task")?;
-        let artifacts = match get(pairs, "artifacts")? {
+        let mut artifacts = match get(pairs, "artifacts")? {
             Value::Array(items) => {
                 let mut out = Vec::with_capacity(items.len());
                 for item in items {
@@ -269,28 +286,32 @@ impl TaskRecord {
                 });
             }
         };
-        let record = Self::new(
-            as_string(get(pairs, "task_id")?, "task_id")?.to_string(),
+        // No run can produce two artifacts at one path, because
+        // collection holds one entry per declared output, so a
+        // duplicate is rejected rather than carried into the
+        // framing. The check runs on the sorted order
+        // construction will hold, and it runs here, before
+        // construction, because on this path a duplicate is
+        // data to report, not a programming error to panic on.
+        artifacts.sort_by(|left, right| left.path.as_bytes().cmp(right.path.as_bytes()));
+        let task_id = as_string(get(pairs, "task_id")?, "task_id")?.to_string();
+        for window in artifacts.windows(2) {
+            if window[0].path == window[1].path {
+                return Err(ManifestError::DuplicateArtifactPath {
+                    task_id: task_id.clone(),
+                    path: window[0].path.clone(),
+                });
+            }
+        }
+        Ok(Self::new(
+            task_id,
             as_digest(get(pairs, "exec_digest")?, "exec_digest")?,
             as_status(get(pairs, "status")?)?,
             as_exit_code(get(pairs, "exit_code")?)?,
             as_digest(get(pairs, "stdout_sha256")?, "stdout_sha256")?,
             as_digest(get(pairs, "stderr_sha256")?, "stderr_sha256")?,
             artifacts,
-        );
-        // Construction sorts the artifacts by path. No run can
-        // produce two artifacts at one path, because collection
-        // holds one entry per declared output, so a duplicate is
-        // rejected rather than carried into the framing.
-        for window in record.artifacts.windows(2) {
-            if window[0].path == window[1].path {
-                return Err(ManifestError::DuplicateArtifactPath {
-                    task_id: record.task_id.clone(),
-                    path: window[0].path.clone(),
-                });
-            }
-        }
-        Ok(record)
+        ))
     }
 }
 
@@ -313,10 +334,24 @@ impl Manifest {
     ///
     /// # Panics
     ///
-    /// Never panics in the core implementation.
+    /// Panics if two records share a task id. The only producer
+    /// is the scheduler over a validated run, whose task ids are
+    /// unique by validation, so a duplicate here is a programming
+    /// error rather than data, the same assignment
+    /// [`Manifest::digest`] makes for its domain. The parse path
+    /// reports the same shape as
+    /// [`ManifestError::DuplicateTaskId`] instead, because there
+    /// it is data.
     #[must_use]
     pub fn build(factory: &dyn HasherFactory, mut records: Vec<TaskRecord>) -> Self {
         records.sort_by(|left, right| left.task_id.as_bytes().cmp(right.task_id.as_bytes()));
+        for window in records.windows(2) {
+            assert!(
+                window[0].task_id != window[1].task_id,
+                "duplicate task id {:?} in a built manifest",
+                window[0].task_id
+            );
+        }
         let leaves: Vec<Digest> = records
             .iter()
             .map(|record| record.record_digest(factory))
