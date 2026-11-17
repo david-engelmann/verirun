@@ -28,7 +28,7 @@ The M4 suites cover tamper, crash recovery at put boundaries, and pipe stress. T
 
 Scope: a collection interruption fault that stops a sweep between deletions and proves the store stays consistent and a rerun finishes the plan. A disk-full fault on a bounded store proving the put fails as a named store error with no partial object visible. The never-closes pipe shape at the full 16 MiB the invariant names. A scheduled weekly workflow that runs the stress tier at ten times the pull request volume, with the heaviest tests admitted to that tier by name.
 
-Gate: each fault lands with its INVARIANTS matrix row in the same pull request, and the weekly workflow is green on its first scheduled run.
+Gate: each fault lands with its INVARIANTS matrix row in the same pull request, and the weekly workflow is green on its first scheduled run. Lane R3 landed in two slices on 2026-11-16. INV-GC-5 and the full-size INV-LAT-2 edge landed first (main 54234c89), then INV-CAS-9 with the stress workflow (main 25ffe42c). The workflow's first dispatched run (43921605698) failed in its 100,000-case suite step. The cause was a generator defect in prop_tuple_framing_injective, which drew two field lists independently and filtered equal pairs until the reject cap aborted the run at the higher volume, exactly the class of defect the volume tier exists to catch. Hosted bisection cleared the other five property suites at 100,000 cases, the generator now derives the second list from the first with one guaranteed change (main 78ad52a7), and the re-dispatched run 43969419775 completed green with the full suite and the tenfold stress suite both passing. The temporary diag workflow added for the bisection is removed in the same change that records this closure.
 
 ## R4. Performance
 
@@ -36,7 +36,7 @@ The recorded figures are honest and, by the gate audit's own reruns, conservativ
 
 Scope: a presence pre-check in put_bytes that skips the temp write when the digest is already stored, with the safety argument stated in the code (the digest is computed from the caller's bytes before the check, and presence under a content address asserts nothing the read path does not re-verify). Parallel blob reads in verification with error reporting kept in first-reference order. An allocation pass over the encoder measured with the counting sink the core already ships. Every change records before and after benchmark numbers in its pull request, and the README figures are refreshed in the same pull request when a number moves beyond run-to-run noise.
 
-Gate: numbers recorded for each change, the full suite green, and no invariant amended. A change that cannot show a measured improvement does not land.
+Gate: numbers recorded for each change, the full suite green, and no invariant amended. A change that cannot show a measured improvement does not land. Lane R4 landed in three slices on 2026-11-16. The put_bytes presence pre-check took repeat puts of one 64 KiB payload from 14.8 and 15.3 puts/s before to 1233.1 and 1631.8 after (main 734eaf81). The mixed bench stayed inside its noise band, so no mixed figure is claimed and the README numbers stand. Parallel verification (main acdb7795) at a 128-task manifest measured 3.61 and 4.53 verifications/s sequentially and 8.47 and 6.00 in parallel, while at 32 tasks the two were indistinguishable, so the slice is claimed only at the size where it pays. The encoder allocation pass (main 9e160d5b) measured 13.8, 21.7 and 20.4 MiB/s before and 28.6, 25.9 and 26.0 after on the shipped bench. No invariant was amended.
 
 ## R5. CLI surface completion
 
@@ -44,7 +44,7 @@ The audit found one surface gap. Verification answers whether a manifest is soun
 
 Scope: a `verirun show` command that prints a manifest's tasks, statuses, exit codes, and digests in text, with the same content under --json. Show verifies the manifest under section 9.3 of the architecture document before displaying anything, so it never presents an unverified manifest as fact, and its failures take the existing exit code for verification. A CLI invariant row records the verify-first rule, with exit code table tests for the new command.
 
-Gate: the command ships with its matrix row and tests, and the full suite stays green.
+Gate: the command ships with its matrix row and tests, and the full suite stays green. Lane R5 landed on 2026-11-16 (main 639ec25c). The show command verifies under section 9.3 before rendering, its matrix row is INV-CLI-5, and its oracles include the tampered-store case exiting 2 with empty stdout.
 
 ## R6. Portability
 
@@ -52,7 +52,7 @@ The core is pure computation and the store's platform assumptions are already fe
 
 Scope: Windows compile coverage for verirun-core and for the parts of verirun-store outside the runner, a windows-latest CI job for exactly those crates, and the runner's POSIX boundary stated plainly in the architecture document. Runtime support on Windows is direction call D3 and is not assumed by this lane.
 
-Gate: the Windows CI job is green for the crates it claims, and no POSIX behaviour changes.
+Gate: the Windows CI job is green for the crates it claims, and no POSIX behaviour changes. Lane R6 landed on 2026-11-16 (main a61b5dcd). The windows job was green on its first run, checking core and store and running the core tests on windows-latest, and the Linux suite was unchanged and green beside it.
 
 ## R7. Release engineering
 
@@ -60,7 +60,7 @@ Nothing watches the dependency set for advisories, and there is no release disci
 
 Scope: cargo audit running in CI with its failures treated as gate failures. A written semantic versioning policy in CONTRIBUTING.md that spells out what the project already treats as forever (the domain-separated digest formats and the canonical encoding) and what may still move before 1.0. A GitHub release for each published version carrying its changelog section as the notes, with tags matching crate versions.
 
-Gate: the audit job is green, the policy is written, and the first release is cut when D1 is decided.
+Gate: the audit job is green, the policy is written, and the first release is cut when D1 is decided. Lane R7 landed on 2026-11-16 (main c825cee1). The audit job runs cargo audit in CI and was green on its first run, the versioning policy stands in CONTRIBUTING.md, and the dispatch-only release workflow is ready. D1 was decided on 2026-11-16, and the first release is cut with the 0.1.0 publication.
 
 ## Direction calls recorded
 
