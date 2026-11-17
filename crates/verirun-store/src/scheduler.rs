@@ -825,7 +825,7 @@ fn store_cache_entry(cas: &Cas, record: &TaskRecord) -> Result<(), RunError> {
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => false,
         Err(source) => {
             return Err(RunError::from(StoreError::Io {
-                path: shard.clone(),
+                path: shard,
                 step: StoreStep::CreateShard,
                 source,
             }));
