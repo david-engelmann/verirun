@@ -466,6 +466,13 @@ struct ChannelReader {
     failed: Option<io::Error>,
     /// The cutoff flag shared with `collect_stream`.
     cutoff: std::sync::Arc<AtomicBool>,
+    /// How long to wait on the channel before re-checking the
+    /// cutoff. Backs off while the stream is idle, from 5
+    /// milliseconds up to a 100 millisecond cap, and resets
+    /// whenever a chunk or an error arrives (audit finding
+    /// F15). The cap is one percent of the drain grace the
+    /// cutoff serves, so the extra cut latency is immaterial.
+    poll: Duration,
 }
 
 impl ChannelReader {
@@ -481,6 +488,7 @@ impl ChannelReader {
             offset: 0,
             failed: None,
             cutoff,
+            poll: Duration::from_millis(5),
         }
     }
 }
@@ -504,15 +512,19 @@ impl Read for ChannelReader {
             if let Some(source) = self.failed.take() {
                 return Err(source);
             }
-            match self.receiver.recv_timeout(Duration::from_millis(5)) {
+            match self.receiver.recv_timeout(self.poll) {
                 Ok(Ok(chunk)) => {
                     self.pending = chunk;
                     self.offset = 0;
+                    self.poll = Duration::from_millis(5);
                 }
                 Ok(Err(source)) => {
                     self.failed = Some(source);
+                    self.poll = Duration::from_millis(5);
                 }
-                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    self.poll = (self.poll * 2).min(Duration::from_millis(100));
+                }
                 Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(0),
             }
         }
@@ -758,6 +770,12 @@ struct Supervision {
 /// threads, which finish when the pipes close (section 8.3).
 fn supervise(child: &mut Child, timeout_ms: Option<u64>) -> Supervision {
     let deadline = timeout_ms.map(|ms| Instant::now() + Duration::from_millis(ms));
+    // The wait between exit checks backs off while the child
+    // runs, from 2 milliseconds up to a 50 millisecond cap, so a
+    // long task costs a handful of wakeups a second instead of
+    // five hundred (audit finding F15). The sleep never crosses
+    // the deadline, so the timeout still fires on time.
+    let mut wait = Duration::from_millis(2);
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
@@ -770,25 +788,29 @@ fn supervise(child: &mut Child, timeout_ms: Option<u64>) -> Supervision {
                 };
             }
             Ok(None) => {
-                if let Some(deadline) = deadline
-                    && Instant::now() >= deadline
-                {
-                    kill_process_group(child.id());
-                    let _ = child.kill();
-                    return match child.wait() {
-                        Ok(_) => Supervision {
-                            exit_code: None,
-                            timed_out: true,
-                            detail: None,
-                        },
-                        Err(source) => Supervision {
-                            exit_code: None,
-                            timed_out: true,
-                            detail: Some(format!("reaping the killed child failed: {source}")),
-                        },
-                    };
+                if let Some(deadline) = deadline {
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    if remaining.is_zero() {
+                        kill_process_group(child.id());
+                        let _ = child.kill();
+                        return match child.wait() {
+                            Ok(_) => Supervision {
+                                exit_code: None,
+                                timed_out: true,
+                                detail: None,
+                            },
+                            Err(source) => Supervision {
+                                exit_code: None,
+                                timed_out: true,
+                                detail: Some(format!("reaping the killed child failed: {source}")),
+                            },
+                        };
+                    }
+                    std::thread::sleep(wait.min(remaining));
+                } else {
+                    std::thread::sleep(wait);
                 }
-                std::thread::sleep(Duration::from_millis(2));
+                wait = (wait * 2).min(Duration::from_millis(50));
             }
             Err(source) => {
                 return Supervision {
