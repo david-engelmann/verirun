@@ -110,7 +110,9 @@ impl CliError {
                 RunError::Store {
                     source: StoreError::Integrity { .. } | StoreError::Missing { .. },
                 } => 2,
-                RunError::Store { .. } | RunError::MissingInput { .. } => 3,
+                RunError::Store { .. }
+                | RunError::MissingInput { .. }
+                | RunError::WorkLocked { .. } => 3,
             },
             Self::Store { source } => match source {
                 StoreError::Integrity { .. } | StoreError::Missing { .. } => 2,

@@ -33,13 +33,16 @@ that exits zero without writing a declared output can therefore have
 a file left by an earlier run collected and recorded as this run's
 artifact, and two verirun processes sharing one work root write into
 the same sandboxes. Every test in the suite uses a fresh work root,
-so the gate cannot see this. The fix gives each run its own sandbox
-root under the work root, after checking whether the architecture
-pins the sandbox path shape. The behaviour consequence is that work
-roots accumulate one run directory per run until the user removes
-them. Not an API break.
+so the gate cannot see this. The architecture does pin the sandbox
+layout, so the shipped fix keeps the layout and attacks the cause.
+The runner clears each task's sandbox before the task executes, so
+collection only ever sees files the current execution wrote, and
+the scheduler holds the work root under a run lock for the run's
+duration, so two runs sharing a work root fail loudly instead of
+corrupting each other. The new behaviour is pinned as INV-SBX-6 and
+INV-RUN-8. Not an API break.
 
-Disposition. LAND in Round 2.
+Disposition. LANDED in Round 2.
 
 ### F2. A crafted cache record can panic the coordinator
 
@@ -52,10 +55,11 @@ producer's record holds its declared outputs. A hand planted store
 entry that passes the checks while naming the wrong paths panics the
 coordinator thread, which breaks the documented never panics
 contract of the run entry point. Reachability needs a crafted store
-entry, so the severity is minor. The fix validates artifact paths
-during lookup and treats a mismatch as a cache miss.
+entry, so the severity is minor. The shipped fix validates artifact
+paths during lookup and treats a mismatch as a cache miss, and
+INV-RUN-7 now states the path condition in its text.
 
-Disposition. LAND in Round 2.
+Disposition. LANDED in Round 2.
 
 ### F3. Manifest reading accepts structures no run can produce
 

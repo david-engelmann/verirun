@@ -2,6 +2,14 @@
 
 Every notable change to verirun is recorded here. Versions follow the semantic versioning policy in CONTRIBUTING.md once the first release is published.
 
+## Unreleased
+
+Changes from the post-completion audit programme, after 0.1.0.
+
+- Sandbox freshness. A task's sandbox is cleared before the task executes, so an output collected for a run was always written by that run (audit finding F1, invariant INV-SBX-6).
+- Work root ownership. A run holds its work root under a lock file for its whole duration, and a second run against the same work root fails with the new RunError::WorkLocked error instead of sharing sandboxes (audit finding F1, invariant INV-RUN-8). The CLI maps the refusal to exit code 3.
+- Cache validation. A stored cache record is honoured only when its artifact paths are exactly the task's declared outputs, so a planted record can no longer be honoured or crash the run (audit finding F2, invariant INV-RUN-7).
+
 ## 0.1.0
 
 The first release, prepared under roadmap lane R1 and published to crates.io on 2026-11-16 under direction call D1.
