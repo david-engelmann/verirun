@@ -407,26 +407,33 @@ impl<'a> Runner<'a> {
 
 /// Spawns the detached reader thread for one pipe. The thread
 /// forwards the pipe's bytes over a channel in read-sized chunks
-/// and exits at end of stream, on a read error, or when the
-/// receiving side is gone (which is how a cut stream releases
-/// it). The returned flag is the stream's cutoff: setting it
-/// makes the drain side report end of stream at the next read,
-/// finalizing the store object from the bytes delivered by
-/// then.
+/// and exits at end of stream or when the receiving side is gone
+/// (which is how a cut stream releases it). A read error is
+/// forwarded as the channel's last item before the thread exits,
+/// so the drain side surfaces it from its store operation
+/// instead of finalizing a truncated capture as if the stream
+/// had ended cleanly. The returned flag is the stream's cutoff:
+/// setting it makes the drain side report end of stream at the
+/// next read, finalizing the store object from the bytes
+/// delivered by then.
 fn spawn_pipe_reader(
     mut pipe: impl Read + Send + 'static,
-) -> (mpsc::Receiver<Vec<u8>>, std::sync::Arc<AtomicBool>) {
+) -> (mpsc::Receiver<io::Result<Vec<u8>>>, std::sync::Arc<AtomicBool>) {
     let (sender, receiver) = mpsc::channel();
     let cutoff = std::sync::Arc::new(AtomicBool::new(false));
     std::thread::spawn(move || {
         let mut buffer = vec![0_u8; STREAM_BUFFER_BYTES];
         loop {
             match pipe.read(&mut buffer) {
-                Ok(0) | Err(_) => break,
+                Ok(0) => break,
                 Ok(read) => {
-                    if sender.send(buffer[..read].to_vec()).is_err() {
+                    if sender.send(Ok(buffer[..read].to_vec())).is_err() {
                         break;
                     }
+                }
+                Err(source) => {
+                    let _ = sender.send(Err(source));
+                    break;
                 }
             }
         }
@@ -440,14 +447,20 @@ fn spawn_pipe_reader(
 /// reported when the reader thread ends (the pipe closed) or
 /// when the cutoff flag is set, whichever comes first; bytes
 /// already delivered are always delivered first, so a cut
-/// stream is an exact prefix of the full stream.
+/// stream is an exact prefix of the full stream. A read error
+/// the reader thread forwarded is returned once the delivered
+/// bytes are served, unless the cutoff fired first: a cut
+/// stream still finalizes as a prefix, exactly as before.
 struct ChannelReader {
     /// The chunk channel from the pipe reader thread.
-    receiver: mpsc::Receiver<Vec<u8>>,
+    receiver: mpsc::Receiver<io::Result<Vec<u8>>>,
     /// The chunk currently being served.
     pending: Vec<u8>,
     /// How much of `pending` has been served.
     offset: usize,
+    /// A read error forwarded by the reader thread, returned
+    /// once the delivered bytes are served.
+    failed: Option<io::Error>,
     /// The cutoff flag shared with `collect_stream`.
     cutoff: std::sync::Arc<AtomicBool>,
 }
@@ -455,11 +468,15 @@ struct ChannelReader {
 impl ChannelReader {
     /// Creates a reader over `receiver`, cut short when
     /// `cutoff` is set.
-    const fn new(receiver: mpsc::Receiver<Vec<u8>>, cutoff: std::sync::Arc<AtomicBool>) -> Self {
+    const fn new(
+        receiver: mpsc::Receiver<io::Result<Vec<u8>>>,
+        cutoff: std::sync::Arc<AtomicBool>,
+    ) -> Self {
         Self {
             receiver,
             pending: Vec::new(),
             offset: 0,
+            failed: None,
             cutoff,
         }
     }
@@ -481,10 +498,16 @@ impl Read for ChannelReader {
             if self.cutoff.load(Ordering::SeqCst) {
                 return Ok(0);
             }
+            if let Some(source) = self.failed.take() {
+                return Err(source);
+            }
             match self.receiver.recv_timeout(Duration::from_millis(5)) {
-                Ok(chunk) => {
+                Ok(Ok(chunk)) => {
                     self.pending = chunk;
                     self.offset = 0;
+                }
+                Ok(Err(source)) => {
+                    self.failed = Some(source);
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(0),

@@ -56,12 +56,12 @@ impl Digest {
     /// Returns [`DigestError`] naming the wrong length or the position
     /// of the first invalid character.
     pub fn from_hex(text: &str) -> Result<Self, DigestError> {
-        if text.len() != 64 {
+        if text.chars().count() != 64 {
             return Err(DigestError::new(
                 DigestErrorKind::InvalidLength,
                 format!(
                     "a digest is 64 hex characters, got {} characters",
-                    text.len()
+                    text.chars().count()
                 ),
             ));
         }
