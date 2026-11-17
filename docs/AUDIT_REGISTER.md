@@ -183,7 +183,21 @@ an integrity error. Whether the public contract should promise
 discard on error, or state the current behaviour louder in the docs,
 is a decision for the API round with the full surface in view.
 
-Disposition. DEFER to Round 3.
+Disposition. LANDED in Round 3 as the louder statement. The copy_to
+documentation now states that verification completes only when the
+copy does, that an integrity error may leave some or all of the
+object's bytes in the destination, that the caller must discard
+them, and that a caller who cannot discard should read through
+read_to_vec and write only on success. No behaviour change and no
+API change; a discard promise would have cost the streaming shape
+that materialization and the scheduler's sink reads rely on. The
+Round 3 read of the rest of the API surface under the ergonomics
+lens found it consistent and cleared it: Digest carries Display,
+Debug, and FromStr beside to_hex and from_hex, the record types are
+symmetric in to_value and from_value, the observed variants are
+named uniformly across the store, each crate's errors form one enum
+with Display and source, and the CLI command functions share one
+shape.
 
 ## Performance
 
