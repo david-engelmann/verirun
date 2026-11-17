@@ -1,0 +1,31 @@
+name: verify
+
+# Temporary publication verification. Consumes the published
+# 0.1.0 crates from crates.io exactly as a stranger would: a
+# fresh project that depends on all three, a build, and a
+# cargo install of the verirun binary. Removed once the
+# 0.1.0 publication verification is complete.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install a stable toolchain
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustc --version
+      - name: Fresh project depending on all three crates
+        run: |
+          cargo new /tmp/consumer
+          cd /tmp/consumer
+          cargo add verirun-core verirun-store verirun-cli
+          cargo build
+      - name: Install the published binary and run it
+        run: |
+          cargo install verirun-cli --root /tmp/verirun-install
+          /tmp/verirun-install/bin/verirun --help
