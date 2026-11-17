@@ -29,9 +29,11 @@
 //!
 //! Cache: before executing a ready task the scheduler looks its
 //! execution digest up in the store's `by-exec/` index. The entry
-//! is reused only when the recorded task record and every blob it
-//! names still exist and re-hash correctly; a missing or corrupt
-//! target is ignored and the task executes (INV-RUN-7). After a
+//! is reused only when the recorded task record's artifact paths
+//! are exactly the task's declared outputs and every blob it
+//! names still exists and re-hashes correctly; a missing or
+//! corrupt target is ignored and the task executes (INV-RUN-7).
+//! After a
 //! task succeeds, its execution digest to record digest mapping
 //! is written with the same atomic discipline as the put
 //! protocol.
@@ -93,7 +95,9 @@ pub struct RunOutcome {
 /// binding. Returns [`RunError::Store`] when the store fails,
 /// including the integrity failure a corrupted input blob raises
 /// during materialization, which aborts the run before the
-/// consuming task starts.
+/// consuming task starts. Returns [`RunError::WorkLocked`]
+/// before any task executes when another run holds the work
+/// root (INV-RUN-8).
 ///
 /// # Panics
 ///
@@ -107,6 +111,11 @@ pub fn run(
     jobs: usize,
 ) -> Result<RunOutcome, RunError> {
     let plans = plan_inputs(dag, inputs)?;
+
+    // One run owns a work root at a time (INV-RUN-8). The guard
+    // is held until this function returns, however it returns,
+    // and its drop removes the lock file.
+    let _work_lock = WorkLock::take(work_root)?;
 
     if dag.tasks.is_empty() {
         let manifest = Manifest::build(factory, Vec::new());
@@ -378,6 +387,10 @@ fn build_work_item(
         task_id: task_id.to_string(),
         exec_digest: compute_exec_digest(factory, dag, task_id, &framed),
         inputs: materialize,
+        outputs: dag.outputs[task_id]
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
     }
 }
 
@@ -443,6 +456,10 @@ struct WorkItem {
     /// The materialization inputs: normalized path and content
     /// blob digest.
     inputs: Vec<(NormalizedPath, Digest)>,
+    /// The task's declared output paths, in declaration order.
+    /// The cache lookup checks a stored record's artifact paths
+    /// against exactly this set (INV-RUN-7).
+    outputs: Vec<String>,
 }
 
 /// The pool state shared between the coordinator and the workers.
@@ -721,10 +738,11 @@ impl Coordinator {
 /// Consults the store's `by-exec/` index for `item`'s execution
 /// digest (section 6.1). The entry is honored only when the
 /// recorded record parses, names this execution digest, encodes
-/// canonically to the very bytes stored, and every blob the
-/// record names still exists and re-hashes correctly. Anything
-/// else is a miss, never an error (INV-RUN-7); a store failure
-/// that is neither a missing nor a corrupt target aborts.
+/// canonically to the very bytes stored, names exactly the
+/// task's declared outputs as its artifact paths, and every blob
+/// the record names still exists and re-hashes correctly.
+/// Anything else is a miss, never an error (INV-RUN-7); a store
+/// failure that is neither a missing nor a corrupt target aborts.
 fn lookup_cache(cas: &Cas, item: &WorkItem) -> Result<Option<TaskRecord>, RunError> {
     let entry_path = cas.root().join(by_exec_relative_path(&item.exec_digest));
     let Ok(text) = fs::read_to_string(&entry_path) else {
@@ -749,6 +767,21 @@ fn lookup_cache(cas: &Cas, item: &WorkItem) -> Result<Option<TaskRecord>, RunErr
     }
     let mut reencoded = Vec::new();
     if canonical::encode(&record.to_value(), &mut reencoded).is_err() || reencoded != bytes {
+        return Ok(None);
+    }
+    // The record's own fields are self-consistent at this point,
+    // but nothing yet ties its artifact paths to this task. A
+    // record planted with the right execution digest and the
+    // wrong paths would otherwise be honored, and the builders
+    // downstream trust a producer's record to hold its declared
+    // outputs. A path mismatch is a miss (INV-RUN-7).
+    let declared: BTreeSet<&str> = item.outputs.iter().map(String::as_str).collect();
+    let recorded: BTreeSet<&str> = record
+        .artifacts
+        .iter()
+        .map(|artifact| artifact.path.as_str())
+        .collect();
+    if record.artifacts.len() != recorded.len() || recorded != declared {
         return Ok(None);
     }
     for named in record.named_digests() {
@@ -845,4 +878,51 @@ fn store_cache_entry(cas: &Cas, record: &TaskRecord) -> Result<(), RunError> {
         })
     })?;
     Ok(())
+}
+
+/// The work root lock (INV-RUN-8), on the same `create_new` and
+/// drop-removes discipline as the collection lock in `gc`. A
+/// run holds its work root exclusively from admission to
+/// completion, so two runs can never write into the same task
+/// sandboxes at the same time.
+struct WorkLock {
+    /// The lock file path.
+    path: PathBuf,
+}
+
+impl WorkLock {
+    /// Creates the work root when needed and claims its
+    /// `run.lock` file, failing with [`RunError::WorkLocked`]
+    /// when another run already holds it.
+    fn take(work_root: &Path) -> Result<Self, RunError> {
+        fs::create_dir_all(work_root).map_err(|source| {
+            RunError::from(StoreError::Io {
+                path: work_root.to_path_buf(),
+                step: StoreStep::CreateRunLock,
+                source,
+            })
+        })?;
+        let path = work_root.join("run.lock");
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(_file) => Ok(Self { path }),
+            Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+                Err(RunError::WorkLocked { path })
+            }
+            Err(source) => Err(RunError::from(StoreError::Io {
+                path,
+                step: StoreStep::CreateRunLock,
+                source,
+            })),
+        }
+    }
+}
+
+impl Drop for WorkLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
 }

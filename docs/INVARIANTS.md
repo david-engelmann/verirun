@@ -151,8 +151,12 @@ When a task fails or times out, exactly its transitive dependents are recorded `
 Edge cases: a failure at the root of a chain, a failure in one branch of a diamond (the other branch and the join's other inputs still resolve, the join itself is skipped), a graph where everything fails, a run whose manifest holds only skipped records apart from one failed root, verified clean after the run.
 
 ### INV-RUN-7. Cache soundness
-A cached task is reused only when its execution digest matches and every recorded output and log blob still exists and re-hashes correctly at materialization. A cache entry pointing at missing or corrupted blobs is ignored and the task re-executes. Cache state can never change a manifest's meaning: a run served fully from cache and the same run executed cold produce identical manifests apart from the `cached` status markers defined in the record semantics, and identical artifact and log digests.
-Edge case: delete one output blob of a cached task, re-run, and observe re-execution of exactly that task.
+A cached task is reused only when its execution digest matches, its recorded artifact paths are exactly the task's declared outputs, and every recorded output and log blob still exists and re-hashes correctly at materialization. A cache entry pointing at missing or corrupted blobs is ignored and the task re-executes. Cache state can never change a manifest's meaning: a run served fully from cache and the same run executed cold produce identical manifests apart from the `cached` status markers defined in the record semantics, and identical artifact and log digests.
+Edge case: delete one output blob of a cached task, re-run, and observe re-execution of exactly that task. A cache record whose blobs all verify but whose artifact paths differ from the declared outputs is likewise ignored and the task re-executes, because nothing in the record's own fields ties its paths to the task it claims to describe.
+
+### INV-RUN-8. One run per work root
+A run holds its work root exclusively from admission to completion through a create_new lock file named `run.lock` in the work root. A second run against the same work root fails with `RunError::WorkLocked` before any task executes, and the CLI exits with code 3. The lock file is removed when the run ends, however it ends, so a later run over the same work root is admitted.
+Edge case: a lock file planted in the work root before the run starts. The run refuses, no sandbox is created or touched, and the planted file is left in place, because a lock the run did not take is not the run's to remove.
 
 ## 6. Sandbox invariants (SBX)
 
@@ -175,6 +179,10 @@ Edge cases: undeclared files in the sandbox (ignored), a declared output that is
 ### INV-SBX-5. Input materialization is verified
 Inputs are copied into the sandbox from the store with hash verification during the copy. A stored input that fails verification aborts the run with exit code 2 before the task starts, naming the digest.
 Edge case: corrupt one byte of an input blob in the store, then run a graph that consumes it.
+
+### INV-SBX-6. The sandbox starts empty
+Every execution starts from an empty sandbox. Before a task spawns, whatever a previous execution of the same task id left in its sandbox is removed whole, without following symlinks, so every artifact collection gathers can only have been written by the execution the record describes. A sandbox that cannot be cleared fails the task before it spawns, with the reason recorded as the task's failure detail.
+Edge cases: an earlier run's file sitting at a declared output path while the current execution writes nothing there (the task fails as a missing output, and the stale file is never collected), read-only directories left by an earlier execution (still removed), and a leftover symlink at the sandbox path itself (unlinked as a link, its target untouched).
 
 ## 7. Manifest invariants (MAN)
 
@@ -316,12 +324,14 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-RUN-4 | F | `runner_timeout::fault_timeout_kills_and_reaps`, `runner_timeout::fault_timeout_under_pipe_flood` | M2, M4 |
 | INV-RUN-5 | P | `scheduler_prop::prop_worker_count_independence` | M2 |
 | INV-RUN-6 | F | `scheduler_faults::fault_failure_propagation_sets`, `manifest_faults::fault_skipped_records_verify_clean` | M2 |
-| INV-RUN-7 | F | `scheduler_faults::fault_cache_missing_blob_reexecutes` | M2 |
+| INV-RUN-7 | F | `scheduler_faults::fault_cache_missing_blob_reexecutes`, `scheduler_faults::fault_cache_record_with_wrong_artifact_paths_reexecutes` | M2, Audit R2 |
+| INV-RUN-8 | F | `scheduler_faults::fault_work_root_lock_blocks_second_run` | Audit R2 |
 | INV-SBX-1 | F | `paths_faults::fault_parent_traversal_table` in `crates/verirun-core/tests/` | M2 |
 | INV-SBX-2 | F | `paths_faults::fault_absolute_path_table` | M2 |
 | INV-SBX-3 | F | `runner_collect::fault_symlink_output_rejected` in `crates/verirun-store/tests/` | M2 |
 | INV-SBX-4 | F | `runner_collect::fault_collection_exactness_and_metadata` | M2 |
 | INV-SBX-5 | F | `runner_collect::fault_corrupt_input_aborts_before_spawn` | M2 |
+| INV-SBX-6 | F | `runner_collect::fault_stale_output_from_earlier_run_not_collected` in `crates/verirun-store/tests/` | Audit R2 |
 | INV-MAN-1 | P | `manifest_prop::prop_manifest_determinism_across_workers_and_workspaces` in `crates/verirun-cli/tests/` | M2 |
 | INV-MAN-2 | F | `manifest_faults::fault_verify_from_relocated_store` | M3 |
 | INV-MAN-3 | F | `tamper_suite::fault_bitflip_leaf_blobs` in `crates/verirun-cli/tests/` | M4 |

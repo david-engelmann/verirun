@@ -170,8 +170,12 @@ impl<'a> Runner<'a> {
         }
     }
 
-    /// Executes one task in `sandbox`, creating the sandbox and
-    /// its `inputs`, `outputs`, and `tmp` areas.
+    /// Executes one task in `sandbox`, clearing whatever a
+    /// previous execution left there and then creating the
+    /// sandbox and its `inputs`, `outputs`, and `tmp` areas.
+    /// The sandbox starts empty for every execution, so every
+    /// collected artifact was written by the execution the
+    /// record describes (INV-SBX-6).
     ///
     /// `inputs` pairs each normalized declared input path with the
     /// blob digest to materialize. Materialization copies through
@@ -196,17 +200,10 @@ impl<'a> Runner<'a> {
         inputs: &[(NormalizedPath, Digest)],
         sandbox: &Path,
     ) -> Result<TaskExecution, RunError> {
-        let inputs_dir = sandbox.join("inputs");
-        let outputs_dir = sandbox.join("outputs");
-        let tmp_dir = sandbox.join("tmp");
-        for dir in [sandbox, &inputs_dir, &outputs_dir, &tmp_dir] {
-            if let Err(source) = fs::create_dir_all(dir) {
-                return self.unspawned(format!(
-                    "creating sandbox directory {} failed: {source}",
-                    dir.display()
-                ));
-            }
-        }
+        let (inputs_dir, outputs_dir, tmp_dir) = match prepare_sandbox(sandbox) {
+            Ok(dirs) => dirs,
+            Err(detail) => return self.unspawned(detail),
+        };
 
         // Materialize inputs through the store's verified read
         // before anything spawns. A corrupted blob aborts the run
@@ -538,6 +535,73 @@ fn collect_stream(
     match received {
         Ok(digest) => Ok((digest, cut)),
         Err(source) => Err(RunError::from(source)),
+    }
+}
+
+/// Clears `sandbox` of any previous execution's leftovers
+/// (INV-SBX-6) and creates the sandbox and its `inputs`,
+/// `outputs`, and `tmp` areas, returning the three area paths.
+fn prepare_sandbox(sandbox: &Path) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+    clear_sandbox(sandbox)?;
+    let inputs_dir = sandbox.join("inputs");
+    let outputs_dir = sandbox.join("outputs");
+    let tmp_dir = sandbox.join("tmp");
+    for dir in [sandbox, &inputs_dir, &outputs_dir, &tmp_dir] {
+        fs::create_dir_all(dir).map_err(|source| {
+            format!(
+                "creating sandbox directory {} failed: {source}",
+                dir.display()
+            )
+        })?;
+    }
+    Ok((inputs_dir, outputs_dir, tmp_dir))
+}
+
+/// Removes whatever a previous execution left in `sandbox`,
+/// so the execution about to start sees an empty directory
+/// (INV-SBX-6). A missing sandbox is already clear. A leftover
+/// that is not a directory, including a symlink, is unlinked
+/// as itself and never followed. Directory leftovers are made
+/// removable first, because a task may have left read-only
+/// directories behind, and then removed whole.
+fn clear_sandbox(sandbox: &Path) -> Result<(), String> {
+    let failed = |source: io::Error| {
+        format!(
+            "clearing sandbox directory {} failed: {source}",
+            sandbox.display()
+        )
+    };
+    let metadata = match fs::symlink_metadata(sandbox) {
+        Ok(metadata) => metadata,
+        Err(source) if source.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(source) => return Err(failed(source)),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return fs::remove_file(sandbox).map_err(failed);
+    }
+    make_removable(sandbox);
+    fs::remove_dir_all(sandbox).map_err(failed)
+}
+
+/// Restores owner write and traverse permission on `dir` and
+/// every real directory under it, so a tree a task left
+/// read-only can still be removed. Symlinks are never
+/// followed: a linked directory is left for the removal to
+/// unlink as a link.
+fn make_removable(dir: &Path) {
+    if let Ok(metadata) = fs::metadata(dir) {
+        let mut permissions = metadata.permissions();
+        permissions.set_mode(permissions.mode() | 0o700);
+        let _ = fs::set_permissions(dir, permissions);
+    }
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Ok(file_type) = entry.file_type()
+                && file_type.is_dir()
+            {
+                make_removable(&entry.path());
+            }
+        }
     }
 }
 

@@ -225,3 +225,53 @@ fn fault_corrupt_input_aborts_before_spawn() {
     );
     remove_tree(&root);
 }
+
+#[test]
+fn fault_stale_output_from_earlier_run_not_collected() {
+    let root = fresh_root("stale");
+    let cas_root = root.join("cas");
+    let work_root = root.join("work");
+    let cas = Cas::open(&cas_root).expect("store opens");
+
+    // First run: the task writes its declared output.
+    let writing = task_json(
+        "writer",
+        "printf 'first-run-bytes' > outputs/a.txt",
+        &["a.txt"],
+    );
+    let spec = format!(r#"{{"tasks":[{writing}]}}"#);
+    let value = parse(spec.as_bytes()).expect("spec parses");
+    let dag = validate_run_spec(&value).expect("spec validates");
+    let first = scheduler::run(&cas, &Sha256Factory, &work_root, &dag, &BTreeMap::new(), 1)
+        .expect("first run completes");
+    let first_rec = &first.manifest.tasks[0];
+    assert_eq!(first_rec.status, TaskStatus::Succeeded);
+    assert_eq!(first_rec.artifacts.len(), 1);
+    let stale_digest = first_rec.artifacts[0].digest;
+    assert_eq!(
+        cas.read_to_vec(&stale_digest).expect("first blob reads"),
+        b"first-run-bytes"
+    );
+
+    // Second run, same store and same work root: the task's
+    // command changed, so its execution digest differs and it
+    // really executes, but the new command writes nothing. The
+    // declared output is missing from this execution. The file
+    // the first run left in the sandbox must not be collected
+    // as this run's artifact.
+    let silent = task_json("writer", "true", &["a.txt"]);
+    let spec = format!(r#"{{"tasks":[{silent}]}}"#);
+    let value = parse(spec.as_bytes()).expect("spec parses");
+    let dag = validate_run_spec(&value).expect("spec validates");
+    let second = scheduler::run(&cas, &Sha256Factory, &work_root, &dag, &BTreeMap::new(), 1)
+        .expect("second run completes");
+    assert_eq!(second.exit_code, 1);
+    let second_rec = &second.manifest.tasks[0];
+    assert_eq!(
+        second_rec.status,
+        TaskStatus::Failed,
+        "an output this execution never wrote must fail the task, not collect a stale file"
+    );
+    assert_eq!(second_rec.artifacts.len(), 0);
+    remove_tree(&root);
+}

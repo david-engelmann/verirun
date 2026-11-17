@@ -57,6 +57,8 @@ pub enum StoreStep {
     RemoveObject,
     /// Creating the collection lock file.
     CreateLock,
+    /// Creating the run lock file in a work root.
+    CreateRunLock,
 }
 
 impl fmt::Display for StoreStep {
@@ -83,6 +85,7 @@ impl fmt::Display for StoreStep {
             Self::ListObjects => "list objects",
             Self::RemoveObject => "remove object",
             Self::CreateLock => "create collection lock",
+            Self::CreateRunLock => "create run lock",
         };
         f.write_str(name)
     }
@@ -199,6 +202,14 @@ pub enum RunError {
         /// The normalized input path that resolves nowhere.
         path: String,
     },
+    /// Another run holds the work root's `run.lock`, so this run
+    /// was refused before any task executed (INV-RUN-8). Two runs
+    /// sharing one work root would write into the same task
+    /// sandboxes, so the second run fails cleanly instead.
+    WorkLocked {
+        /// The lock file path.
+        path: PathBuf,
+    },
 }
 
 impl fmt::Display for RunError {
@@ -209,6 +220,11 @@ impl fmt::Display for RunError {
                 f,
                 "task {task_id:?} declares input {path:?}, which no dependency produced and the caller did not bind"
             ),
+            Self::WorkLocked { path } => write!(
+                f,
+                "another run holds the work root lock at {}; if no run is active, remove that file and retry",
+                path.display()
+            ),
         }
     }
 }
@@ -217,7 +233,7 @@ impl std::error::Error for RunError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Store { source } => Some(source),
-            Self::MissingInput { .. } => None,
+            Self::MissingInput { .. } | Self::WorkLocked { .. } => None,
         }
     }
 }
