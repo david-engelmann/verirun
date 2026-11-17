@@ -52,7 +52,7 @@ Inside its working folder, a task reads its input files under `inputs` and write
 
 ## Using verirun today
 
-verirun is a Rust workspace with three library crates and a command line program. The program runs a description, verifies a manifest, compares two runs, and collects garbage from the store. The libraries work on their own as well, and the test suites exercise everything end to end.
+verirun is a Rust workspace with three library crates and a command line program. The program runs a description, verifies a manifest, compares two runs, and collects garbage from the store. The libraries work on their own as well, and the test suites exercise everything end to end. The three crates are published on crates.io at 0.1.0, and installing the program is one command, `cargo install verirun-cli`.
 
 - `verirun-core` holds the data model. It parses and checks run descriptions, puts JSON into one canonical form, computes the hashes, and builds manifests. It has no dependencies outside the Rust standard library.
 - `verirun-store` holds the machinery. It keeps the content store on disk, runs tasks under the sandbox rules, and schedules tasks in parallel up to the worker count you ask for.
