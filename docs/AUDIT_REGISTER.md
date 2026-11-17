@@ -157,6 +157,20 @@ timing across a crash is not observable from a test, and the
 crash recovery and concurrency suites pin the protocol the
 syncs extend.
 
+Round 18 measurement. The store bench ran interleaved on one
+hosted runner, pre-fix tree against fixed tree, two runs each.
+Repeat puts measured 24699 and 24760 per second before the
+fix, and 3447 and 20662 after it: the two added directory
+syncs cost between a little and a lot per put depending on
+the disk's flush behaviour, spiky on a shared runner, and
+even the worst observed rate stays in the thousands per
+second, far above the one put per artifact a run performs.
+Distinct puts and verified reads were unchanged within noise
+on both sides, as expected, since the syncs touch only the
+repeat paths. The measurement closes the charge with no
+follow-up change: the syncs are the fix, and the pre-check
+still removes the whole-object rewrite it exists to remove.
+
 ### F8. The GC lock has no staleness recovery
 
 Minor. The collector's lock is a create_new lock file removed on
