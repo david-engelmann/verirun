@@ -121,7 +121,8 @@ impl ValidatedDag {
 ///
 /// Returns [`DagError`] describing the first violation found: a
 /// schema violation, a duplicated task id, an unknown dependency, a
-/// colliding output, an unsafe path, or the sorted cyclic remnant.
+/// colliding output, a duplicated input, an unsafe path, or the
+/// sorted cyclic remnant.
 ///
 /// # Panics
 ///
@@ -204,7 +205,20 @@ pub fn validate_run_spec(spec: &Value) -> Result<ValidatedDag, DagError> {
         let mut inputs: Vec<NormalizedPath> = Vec::with_capacity(task.inputs.len());
         for declared in &task.inputs {
             match crate::paths::validate_path(declared) {
-                Ok(normalized) => inputs.push(normalized),
+                Ok(normalized) => {
+                    // A repeated input is rejected, as a repeated
+                    // output is under check 4. Carrying it would
+                    // frame the same bytes twice into the exec
+                    // digest and materialize the path twice, two
+                    // silent answers to a spec mistake.
+                    if inputs.contains(&normalized) {
+                        return Err(DagError::DuplicateInput {
+                            task_id: task.task_id.clone(),
+                            path: normalized.as_str().to_string(),
+                        });
+                    }
+                    inputs.push(normalized);
+                }
                 Err(source) => {
                     return Err(DagError::InvalidPath {
                         task_id: task.task_id.clone(),

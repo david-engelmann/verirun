@@ -14,6 +14,9 @@ Changes from the post-completion audit programme, after 0.1.0.
 - Verification error taxonomy (breaking). VerifyError gains ManifestUnreadable and BlobUnreadable: a manifest or blob that exists but cannot be read is reported with the store failure named, no longer as missing (audit findings F18 and F24). Exhaustive matches on VerifyError gain the two variants.
 - Stream capture errors. A pipe read error while capturing a task's output now fails the run instead of finalizing a truncated capture as if the stream had ended cleanly (audit finding F19).
 - Digest length message. Digest::from_hex counts characters in its length error, as the message has always said (audit finding F20).
+- Manifest duplicate rejection (breaking). Manifest reading rejects two records for one task id and two artifacts at one path in a record, shapes no run can produce, through the new ManifestError variants DuplicateTaskId and DuplicateArtifactPath (audit finding F3).
+- Encode depth limit. Canonical encoding rejects a programmatically built value nested past the parser's depth limit, through the new CanonicalErrorKind variant DepthLimitExceeded, instead of recursing until the stack fails (audit finding F4).
+- Duplicate input rejection (breaking). Run validation rejects a task that declares the same input path twice, through the new DagError variant DuplicateInput, mirroring the output collision rule (audit finding F5).
 
 ## 0.1.0
 

@@ -285,3 +285,37 @@ fn fault_schema_rejection_table() {
     assert!(validate(&run(&[task("a.b-c_d")])).is_ok());
     assert!(validate(r#"{"tasks":[]}"#).is_ok());
 }
+
+#[test]
+fn fault_duplicate_input() {
+    // The same input declared twice in one task (audit finding
+    // F5). Outputs reject this shape under check 4; inputs now
+    // reject it in check 5, after path validation of the first
+    // occurrence.
+    let adjacent = task("a").replace(r#""inputs":[]"#, r#""inputs":["in.txt","in.txt"]"#);
+    assert_eq!(
+        validate(&run(&[adjacent])),
+        Err(DagError::DuplicateInput {
+            task_id: "a".to_string(),
+            path: "in.txt".to_string()
+        })
+    );
+
+    // The duplicate need not be adjacent in the declared list.
+    let separated = task("a").replace(r#""inputs":[]"#, r#""inputs":["a.txt","b.txt","a.txt"]"#);
+    assert_eq!(
+        validate(&run(&[separated])),
+        Err(DagError::DuplicateInput {
+            task_id: "a".to_string(),
+            path: "a.txt".to_string()
+        })
+    );
+
+    // Control: distinct inputs in one task validate, and the same
+    // input path in two different tasks is ordinary fan-in.
+    let distinct = task("a").replace(r#""inputs":[]"#, r#""inputs":["a.txt","b.txt"]"#);
+    assert!(validate(&run(&[distinct])).is_ok());
+    let fan_in_a = task("a").replace(r#""inputs":[]"#, r#""inputs":["shared.txt"]"#);
+    let fan_in_b = task("b").replace(r#""inputs":[]"#, r#""inputs":["shared.txt"]"#);
+    assert!(validate(&run(&[fan_in_a, fan_in_b])).is_ok());
+}
