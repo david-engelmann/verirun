@@ -231,7 +231,6 @@ fn fault_cache_missing_blob_reexecutes() {
     remove_tree(&root);
 }
 
-#[cfg(any())]
 #[test]
 fn fault_work_root_lock_blocks_second_run() {
     let root = fresh_root("worklock");
@@ -290,8 +289,8 @@ fn cache_entry_for(cas: &Cas, task_id: &str) -> (PathBuf, TaskRecord) {
         for entry in std::fs::read_dir(&shard).expect("shard lists") {
             let entry = entry.expect("entry").path();
             let hex = std::fs::read_to_string(&entry).expect("entry reads");
-            let digest = verirun_core::digest::Digest::from_hex(hex.trim())
-                .expect("entry names a digest");
+            let digest =
+                verirun_core::digest::Digest::from_hex(hex.trim()).expect("entry names a digest");
             let bytes = cas.read_to_vec(&digest).expect("record blob reads");
             let value = parse(&bytes).expect("record parses");
             let record = TaskRecord::from_value(&value).expect("record decodes");
