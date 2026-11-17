@@ -338,7 +338,7 @@ fn fault_cache_record_with_wrong_artifact_paths_reexecutes() {
     let (entry_path, genuine) = cache_entry_for(&cas, "producer");
     assert_eq!(genuine.artifacts.len(), 1);
     assert_eq!(genuine.artifacts[0].path, "p.txt");
-    let mut forged = genuine.clone();
+    let mut forged = genuine;
     forged.artifacts[0].path = "forged.txt".to_string();
     let mut forged_bytes = Vec::new();
     canonical::encode(&forged.to_value(), &mut forged_bytes).expect("forged record encodes");
