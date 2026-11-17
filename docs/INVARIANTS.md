@@ -232,6 +232,10 @@ Edge case: dry run followed by a real run on an unchanged store executes exactly
 A collection stopped at any point, by a crash, a kill, or an error, leaves a consistent store. The deletions already made are exactly a prefix of the plan in the sweep's deterministic order, every object not yet deleted is intact, and no reachable object is ever in the plan. A later collection replans from the live store and completes exactly the remaining work, and a collection after that finds nothing to do.
 Edge case: a sweep interrupted after two of six planned deletions, simulated by deleting the plan's prefix directly, then rerun to completion with the pinned graph verified intact at every stage.
 
+### INV-GC-6. A stale collection lock is broken, a fresh one refuses
+The collection lock is debris once it is a day old, because a sweep is bounded work and no live collection holds its lock that long. A collection that finds a lock older than the threshold breaks it and proceeds. A lock younger than the threshold is a live collection and refuses, and the refusal names the remedy of removing the file when no collection is active. Ages are read against the collector's one clock read, and a lock dated in the future reads as fresh.
+Edge case: a planted lock aged past the threshold by the fabricated now is broken and the sweep runs; a planted lock at the current now refuses with the remedy in its message.
+
 ## 9. CLI invariants (CLI)
 
 ### INV-CLI-1. Exit code totality
@@ -343,6 +347,7 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-GC-3 | F | `gc_faults::fault_gc_reclaims_stale_tmp_only` | M3 |
 | INV-GC-4 | F | `gc_faults::fault_gc_dry_run_deletes_nothing` | M3 |
 | INV-GC-5 | F | `gc_faults::fault_gc_interrupted_sweep_rerun_completes` | R3 |
+| INV-GC-6 | F | `gc_faults::fault_gc_breaks_a_stale_lock_and_sweeps`, `gc_faults::fault_gc_fresh_lock_refuses_and_names_the_remedy` | Audit R16 |
 | INV-CLI-1 | F | `cli_exit_codes::fault_exit_code_table` in `crates/verirun-cli/tests/` | M3 |
 | INV-CLI-2 | F | `cli_exit_codes::fault_json_parity_on_failure` | M3 |
 | INV-CLI-3 | P | `cli_seed::prop_seed_trace_reproducibility` | M3 |

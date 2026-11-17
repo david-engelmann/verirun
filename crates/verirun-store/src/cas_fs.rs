@@ -297,6 +297,19 @@ impl Cas {
         // that returns Ok has either found the object present
         // or made it durable itself.
         if self.contains(&digest) {
+            // Presence alone is not durability (F7): the put
+            // that landed the object may have renamed it without
+            // yet syncing its directories when a crash comes.
+            // Sync both directories here, so the Durable phase
+            // this hit reports is one this call has established
+            // itself rather than borrowed from a put still in
+            // flight.
+            let destination = self.object_path(&digest);
+            let shard_dir = destination
+                .parent()
+                .expect("an object path always has a shard parent");
+            sync_directory(shard_dir, StoreStep::SyncShard)?;
+            sync_directory(&self.root.join("objects"), StoreStep::SyncObjects)?;
             observer.on_phase(PutPhase::Writing);
             observer.on_phase(PutPhase::FileSynced);
             observer.on_phase(PutPhase::Renamed);
@@ -366,9 +379,15 @@ impl Cas {
         let mut hasher = begin(&self.factory, DomainTag::Blob);
         let mut buffer = vec![0_u8; STREAM_BUFFER_BYTES];
         loop {
-            let read = reader
-                .read(&mut buffer)
-                .map_err(|err| io_error(&temp_path, StoreStep::Write, err))?;
+            // An interrupted read is a normal event on a busy
+            // host, not a failure of the stream (F6): retry it.
+            let read = loop {
+                match reader.read(&mut buffer) {
+                    Ok(read) => break read,
+                    Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(err) => return Err(io_error(&temp_path, StoreStep::Write, err)),
+                }
+            };
             if read == 0 {
                 break;
             }
@@ -406,25 +425,37 @@ impl Cas {
         drop(file);
 
         let destination = self.object_path(digest);
-        if destination.is_file() {
-            // Already present from an earlier or concurrent put of the
-            // same bytes. Discard the temp; the object and its
-            // durability were established by the put that landed it.
-            std::fs::remove_file(temp_path)
-                .map_err(|err| io_error(temp_path, StoreStep::RemoveTemp, err))?;
-            observer.on_phase(PutPhase::Renamed);
-            observer.on_phase(PutPhase::Durable);
-            return Ok(*digest);
-        }
         let shard_dir = destination
             .parent()
             .expect("an object path always has a shard parent")
             .to_path_buf();
-        let shard_created = !shard_dir.is_dir();
-        if shard_created {
-            std::fs::create_dir_all(&shard_dir)
-                .map_err(|err| io_error(&shard_dir, StoreStep::CreateShard, err))?;
+        if destination.is_file() {
+            // Already present from an earlier or concurrent put of
+            // the same bytes. Discard the temp. The Durable phase
+            // still has to be earned here (F7): the put that
+            // landed the object may not have synced its
+            // directories yet, so sync them on this path too
+            // before reporting durability.
+            std::fs::remove_file(temp_path)
+                .map_err(|err| io_error(temp_path, StoreStep::RemoveTemp, err))?;
+            sync_directory(&shard_dir, StoreStep::SyncShard)?;
+            sync_directory(&self.root.join("objects"), StoreStep::SyncObjects)?;
+            observer.on_phase(PutPhase::Renamed);
+            observer.on_phase(PutPhase::Durable);
+            return Ok(*digest);
         }
+        // Create the shard directory with a single create call
+        // rather than an is_dir check first (F7): the check and
+        // the create raced across concurrent puts, so a put could
+        // see the directory present, skip the objects sync, and
+        // leave the shard's own creation unsynced if the creating
+        // put crashed first. Exactly one put now learns that it
+        // created the shard, and that put syncs objects below.
+        let shard_created = match std::fs::create_dir(&shard_dir) {
+            Ok(()) => true,
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => false,
+            Err(err) => return Err(io_error(&shard_dir, StoreStep::CreateShard, err)),
+        };
         std::fs::rename(temp_path, &destination)
             .map_err(|err| io_error(temp_path, StoreStep::Rename, err))?;
         observer.on_phase(PutPhase::Renamed);
@@ -501,9 +532,14 @@ impl Cas {
         let mut buffer = vec![0_u8; STREAM_BUFFER_BYTES];
         let mut total: u64 = 0;
         loop {
-            let read = file
-                .read(&mut buffer)
-                .map_err(|err| io_error(&path, StoreStep::ReadObject, err))?;
+            // Retry interrupted reads (F6), as in the put stream.
+            let read = loop {
+                match file.read(&mut buffer) {
+                    Ok(read) => break read,
+                    Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(err) => return Err(io_error(&path, StoreStep::ReadObject, err)),
+                }
+            };
             if read == 0 {
                 break;
             }

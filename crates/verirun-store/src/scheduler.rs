@@ -817,13 +817,20 @@ fn store_cache_entry(cas: &Cas, record: &TaskRecord) -> Result<(), RunError> {
         .parent()
         .expect("a by-exec entry path has a shard parent")
         .to_path_buf();
-    fs::create_dir_all(&shard).map_err(|source| {
-        RunError::from(StoreError::Io {
-            path: shard.clone(),
-            step: StoreStep::CreateShard,
-            source,
-        })
-    })?;
+    // One create call, as in the put protocol (F7): the call
+    // that creates the shard owes by-exec/ a sync once the entry
+    // lands, and a check first would race the same way.
+    let shard_created = match fs::create_dir(&shard) {
+        Ok(()) => true,
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => false,
+        Err(source) => {
+            return Err(RunError::from(StoreError::Io {
+                path: shard.clone(),
+                step: StoreStep::CreateShard,
+                source,
+            }));
+        }
+    };
 
     let unique = COUNTER.fetch_add(1, Ordering::SeqCst);
     let temp_path = cas.root().join("tmp").join(format!(
@@ -876,11 +883,31 @@ fn store_cache_entry(cas: &Cas, record: &TaskRecord) -> Result<(), RunError> {
     })?;
     shard_dir.sync_all().map_err(|source| {
         RunError::from(StoreError::Io {
-            path: shard,
+            path: shard.clone(),
             step: StoreStep::SyncShard,
             source,
         })
     })?;
+    if shard_created {
+        // The shard's own directory entry lives in by-exec/,
+        // and only the call that created the shard can owe it
+        // this sync (F7).
+        let by_exec = cas.root().join("by-exec");
+        let by_exec_dir = fs::File::open(&by_exec).map_err(|source| {
+            RunError::from(StoreError::Io {
+                path: by_exec.clone(),
+                step: StoreStep::SyncByExec,
+                source,
+            })
+        })?;
+        by_exec_dir.sync_all().map_err(|source| {
+            RunError::from(StoreError::Io {
+                path: by_exec,
+                step: StoreStep::SyncByExec,
+                source,
+            })
+        })?;
+    }
     Ok(())
 }
 

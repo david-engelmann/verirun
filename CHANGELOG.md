@@ -19,6 +19,9 @@ Changes from the post-completion audit programme, after 0.1.0.
 - Duplicate input rejection (breaking). Run validation rejects a task that declares the same input path twice, through the new DagError variant DuplicateInput, mirroring the output collision rule (audit finding F5).
 - Builder invariant. Manifest and record construction now panic on a duplicate task id or artifact path, the shapes parsing rejects as errors, so a built manifest always survives its own round trip through the value form (audit finding F25).
 - Supervision backoff. The runner's exit watch and pipe drain waits back off while a task runs (2 to 50 milliseconds, and 5 to 100 milliseconds on an idle stream), so a long task no longer costs hundreds of wakeups a second; timeouts still fire on time (audit finding F15).
+- Interrupted reads. The store's read loops retry an interrupted read instead of failing the put or the copy (audit finding F6).
+- Put durability. A put that finds its object already present, whether by the pre-check or by losing the rename race, now syncs the object's directories itself before reporting the object durable, and shard creation no longer races a directory check (audit finding F7). Cache entry publication syncs the by-exec directory when it creates a shard.
+- Collection lock staleness. A collection lock older than a day is broken automatically, so a collection killed without dropping its lock no longer blocks every later collection, and the lock refusal names the remedy (audit finding F8, invariant INV-GC-6).
 
 ## 0.1.0
 
