@@ -11,6 +11,7 @@
 #![forbid(unsafe_code)]
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -75,9 +76,11 @@ fn chain_spec() -> String {
                 format!("\"f{}.txt\"", i - 1),
             )
         };
-        tasks.push_str(&format!(
+        write!(
+            tasks,
             r#"{{"task_id":"t{i}","executable":"sh","args":["-c","{script}"],"env":{{}},"inputs":[{inputs}],"outputs":["f{i}.txt"],"depends_on":[{deps}]}}"#
-        ));
+        )
+        .expect("writing to a string cannot fail");
     }
     format!(r#"{{"tasks":[{tasks}]}}"#)
 }
