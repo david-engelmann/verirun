@@ -257,13 +257,36 @@ fn plan_inputs(
     dag: &ValidatedDag,
     inputs: &BTreeMap<String, Digest>,
 ) -> Result<BTreeMap<String, Vec<(NormalizedPath, InputSource)>>, RunError> {
+    // The producer of every declared output, resolved once.
+    // Output paths are unique across a validated run, so no
+    // entry is ever overwritten.
+    let mut producers: BTreeMap<&NormalizedPath, &str> = BTreeMap::new();
+    for (task_id, outputs) in &dag.outputs {
+        for path in outputs {
+            producers.insert(path, task_id.as_str());
+        }
+    }
+    // The transitive dependencies of every task, accumulated
+    // in topological order so a dependency's set is final
+    // before any dependent reads it.
+    let mut transitive: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for task_id in &dag.order {
+        let mut set: BTreeSet<&str> = BTreeSet::new();
+        for dependency in &dag.dependencies[task_id] {
+            set.insert(dependency.as_str());
+            if let Some(dependency_set) = transitive.get(dependency.as_str()) {
+                set.extend(dependency_set.iter().copied());
+            }
+        }
+        transitive.insert(task_id.as_str(), set);
+    }
     let mut plans = BTreeMap::new();
     for (task_id, paths) in &dag.inputs {
         let mut plan = Vec::with_capacity(paths.len());
         for path in paths {
-            let source = match dag.producer_of(path) {
-                Some(producer) if is_transitive_dependency(dag, task_id, producer) => {
-                    InputSource::ProducedBy(producer.to_string())
+            let source = match producers.get(path) {
+                Some(producer) if transitive[task_id.as_str()].contains(producer) => {
+                    InputSource::ProducedBy((*producer).to_string())
                 }
                 _ => match inputs.get(path.as_str()) {
                     Some(digest) => InputSource::Bound(*digest),
@@ -280,25 +303,6 @@ fn plan_inputs(
         plans.insert(task_id.clone(), plan);
     }
     Ok(plans)
-}
-
-/// Whether `producer` is reachable from `task_id` along dependency
-/// edges, at any depth.
-fn is_transitive_dependency(dag: &ValidatedDag, task_id: &str, producer: &str) -> bool {
-    let mut seen: BTreeSet<&str> = BTreeSet::new();
-    let mut stack: Vec<&str> = dag.dependencies[task_id]
-        .iter()
-        .map(String::as_str)
-        .collect();
-    while let Some(current) = stack.pop() {
-        if current == producer {
-            return true;
-        }
-        if seen.insert(current) {
-            stack.extend(dag.dependencies[current].iter().map(String::as_str));
-        }
-    }
-    false
 }
 
 /// Every task that transitively depends on `task_id`, sorted.
