@@ -480,10 +480,6 @@ const fn as_bool(value: &Value, field: &'static str) -> Result<bool, ManifestErr
     }
 }
 
-/// The largest magnitude the canonical number domain admits,
-/// 2^53 - 1 (section 4.3).
-const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
-
 #[allow(
     clippy::float_cmp,
     reason = "the domain checks are exactness tests on parsed values: a field is valid only when the number is exactly integral"
@@ -496,7 +492,7 @@ const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
 fn as_bytes(value: &Value, field: &'static str) -> Result<u64, ManifestError> {
     match value {
         Value::Number(number) => {
-            if *number < 0.0 || *number > MAX_SAFE_INTEGER || number.fract() != 0.0 {
+            if *number < 0.0 || *number > canonical::MAX_SAFE_INTEGER || number.fract() != 0.0 {
                 return Err(ManifestError::InvalidNumber {
                     field,
                     detail: format!(

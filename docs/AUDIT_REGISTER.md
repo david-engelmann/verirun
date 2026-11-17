@@ -277,7 +277,13 @@ value is pinned by the format, so a drift between the two copies
 would be a silent format change. The fix leaves one definition, used
 by both modules.
 
-Disposition. LAND in Round 5.
+Disposition. LANDED in Round 5. The local constant is deleted and
+the byte length check in manifest.rs reads canonical::MAX_SAFE_INTEGER,
+the same definition the parser uses. The Round 5 read of the rest
+of the tree under the structure lens found no second duplication
+of the kind: the store's io_error and sync_directory helpers live
+only in cas_fs, and the per-crate error enums are parallel by
+design rather than copies.
 
 ## Error handling
 
@@ -292,7 +298,14 @@ Breaking, because VerifyError is a public enum and exhaustive
 matchers gain a variant. The version consequence is a pre-1.0 minor
 bump shared with the other breaking findings of this programme.
 
-Disposition. LAND in Round 6. Breaking.
+Disposition. LANDED in Round 6. Breaking. VerifyError gains
+ManifestUnreadable, carrying the digest and the store failure's
+own text; check 1 maps only StoreError::Missing to
+ManifestMissing and every other non-integrity failure to the new
+variant. The CLI's JSON form gains the manifest_unreadable kind
+with digest and detail fields, and the exit code stays 2. A new
+CLI test denies reads on the manifest object and checks both
+forms name access rather than absence.
 
 ### F19. Pipe read errors are swallowed by the drain
 
@@ -303,7 +316,17 @@ Fixing this needs a report channel change in the runner, which
 belongs with the error handling round's enum work. Deferred to that
 round.
 
-Disposition. DEFER to Round 6.
+Disposition. LANDED in Round 6. The reader channel now carries
+io::Result chunks: a read error is forwarded as the channel's
+last item, and ChannelReader returns it from read once the
+delivered bytes are served, so the drain's put_stream fails and
+collect_stream aborts the run with that store error, the same
+outcome a dead drain already produced. The cutoff keeps priority
+over a forwarded error, so a stream cut at the drain grace after
+a timeout still finalizes as an exact prefix. No new test pins
+the change: a pipe read error cannot be staged through the
+public runner, and the pipe and timeout suites pin the behaviour
+around it.
 
 ### F20. The digest length message counts bytes and calls them characters
 
@@ -312,7 +335,26 @@ count while calling it characters. Hex input is ASCII in practice,
 so the count agrees until the day it does not. The fix counts
 characters, or names the unit honestly in the message.
 
-Disposition. LAND in Round 6.
+Disposition. LANDED in Round 6. The length gate and the message
+both count characters now. A digest vector test pins it: a
+64-character string with one multibyte character fails as an
+invalid character, not a wrong length, and a 63-character string
+reports 63.
+
+### F24. Verify check 4 misreports blob access failures as missing blobs
+
+Minor, found by the Round 6 read. The fourth verification check
+has the defect F18 names in the first: every store error that is
+not an integrity error maps to BlobMissing, including read and
+permission failures on a blob that exists. The fix is the sibling
+of F18's, landed in the same round so the taxonomy changes once.
+
+Disposition. LANDED in Round 6. Breaking, on the same terms as
+F18. VerifyError gains BlobUnreadable, carrying the digest, one
+referencing task and path, and the store failure's own text;
+check 4 maps only StoreError::Missing to BlobMissing. The JSON
+form gains the blob_unreadable kind, and a CLI test denies reads
+on an artifact blob and checks both forms.
 
 ## Tests
 
