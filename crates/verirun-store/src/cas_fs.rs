@@ -473,6 +473,14 @@ impl Cas {
     /// Streams an object to `writer`, verifying its digest during the
     /// copy, and returns the number of bytes written.
     ///
+    /// Verification completes only when the copy does, so the
+    /// destination receives bytes before their verdict exists. If
+    /// this returns an integrity error, `writer` may already hold
+    /// some or all of the object's bytes, and the caller must
+    /// discard whatever was written. A caller that cannot discard
+    /// its destination should read through [`Cas::read_to_vec`]
+    /// instead and write only on success.
+    ///
     /// # Errors
     ///
     /// Returns the [`StoreError`] of [`Cas::read_to_vec`], plus
