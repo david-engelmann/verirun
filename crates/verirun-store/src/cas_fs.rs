@@ -280,6 +280,12 @@ impl Cas {
     /// # Errors
     ///
     /// Returns the [`StoreError`] of [`Cas::put_bytes`].
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the store's own object path has no parent
+    /// directory, which the store layout makes impossible. The
+    /// check is a structural invariant, not input handling.
     pub fn put_bytes_observed(
         &self,
         bytes: &[u8],
