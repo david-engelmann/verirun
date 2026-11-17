@@ -64,7 +64,7 @@ Gate: the audit job is green, the policy is written, and the first release is cu
 
 ## Direction calls recorded
 
-D1. Publication. Pressing publish on crates.io, and the account step that goes with it, is the owner's act. The four names were free on 2026-11-16 and will not stay free indefinitely, which argues for deciding soon. R1 prepares everything up to that act.
+D1. Publication. Decided by David on 2026-11-16 and executed that night. Verirun-core, verirun-store and verirun-cli are live on crates.io at 0.1.0, published in dependency order through the owner's connected credential and verified firsthand from the crate pages, the sparse index, the docs.rs builds and a clean-runner consumer build that added all three crates to a fresh project and installed the binary. The GitHub release v0.1.0 carries the 0.1.0 changelog section as its notes. The name verirun itself is the binary the cli crate installs, so three crates carry the release.
 
 D2. The 1.0 line. When the three crates and the CLI surface freeze under semantic versioning is a product decision. R7 writes the policy that describes the freeze; choosing its date is the owner's.
 
