@@ -295,13 +295,14 @@ impl TaskRecord {
         // data to report, not a programming error to panic on.
         artifacts.sort_by(|left, right| left.path.as_bytes().cmp(right.path.as_bytes()));
         let task_id = as_string(get(pairs, "task_id")?, "task_id")?.to_string();
-        for window in artifacts.windows(2) {
-            if window[0].path == window[1].path {
-                return Err(ManifestError::DuplicateArtifactPath {
-                    task_id: task_id.clone(),
-                    path: window[0].path.clone(),
-                });
-            }
+        if let Some(window) = artifacts
+            .windows(2)
+            .find(|window| window[0].path == window[1].path)
+        {
+            return Err(ManifestError::DuplicateArtifactPath {
+                task_id,
+                path: window[0].path.clone(),
+            });
         }
         Ok(Self::new(
             task_id,
