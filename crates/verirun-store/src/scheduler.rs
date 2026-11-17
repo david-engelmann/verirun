@@ -781,7 +781,7 @@ fn lookup_cache(cas: &Cas, item: &WorkItem) -> Result<Option<TaskRecord>, RunErr
         .iter()
         .map(|artifact| artifact.path.as_str())
         .collect();
-    if record.artifacts.len() != item.outputs.len() || recorded != declared {
+    if record.artifacts.len() != recorded.len() || recorded != declared {
         return Ok(None);
     }
     for named in record.named_digests() {
@@ -880,7 +880,7 @@ fn store_cache_entry(cas: &Cas, record: &TaskRecord) -> Result<(), RunError> {
     Ok(())
 }
 
-/// The work root lock (INV-RUN-8), on the same create_new and
+/// The work root lock (INV-RUN-8), on the same `create_new` and
 /// drop-removes discipline as the collection lock in `gc`. A
 /// run holds its work root exclusively from admission to
 /// completion, so two runs can never write into the same task

@@ -200,20 +200,10 @@ impl<'a> Runner<'a> {
         inputs: &[(NormalizedPath, Digest)],
         sandbox: &Path,
     ) -> Result<TaskExecution, RunError> {
-        if let Err(detail) = clear_sandbox(sandbox) {
-            return self.unspawned(detail);
-        }
-        let inputs_dir = sandbox.join("inputs");
-        let outputs_dir = sandbox.join("outputs");
-        let tmp_dir = sandbox.join("tmp");
-        for dir in [sandbox, &inputs_dir, &outputs_dir, &tmp_dir] {
-            if let Err(source) = fs::create_dir_all(dir) {
-                return self.unspawned(format!(
-                    "creating sandbox directory {} failed: {source}",
-                    dir.display()
-                ));
-            }
-        }
+        let (inputs_dir, outputs_dir, tmp_dir) = match prepare_sandbox(sandbox) {
+            Ok(dirs) => dirs,
+            Err(detail) => return self.unspawned(detail),
+        };
 
         // Materialize inputs through the store's verified read
         // before anything spawns. A corrupted blob aborts the run
@@ -546,6 +536,25 @@ fn collect_stream(
         Ok(digest) => Ok((digest, cut)),
         Err(source) => Err(RunError::from(source)),
     }
+}
+
+/// Clears `sandbox` of any previous execution's leftovers
+/// (INV-SBX-6) and creates the sandbox and its `inputs`,
+/// `outputs`, and `tmp` areas, returning the three area paths.
+fn prepare_sandbox(sandbox: &Path) -> Result<(PathBuf, PathBuf, PathBuf), String> {
+    clear_sandbox(sandbox)?;
+    let inputs_dir = sandbox.join("inputs");
+    let outputs_dir = sandbox.join("outputs");
+    let tmp_dir = sandbox.join("tmp");
+    for dir in [sandbox, &inputs_dir, &outputs_dir, &tmp_dir] {
+        fs::create_dir_all(dir).map_err(|source| {
+            format!(
+                "creating sandbox directory {} failed: {source}",
+                dir.display()
+            )
+        })?;
+    }
+    Ok((inputs_dir, outputs_dir, tmp_dir))
 }
 
 /// Removes whatever a previous execution left in `sandbox`,
