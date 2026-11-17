@@ -13,7 +13,7 @@ use verirun_core::error::ManifestError;
 use verirun_core::manifest::{ArtifactRecord, Manifest, TaskRecord};
 use verirun_core::value::Value;
 
-fn digest(byte: u8) -> Digest {
+const fn digest(byte: u8) -> Digest {
     Digest::from_bytes([byte; 32])
 }
 
