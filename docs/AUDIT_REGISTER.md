@@ -611,6 +611,14 @@ as the Round 6 tests pin them, missing and unreadable kept
 distinct for manifests and blobs alike. The round closes
 with the read recorded and no finding raised.
 
+Round 34 read. The error handling lens passed over the tree
+again at the Round 33 state and found nothing new to
+disposition. The error account is fully settled: the Round 6
+taxonomy is the last change to it, its two halves were
+revisited in Rounds 20 and 27, and nothing has moved since.
+The round closes with the read recorded and no finding
+raised.
+
 ## Tests
 
 ### F21. The distinct put bench measures repeats after its midpoint
