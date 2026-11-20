@@ -123,7 +123,11 @@ interrupted read is a normal event on a busy host, and today it
 fails a put or a materialization that should have succeeded. The fix
 retries on the interrupted kind at both sites.
 
-Disposition. LAND in Round 16.
+Disposition. LANDED in Round 16. Both read loops now retry on the
+interrupted error kind and propagate only real failures, each with
+its original step naming. No new test: an interrupted read cannot
+be staged through the public store surface, and the put, copy, and
+pipe suites pin the behaviour the loops preserve.
 
 ### F7. Directory durability gaps at four sites
 
@@ -138,7 +142,20 @@ the by-exec directory itself when it creates the shard. The fix adds
 cheap directory syncs at these sites, and the performance round
 measures their cost before the pattern spreads further.
 
-Disposition. LAND in Round 16.
+Disposition. LANDED in Round 16. The presence pre-check and the
+discard path in finish_put now sync the shard directory and the
+objects directory before reporting the Durable phase, so a
+durability claim is always one the reporting call established
+itself. finish_put creates the shard with a single create call
+whose result, not a racy is_dir check, decides which put owes
+the objects sync. store_cache_entry creates its shard the same
+way and syncs by-exec itself when its call created the shard,
+under a new SyncByExec step. The cost lands on repeat puts and
+repeat cache entries, and the next performance round (Round 18)
+measures it, as this entry prescribed. No new test: durability
+timing across a crash is not observable from a test, and the
+crash recovery and concurrency suites pin the protocol the
+syncs extend.
 
 ### F8. The GC lock has no staleness recovery
 
@@ -149,7 +166,18 @@ error names no remedy. The fix adds age based staleness using the
 collector's one clock read, and a LockHeld message that names the
 remedy.
 
-Disposition. LAND in Round 16.
+Disposition. LANDED in Round 16. The lock guard now ages the
+standing lock against the collector's one clock read: a lock
+older than a day is broken and the create retried once, and a
+second refusal means a live collection won the race and stands.
+A lock dated in the future reads as fresh. The LockHeld message
+names the remedy, matching the run lock's wording. The new
+invariant INV-GC-6 pins the behaviour, with two fault tests in
+gc_faults (a stale lock broken and the sweep run, a fresh lock
+refusing with the remedy in its message). The run lock keeps
+its deliberate difference: a run may legitimately hold its
+work root for hours, so it has no staleness, and its message
+already names the remedy.
 
 ### F9. Temp file names can collide after pid reuse
 

@@ -500,7 +500,7 @@ Comparison covers exactly the fields named above. Two records whose execution di
 
 1. Mark. Read every pin in `pins/`. For each pinned manifest, collect the reachable set: the manifest blob, every artifact and log digest it names, and the by-exec entries its records use.
 2. Plan. List `objects/`. An object outside the reachable set is a sweep candidate only when its modification time is older than the grace threshold, set by `--grace-secs` with a default of 3600. Temporary files under `tmp/` follow the same age rule, with no reachability test. The grace rule is the concurrency guard: a blob written by an in-flight run whose manifest is not pinned yet is young, and young blobs are never swept.
-3. Sweep. Take `gc.lock` by create-new, failing cleanly when another sweep holds it. Delete the planned files. Report counts and reclaimed bytes. Dry run prints the same plan and deletes nothing.
+3. Sweep. Take `gc.lock` by create-new, failing cleanly when another sweep holds it. A lock older than a day is debris from a collection that died without dropping it, and the sweep breaks it and proceeds; a younger lock refuses, and the refusal names the remedy. Delete the planned files. Report counts and reclaimed bytes. Dry run prints the same plan and deletes nothing.
 
 GC reads wall-clock time for ages. That is why GC planning takes ages as inputs in core and reads the clock only in the adapter (`verirun-store::clock`). Deterministic code never decides anything from a clock. GC itself is a maintenance operation outside the determinism boundary: it changes what is stored, never what a digest means.
 
