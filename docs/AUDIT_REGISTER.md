@@ -772,6 +772,14 @@ and the cleared list at the tail. Nothing else in the docs
 tree has changed since the Round 22 read. The round closes
 with the read recorded and no finding raised.
 
+Round 36 read. The docs and examples lens passed over the
+tree again at the Round 35 state and found nothing new to
+disposition. Outside this register, the docs tree is
+unchanged since the Round 29 read; inside it, each round's
+record has been appended in its lens section in order, and
+the count of findings stands where Round 15 left it. The
+round closes with the read recorded and no finding raised.
+
 ## Checked and cleared in Round 1
 
 The read also verified the following surfaces and found nothing to
