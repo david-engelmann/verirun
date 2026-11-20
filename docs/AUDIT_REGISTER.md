@@ -230,6 +230,22 @@ confinement feature changes the threat model.
 
 Disposition. DEFER.
 
+Round 23 read. The correctness lens passed over the tree again
+at the Round 22 state and found nothing new to disposition.
+The two standing deferrals were revisited on their own terms:
+F9's temp names still fail safe against crash debris after pid
+reuse, and F11's walk race still sits inside the hygiene not
+confinement model, with D3 parked and no confinement feature
+proposed. The Round 16 fixes were re-read in their landed
+form: the pre-check syncs both directories before it reports
+any phase, so a sync failure claims nothing; the stale lock
+retry fires exactly once and a second refusal stands; and the
+one race the re-read surfaced, a sweep deleting an aged
+unpinned object between the pre-check and its syncs, is the
+race the collector's grace period and pin contract already
+bound, not a new exposure. The round closes with the read
+recorded and no finding raised.
+
 ## API surface and ergonomics
 
 ### F12. copy_to writes unverified bytes before the verdict
