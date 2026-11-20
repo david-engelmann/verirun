@@ -335,6 +335,17 @@ of the kind: the store's io_error and sync_directory helpers live
 only in cas_fs, and the per-crate error enums are parallel by
 design rather than copies.
 
+Round 12 read. The structure lens passed over the tree again at
+the Round 11 state and found nothing new to disposition. The
+module map still matches the architecture document one concept
+per module in the core, one adapter concern per module in the
+store, one command module per subcommand in the cli over a
+shared library layer, and the crate roots hold no logic. The
+largest files are the scheduler and the runner, each a single
+cohesive responsibility, and the store helpers still live only
+in cas_fs. The round closes with the read recorded and no
+finding raised.
+
 ## Error handling
 
 ### F18. Verify check 1 misreports store access failures as a missing manifest
