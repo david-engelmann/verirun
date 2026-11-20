@@ -819,6 +819,12 @@ record has been appended in its lens section in order, and
 the count of findings stands where Round 15 left it. The
 round closes with the read recorded and no finding raised.
 
+Round 43 read. The docs and examples lens passed over the
+tree again at the Round 42 state and found nothing new to
+disposition. The docs tree outside this register is
+unchanged since the Round 36 read. The round closes with
+the read recorded and no finding raised.
+
 ## Checked and cleared in Round 1
 
 The read also verified the following surfaces and found nothing to
