@@ -500,6 +500,18 @@ message does, and that gap is the second half of F8, which
 lands with its staleness design in Round 16. The round
 closes with the read recorded and no finding raised.
 
+Round 20 read. The error handling lens passed over the tree
+again at the Round 19 state and found nothing new to
+disposition. The Round 13 conclusions still hold, and the
+Round 16 additions follow them: the collection lock message
+now names the same remedy the run lock's message names, in
+the same words modulo the lock's owner; the staleness retry
+fails conservative, treating an unreadable lock as fresh and
+refusing; and SyncByExec reports through the store error
+like every other step, named for the directory it syncs.
+Exit codes did not move. The round closes with the read
+recorded and no finding raised.
+
 ## Tests
 
 ### F21. The distinct put bench measures repeats after its midpoint
