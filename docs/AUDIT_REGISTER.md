@@ -265,6 +265,12 @@ recorded reasoning, every other correctness finding has
 landed, and no code has changed since Round 30. The round
 closes with the read recorded and no finding raised.
 
+Round 44 read. The correctness lens passed over the tree
+again at the Round 43 state and found nothing new to
+disposition. Nothing has changed since the Round 37
+settlement of the correctness account. The round closes
+with the read recorded and no finding raised.
+
 ## API surface and ergonomics
 
 ### F12. copy_to writes unverified bytes before the verdict
