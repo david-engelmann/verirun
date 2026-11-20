@@ -402,6 +402,20 @@ cohesive responsibility, and the store helpers still live only
 in cas_fs. The round closes with the read recorded and no
 finding raised.
 
+Round 19 read. The structure lens passed over the tree again
+at the Round 18 state and found nothing new to disposition.
+The module map is unchanged since the Round 12 read: core
+holds one module per concept, the store one per adapter
+concern, the cli one command module per subcommand over a
+shared library. The rounds since grew files without
+blurring them: the scheduler is 959 lines with the run lock
+and the cache entry sync inside the module that owns both,
+cas_fs is 568 with the durability work inside the put
+protocol it extends, and the new error variants and steps
+live in the per-crate error modules beside their families.
+No change crossed a boundary it should not have. The round
+closes with the read recorded and no finding raised.
+
 ## Error handling
 
 ### F18. Verify check 1 misreports store access failures as a missing manifest
