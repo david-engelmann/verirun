@@ -626,6 +626,16 @@ because the local build was fault blocked; the reproduced run
 came out with the tutorial's exact manifest digest, which is
 the determinism the tutorial exists to demonstrate.
 
+Round 22 read. The docs and examples lens passed over the
+tree again at the Round 21 state and found nothing new to
+disposition. The README's audit programme line still says
+what is true, the changelog's Unreleased section holds
+exactly the rounds that changed behaviour, and the tutorial
+and examples stand as the Round 15 pass left them, outputs
+and all. The release workflow comment has stayed settled
+since Round 8. The round closes with the read recorded and
+no finding raised.
+
 ## Checked and cleared in Round 1
 
 The read also verified the following surfaces and found nothing to
