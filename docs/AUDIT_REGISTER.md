@@ -462,6 +462,12 @@ No code has changed since, so there is nothing new to
 measure. The round closes with the read recorded and no
 finding raised.
 
+Round 39 read. The performance lens passed over the tree
+again at the Round 38 state and found nothing new to
+disposition. Nothing has changed since the Round 32
+settlement of the performance account. The round closes
+with the read recorded and no finding raised.
+
 ## Structure
 
 ### F17. manifest.rs duplicates a pinned constant
