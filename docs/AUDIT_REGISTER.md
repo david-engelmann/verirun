@@ -498,6 +498,40 @@ publication to crates.io is a separate deliberate act outside the
 release workflow, and that 0.1.0 was published that way on
 2026-11-16 after D1 settled in favour of publishing.
 
+### F26. The README never points at the audit programme
+
+Minor. The README's Read more list links the architecture
+document, the invariant list, the decisions file, the roadmap,
+and the tutorial, but not the audit programme charter or its
+register, so the programme running over the finished build is
+undiscoverable from the repo's front door. The fix adds one
+bullet to the list.
+
+Disposition. LANDED in Round 15. The Read more list now carries
+the audit programme between the roadmap and the tutorial, one
+line naming the 50 round audit and the register that records
+every finding and its disposition.
+
+### F27. The show command is missing from the README and the tutorial
+
+Minor. The show command landed in roadmap lane R5, and the
+changelog names it, but the README's two summary sentences
+still list only run, verify, diff, and collection, and the
+tutorial gives every other subcommand a section and show
+none. A reader of either document would not learn the command
+exists. The fix names show in both README summaries and gives
+the tutorial a Look at it section between Verify it and the
+cached rerun, with output captured from the shipped program
+against the tutorial's own manifest.
+
+Disposition. LANDED in Round 15. The README summaries now name
+the show step, and the tutorial's new section prints the real
+captured record for its manifest, noting that show verifies
+before it displays. The capture was taken on a hosted runner
+because the local build was fault blocked; the reproduced run
+came out with the tutorial's exact manifest digest, which is
+the determinism the tutorial exists to demonstrate.
+
 ## Checked and cleared in Round 1
 
 The read also verified the following surfaces and found nothing to
