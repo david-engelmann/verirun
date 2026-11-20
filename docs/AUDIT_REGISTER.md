@@ -332,6 +332,16 @@ Round 6 taxonomy added are rendered by a match the compiler
 keeps total over the CLI error enum. The round closes with
 the read recorded and no finding raised.
 
+Round 31 read. The API surface lens passed over the tree
+again at the Round 30 state and found nothing new to
+disposition. No public API has changed since the Round 24
+read. The documentation floor the surface stands on still
+holds mechanically: the workspace denies missing docs, and
+no item anywhere carries an allowance against it, so every
+public item in the three crates is documented or the gate
+fails. The round closes with the read recorded and no
+finding raised.
+
 ## Performance
 
 ### F13. Verify check 4 buffers every referenced blob whole
