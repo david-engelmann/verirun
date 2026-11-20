@@ -44,6 +44,28 @@ verirun verify --cas cas --json e63fe409816ad93c944a2043c6c0dba09adf4686ceaf2a1e
 {"manifest":"e63fe409816ad93c944a2043c6c0dba09adf4686ceaf2a1e230c84096223f84a","merkle_root":"2165b51cb1c8ef886d7868919368f8962187ee15c28d53a8b6aa882d5c9cba7d","verified":true}
 ```
 
+## Look at it
+
+Verify answers whether a manifest is sound. Show answers what it says. It runs the same verification first, so a tampered manifest prints nothing and fails with the verification error, and then it prints the record in readable form.
+
+```
+verirun show --cas cas e63fe409816ad93c944a2043c6c0dba09adf4686ceaf2a1e230c84096223f84a
+manifest e63fe409816ad93c944a2043c6c0dba09adf4686ceaf2a1e230c84096223f84a
+merkle root 2165b51cb1c8ef886d7868919368f8962187ee15c28d53a8b6aa882d5c9cba7d
+task count: succeeded, exit code 0
+  exec 7e41c1b07f168544712d313a7febfd69debdfbf19bdd69bdb197e3a33fc23d0b
+  stdout c3dff712aede7ebba7f46332df054028d907425b80e8aff38caf8117e1d58e1f
+  stderr c3dff712aede7ebba7f46332df054028d907425b80e8aff38caf8117e1d58e1f
+  artifact size.txt d8c053c6ee497a3e316765557619a49c1035cbb12d8df218768b1d48c37f5c96 (3 bytes)
+task greet: succeeded, exit code 0
+  exec c05faca736d98942358d9bd8fd342f1220ac43af8f4be3701594f4d89945539f
+  stdout c3dff712aede7ebba7f46332df054028d907425b80e8aff38caf8117e1d58e1f
+  stderr c3dff712aede7ebba7f46332df054028d907425b80e8aff38caf8117e1d58e1f
+  artifact greeting.txt 4d475f39e2c5565d866ed0f641d926b9909d4537a075910d8be7d4cdb884273e (19 bytes)
+```
+
+Each task prints with its status and exit code, the digest of the execution that produced it, the digests of its captured streams, and one line per artifact with its size. With --json the same record prints as one JSON value.
+
 ## Run it again, then diff
 
 Running the same file again executes nothing. Both tasks come back from the by-exec cache, and the run produces a second manifest whose records say cached where the first said succeeded.
