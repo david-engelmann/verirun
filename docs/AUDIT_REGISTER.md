@@ -706,6 +706,16 @@ and all. The release workflow comment has stayed settled
 since Round 8. The round closes with the read recorded and
 no finding raised.
 
+Round 29 read. The docs and examples lens passed over the
+tree again at the Round 28 state and found nothing new to
+disposition. The register itself is now the fastest growing
+document in the repo, and its shape still matches the
+charter: twenty seven findings under the seven lens
+sections in charter order, the Round 1 record at the head,
+and the cleared list at the tail. Nothing else in the docs
+tree has changed since the Round 22 read. The round closes
+with the read recorded and no finding raised.
+
 ## Checked and cleared in Round 1
 
 The read also verified the following surfaces and found nothing to
