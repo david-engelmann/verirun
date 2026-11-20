@@ -30,6 +30,8 @@ pub enum StoreStep {
     SyncShard,
     /// Syncing the `objects/` directory after creating a shard.
     SyncObjects,
+    /// Syncing the `by-exec/` directory after creating a shard.
+    SyncByExec,
     /// Creating a store layout directory while opening the store.
     CreateLayout,
     /// Opening an object for reading.
@@ -72,6 +74,7 @@ impl fmt::Display for StoreStep {
             Self::Rename => "rename into place",
             Self::SyncShard => "sync shard directory",
             Self::SyncObjects => "sync objects directory",
+            Self::SyncByExec => "sync by-exec directory",
             Self::CreateLayout => "create store layout",
             Self::OpenObject => "open object",
             Self::OpenSource => "open source file",
@@ -290,7 +293,11 @@ impl fmt::Display for GcError {
                 "the pinned manifest {digest} is invalid: {detail}; refusing to sweep"
             ),
             Self::LockHeld { path } => {
-                write!(f, "another collection holds the lock at {}", path.display())
+                write!(
+                    f,
+                    "another collection holds the lock at {}; if no collection is active, remove that file and retry",
+                    path.display()
+                )
             }
             Self::Store { source } => write!(f, "collection aborted by a store failure: {source}"),
         }

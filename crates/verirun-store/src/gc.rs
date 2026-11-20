@@ -168,7 +168,7 @@ pub fn collect(
     }
 
     // Phase 3, sweep: under the lock, delete exactly the plan.
-    let _lock = LockGuard::take(&cas.root().join("gc.lock"))?;
+    let _lock = LockGuard::take(&cas.root().join("gc.lock"), now)?;
     for digest in &candidates {
         let path = cas.object_path(digest);
         fs::remove_file(&path).map_err(|source| GcError::Store {
@@ -286,6 +286,12 @@ fn age_and_size(path: &Path, now: SystemTime) -> Result<(u64, u64), GcError> {
     Ok((clock::age_secs(now, modified), metadata.len()))
 }
 
+/// The age past which a leftover `gc.lock` counts as stale
+/// (F8). A sweep is bounded work measured in seconds, so a lock
+/// a day old can only be the debris of a collection that died
+/// without dropping its guard, and breaking it is safe.
+const STALE_LOCK_AGE_SECS: u64 = 86_400;
+
 /// The held `gc.lock`: an exclusive create-new file whose
 /// removal on drop ends the sweep, however it ends.
 struct LockGuard {
@@ -293,7 +299,28 @@ struct LockGuard {
 }
 
 impl LockGuard {
-    fn take(path: &Path) -> Result<Self, GcError> {
+    fn take(path: &Path, now: SystemTime) -> Result<Self, GcError> {
+        match Self::create(path) {
+            Ok(guard) => Ok(guard),
+            Err(GcError::LockHeld { .. }) => {
+                // A lock already stands. Break it only when it
+                // is stale by the collector's one clock read
+                // (F8), then try exactly once more: a second
+                // refusal means a live collection won the race
+                // in between, and its lock is fresh.
+                if !Self::is_stale(path, now) {
+                    return Err(GcError::LockHeld {
+                        path: path.to_path_buf(),
+                    });
+                }
+                let _ = fs::remove_file(path);
+                Self::create(path)
+            }
+            Err(other) => Err(other),
+        }
+    }
+
+    fn create(path: &Path) -> Result<Self, GcError> {
         match fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -313,6 +340,18 @@ impl LockGuard {
                 },
             }),
         }
+    }
+
+    fn is_stale(path: &Path, now: SystemTime) -> bool {
+        let Ok(metadata) = fs::metadata(path) else {
+            // The lock vanished between the refusal and this
+            // read, so the retry in take() decides.
+            return true;
+        };
+        let Ok(modified) = metadata.modified() else {
+            return false;
+        };
+        clock::age_secs(now, modified) > STALE_LOCK_AGE_SECS
     }
 }
 
