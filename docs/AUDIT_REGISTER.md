@@ -637,6 +637,16 @@ carried the proof its register entry prescribed, including
 the rounds that prescribed none. The round closes with the
 read recorded and no finding raised.
 
+Round 28 read. The tests lens passed over the tree again at
+the Round 27 state and found nothing new to disposition.
+Nothing in the test tree has changed since the Round 21
+read: zero ignored tests, the regression seed files still
+empty, and the same 101 test functions plus the property
+suites stand behind every gate, including the gates the
+replacement landings are re-running on identical trees.
+The round closes with the read recorded and no finding
+raised.
+
 ## Docs and examples
 
 ### F23. The release workflow header describes D1 as unsettled
