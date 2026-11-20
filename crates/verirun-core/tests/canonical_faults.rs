@@ -72,3 +72,22 @@ fn fault_duplicate_key_rejected_at_construction() {
     let err = to_vec(&direct).expect_err("encoder rejects duplicates");
     assert_eq!(err.kind(), CanonicalErrorKind::DuplicateKey);
 }
+
+#[test]
+fn fault_encode_depth_limit_matches_parser() {
+    // A programmatically built value nests as deep as its builder
+    // likes; encoding must stop where the parser stops (audit
+    // finding F4). The parser enters at depth 1 and accepts
+    // MAX_DEPTH nested containers, so encoding accepts exactly
+    // that chain and rejects one link more.
+    fn nest(links: usize) -> Value {
+        let mut value = Value::Null;
+        for _ in 0..links {
+            value = Value::Array(vec![value]);
+        }
+        value
+    }
+    to_vec(&nest(MAX_DEPTH)).expect("the parser's deepest chain encodes");
+    let err = to_vec(&nest(MAX_DEPTH + 1)).expect_err("one link more is rejected");
+    assert_eq!(err.kind(), CanonicalErrorKind::DepthLimitExceeded);
+}

@@ -173,13 +173,27 @@ const fn exponent_sign(exponent: i32) -> char {
 ///
 /// Object members are sorted by UTF-16 code unit order at every depth.
 /// Duplicate keys in an object are rejected. Every number is validated
-/// against the domain as it is reached.
+/// against the domain as it is reached. Nesting is capped at the
+/// parser's depth limit, so a programmatically built value deeper
+/// than anything the parser would accept is rejected instead of
+/// recursing without bound.
 ///
 /// # Errors
 ///
-/// Returns [`CanonicalError`] for an out-of-domain number or a
-/// duplicate object key, and propagates any sink failure.
+/// Returns [`CanonicalError`] for an out-of-domain number, a
+/// duplicate object key, or nesting past the depth limit, and
+/// propagates any sink failure.
 pub fn encode<S: ByteSink + ?Sized>(value: &Value, sink: &mut S) -> Result<(), CanonicalError> {
+    // The parser enters at depth 1, so encoding does the same:
+    // the values each accepts are then exactly the same set.
+    encode_at(value, sink, 1)
+}
+
+fn encode_at<S: ByteSink + ?Sized>(
+    value: &Value,
+    sink: &mut S,
+    depth: usize,
+) -> Result<(), CanonicalError> {
     match value {
         Value::Null => sink.write_bytes(b"null"),
         Value::Bool(true) => sink.write_bytes(b"true"),
@@ -190,22 +204,44 @@ pub fn encode<S: ByteSink + ?Sized>(value: &Value, sink: &mut S) -> Result<(), C
         }
         Value::String(text) => encode_string(text, sink),
         Value::Array(items) => {
+            check_depth(depth)?;
             sink.write_bytes(b"[")?;
             for (index, item) in items.iter().enumerate() {
                 if index > 0 {
                     sink.write_bytes(b",")?;
                 }
-                encode(item, sink)?;
+                encode_at(item, sink, depth + 1)?;
             }
             sink.write_bytes(b"]")
         }
-        Value::Object(pairs) => encode_object(pairs, sink),
+        Value::Object(pairs) => {
+            check_depth(depth)?;
+            encode_object(pairs, sink, depth)
+        }
     }
+}
+
+/// The depth gate, mirroring the parser's: a container sitting at
+/// a depth past [`crate::parse::MAX_DEPTH`] is rejected, and the
+/// containers the parser accepts are exactly the ones encoding
+/// accepts.
+fn check_depth(depth: usize) -> Result<(), CanonicalError> {
+    if depth > crate::parse::MAX_DEPTH {
+        return Err(CanonicalError::new(
+            CanonicalErrorKind::DepthLimitExceeded,
+            format!(
+                "nesting exceeds the depth limit of {}",
+                crate::parse::MAX_DEPTH
+            ),
+        ));
+    }
+    Ok(())
 }
 
 fn encode_object<S: ByteSink + ?Sized>(
     pairs: &[(String, Value)],
     sink: &mut S,
+    depth: usize,
 ) -> Result<(), CanonicalError> {
     // Sort by the UTF-16 code unit sequence of each name. Rust string
     // order is code point order, which disagrees with UTF-16 order
@@ -232,7 +268,7 @@ fn encode_object<S: ByteSink + ?Sized>(
         }
         encode_string(key, sink)?;
         sink.write_bytes(b":")?;
-        encode(value, sink)?;
+        encode_at(value, sink, depth + 1)?;
     }
     sink.write_bytes(b"}")
 }
