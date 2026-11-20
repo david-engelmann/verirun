@@ -400,6 +400,20 @@ large object workload exists to measure the fix against.
 
 Disposition. DEFER.
 
+Round 25 revisit. The performance lens re-examined this
+deferral at the Round 24 state and let it stand. Every object
+shape the system itself produces stays under a dozen keys:
+spec files, task records, artifact records, and the manifest
+root are all small by construction, so the quadratic term
+never engages on the system's own data. The only large
+object path is a hand crafted manifest blob handed to
+verify, a local and trusted input. The membership set fix is
+available whenever that changes (a set used only for
+membership never iterates, so determinism is untouched), but
+today it would trade the common case's speed for a case that
+does not occur. The deferral stands until an untrusted or
+large object workload exists.
+
 ## Structure
 
 ### F17. manifest.rs duplicates a pinned constant
