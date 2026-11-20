@@ -52,11 +52,11 @@ Inside its working folder, a task reads its input files under `inputs` and write
 
 ## Using verirun today
 
-verirun is a Rust workspace with three library crates and a command line program. The program runs a description, verifies a manifest, compares two runs, and collects garbage from the store. The libraries work on their own as well, and the test suites exercise everything end to end. The three crates are published on crates.io at 0.1.0, and installing the program is one command, `cargo install verirun-cli`.
+verirun is a Rust workspace with three library crates and a command line program. The program runs a description, verifies a manifest, shows what a manifest says, compares two runs, and collects garbage from the store. The libraries work on their own as well, and the test suites exercise everything end to end. The three crates are published on crates.io at 0.1.0, and installing the program is one command, `cargo install verirun-cli`.
 
 - `verirun-core` holds the data model. It parses and checks run descriptions, puts JSON into one canonical form, computes the hashes, and builds manifests. It has no dependencies outside the Rust standard library.
 - `verirun-store` holds the machinery. It keeps the content store on disk, runs tasks under the sandbox rules, and schedules tasks in parallel up to the worker count you ask for.
-- `verirun-cli` holds the command line program and the library under it. It runs a description from bytes, verifies a manifest against a store, compares two runs, and drives garbage collection, with JSON output and the exit codes the architecture document promises.
+- `verirun-cli` holds the command line program and the library under it. It runs a description from bytes, verifies a manifest against a store, displays a verified manifest, compares two runs, and drives garbage collection, with JSON output and the exit codes the architecture document promises.
 
 ## Building and testing
 
@@ -94,6 +94,7 @@ The commands were `cargo bench -p verirun-core --bench canonical_bench` and `car
 - [The invariant list](docs/INVARIANTS.md) states every rule the system keeps. Each rule names the test that enforces it.
 - [The decisions file](DECISIONS.md) records the locked project choices, including the licence and the dependency rules.
 - [The roadmap](docs/ROADMAP.md) is the ordered forward program after Milestone 4, with the direction calls only the project owner can settle recorded at its end.
+- [The audit programme](docs/AUDIT_PROGRAMME.md) is the 50 round audit now running over the finished build. Its register records every finding and its disposition.
 - [The tutorial](docs/TUTORIAL.md) walks a first run from the run file to verification, a cached rerun, a diff, and a collection dry run, with real captured output.
 
 ## Licence
