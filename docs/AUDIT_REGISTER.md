@@ -367,7 +367,11 @@ pre-check. The bench labelled as distinct puts measures a mix of
 full puts and pre-check hits. The fix widens the seed space or cuts
 the iteration count below the period.
 
-Disposition. LAND in Round 7.
+Disposition. LANDED in Round 7. The bench now builds one payload
+and stamps the iteration counter into its first bytes, so every
+pass puts distinct bytes by construction and the presence
+pre-check never fires. The repeat put bench beside it continues to
+price the pre-check itself.
 
 ### F22. Test helper families are duplicated across suites
 
@@ -379,7 +383,18 @@ programme that will be editing those suites round by round. Deferred
 to the tests round, which will judge whether the churn pays against
 the round's other work.
 
-Disposition. DEFER to Round 7.
+Disposition. REJECTED at the Round 7 revisit. The revisit counted
+eighteen suite files carrying a fresh directory helper and fourteen
+carrying a cleanup walk, and read the variants side by side. They
+are a family fitted to each file rather than copies of one helper.
+The cli helper creates the directory while the store helper only
+computes the path the store then opens. One fault suite installs a
+panic hook inside its helper. Prefixes, counter orderings, and the
+cleanup walks differ in ways the tests carrying them rely on. A
+shared module would either grow options until it reassembled the
+same variation behind one door, or flatten differences that are
+load bearing. The duplication is the honest shape of these suites
+and stays.
 
 ## Docs and examples
 
@@ -391,7 +406,10 @@ on 2026-11-16 and 0.1.0 is published, so the comment now misdescribes
 the world. The fix rewrites the header to describe publication as it
 stands.
 
-Disposition. LAND in Round 8.
+Disposition. LANDED in Round 8. The header now states that
+publication to crates.io is a separate deliberate act outside the
+release workflow, and that 0.1.0 was published that way on
+2026-11-16 after D1 settled in favour of publishing.
 
 ## Checked and cleared in Round 1
 
