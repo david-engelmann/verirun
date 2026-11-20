@@ -1,5 +1,5 @@
 //! Garbage collection fault oracles (INV-GC-1 through
-//! INV-GC-5; docs/ARCHITECTURE.md section 10).
+//! INV-GC-6; docs/ARCHITECTURE.md section 10).
 //!
 //! Ages are deterministic without touching file times: the
 //! collector takes its `now` as an input, so a test captures a
@@ -326,5 +326,51 @@ fn fault_gc_interrupted_sweep_rerun_completes() {
     // A third run has nothing left to do.
     let report = collect(&cas, 3600, false, later).expect("third collect");
     assert_eq!(report.objects, 0);
+    fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn fault_gc_breaks_a_stale_lock_and_sweeps() {
+    // F8: a collection killed without dropping its guard leaves
+    // gc.lock behind. Aged past the staleness threshold by the
+    // collector's fabricated now, the lock is debris: the sweep
+    // breaks it and proceeds.
+    let root = fresh_dir("stale-lock");
+    let cas = Cas::open(&root).expect("open store");
+    let base = SystemTime::now();
+    let blob = cas.put_bytes(b"unpinned and doomed").expect("put blob");
+    fs::write(root.join("gc.lock"), b"").expect("plant stale lock");
+
+    let later = base + Duration::from_secs(90_000);
+    let report = collect(&cas, 0, false, later).expect("collect past a stale lock");
+    assert_eq!(report.objects, 1, "the sweep ran and took the blob");
+    assert!(!cas.contains(&blob));
+    assert!(
+        !root.join("gc.lock").exists(),
+        "the guard's own lock is removed on drop"
+    );
+    fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn fault_gc_fresh_lock_refuses_and_names_the_remedy() {
+    // F8: a fresh lock is a live collection, not debris. The
+    // refusal stands, and its message names the remedy.
+    let root = fresh_dir("fresh-lock");
+    let cas = Cas::open(&root).expect("open store");
+    let base = SystemTime::now();
+    let blob = cas.put_bytes(b"unpinned but protected").expect("put blob");
+    fs::write(root.join("gc.lock"), b"").expect("plant fresh lock");
+
+    let error = collect(&cas, 0, false, base).expect_err("a fresh lock refuses");
+    assert!(
+        matches!(error, verirun_store::error::GcError::LockHeld { .. }),
+        "expected LockHeld, got {error}"
+    );
+    assert!(
+        error.to_string().contains("remove that file and retry"),
+        "the refusal names the remedy: {error}"
+    );
+    assert!(cas.contains(&blob), "nothing was swept");
     fs::remove_dir_all(&root).ok();
 }
