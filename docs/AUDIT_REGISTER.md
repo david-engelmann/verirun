@@ -310,6 +310,17 @@ builders live, and the new SyncByExec step names itself after
 the Sync family it joins. The round closes with the read
 recorded and no finding raised.
 
+Round 24 read. The API surface lens passed over the tree
+again at the Round 23 state and found nothing new to
+disposition. No public API has changed since the Round 17
+read, and the standing mechanical proof still runs every
+gate: the examples and benches build and run against the
+public surface only, so the surface the repo ships is the
+surface its own consumers use. The JSON error shapes the
+Round 6 taxonomy added are rendered by a match the compiler
+keeps total over the CLI error enum. The round closes with
+the read recorded and no finding raised.
+
 ## Performance
 
 ### F13. Verify check 4 buffers every referenced blob whole
