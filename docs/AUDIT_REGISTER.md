@@ -435,6 +435,17 @@ today it would trade the common case's speed for a case that
 does not occur. The deferral stands until an untrusted or
 large object workload exists.
 
+Round 32 read. The performance lens passed over the tree
+again at the Round 31 state and found nothing new to
+disposition. The performance account is fully settled:
+every performance finding has landed (the streaming verify,
+the linear run planning, the polling backoff), the one
+durability cost was measured and accepted in Round 18, and
+the one deferral was revisited on its merits in Round 25.
+No code has changed since, so there is nothing new to
+measure. The round closes with the read recorded and no
+finding raised.
+
 ## Structure
 
 ### F17. manifest.rs duplicates a pinned constant
