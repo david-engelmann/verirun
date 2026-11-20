@@ -772,6 +772,11 @@ the Round 41 state and found nothing new to disposition.
 The test tree is unchanged since the Round 35 read. The
 round closes with the read recorded and no finding raised.
 
+Round 49 read. The tests lens passed over the tree again at
+the Round 48 state and found nothing new to disposition.
+The test tree is unchanged since the Round 42 read. The
+round closes with the read recorded and no finding raised.
+
 ## Docs and examples
 
 ### F23. The release workflow header describes D1 as unsettled
