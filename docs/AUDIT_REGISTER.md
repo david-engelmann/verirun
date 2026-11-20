@@ -457,6 +457,16 @@ live in the per-crate error modules beside their families.
 No change crossed a boundary it should not have. The round
 closes with the read recorded and no finding raised.
 
+Round 26 read. The structure lens passed over the tree again
+at the Round 25 state and found nothing new to disposition.
+No code has changed since the Round 19 read, and the file
+sizes are byte for byte the ones that read recorded, so the
+module map and its cohesion conclusions stand as they were.
+The programme's own documents keep their structure too: the
+charter's rotation and the register's sections still match
+the programme being executed. The round closes with the
+read recorded and no finding raised.
+
 ## Error handling
 
 ### F18. Verify check 1 misreports store access failures as a missing manifest
