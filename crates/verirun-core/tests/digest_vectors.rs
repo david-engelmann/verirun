@@ -207,3 +207,30 @@ fn digest_hex_roundtrip_and_rejection() {
         verirun_core::error::DigestErrorKind::InvalidCharacter
     );
 }
+
+#[test]
+fn digest_hex_length_counts_characters() {
+    // The length message counts characters, not bytes (F20).
+    let short = "a".repeat(63);
+    let err = Digest::from_hex(&short).expect_err("too short");
+    assert_eq!(
+        err.kind(),
+        verirun_core::error::DigestErrorKind::InvalidLength
+    );
+    assert!(
+        err.to_string().ends_with("got 63 characters"),
+        "the count is in characters: {err}"
+    );
+
+    // Sixty-four characters of which one is multibyte, so the
+    // byte count is 65: the length is right in characters and
+    // the failure is the character itself, not the length.
+    let wide = format!("{}é", "a".repeat(63));
+    assert_eq!(wide.chars().count(), 64);
+    assert_eq!(wide.len(), 65);
+    let err = Digest::from_hex(&wide).expect_err("multibyte rejected");
+    assert_eq!(
+        err.kind(),
+        verirun_core::error::DigestErrorKind::InvalidCharacter
+    );
+}

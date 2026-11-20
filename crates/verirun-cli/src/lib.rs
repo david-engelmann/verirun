@@ -222,6 +222,11 @@ pub fn error_json(error: &CliError) -> serde_json::Value {
                 object.insert("kind".to_string(), "manifest_missing".into());
                 object.insert("digest".to_string(), digest.to_hex().into());
             }
+            VerifyError::ManifestUnreadable { digest, detail } => {
+                object.insert("kind".to_string(), "manifest_unreadable".into());
+                object.insert("digest".to_string(), digest.to_hex().into());
+                object.insert("detail".to_string(), detail.clone().into());
+            }
             VerifyError::ManifestDigestMismatch { expected, actual } => {
                 object.insert("kind".to_string(), "manifest_digest_mismatch".into());
                 object.insert("expected".to_string(), expected.to_hex().into());
@@ -249,6 +254,18 @@ pub fn error_json(error: &CliError) -> serde_json::Value {
                 object.insert("digest".to_string(), digest.to_hex().into());
                 object.insert("task_id".to_string(), task_id.clone().into());
                 object.insert("path".to_string(), path.clone().into());
+            }
+            VerifyError::BlobUnreadable {
+                digest,
+                task_id,
+                path,
+                detail,
+            } => {
+                object.insert("kind".to_string(), "blob_unreadable".into());
+                object.insert("digest".to_string(), digest.to_hex().into());
+                object.insert("task_id".to_string(), task_id.clone().into());
+                object.insert("path".to_string(), path.clone().into());
+                object.insert("detail".to_string(), detail.clone().into());
             }
             VerifyError::BlobMismatch {
                 expected,
@@ -328,9 +345,11 @@ pub fn verify_manifest_observed(
     observer: &mut dyn ReadObserver,
 ) -> Result<Manifest, VerifyError> {
     // Check 1: the manifest blob re-hash. The store's verified
-    // read does the hashing; its outcomes map onto the first two
-    // variants. Any other store failure leaves the blob
-    // unretrievable, which this surface reports as missing.
+    // read does the hashing; its outcomes map onto the first
+    // variants: corruption is a digest mismatch, absence is
+    // missing, and any other store failure is an unreadable
+    // manifest, reported with the failure itself so an access
+    // problem is never mistaken for a missing object.
     let bytes = match cas.read_to_vec_observed(expected, observer) {
         Ok(bytes) => bytes,
         Err(StoreError::Integrity { actual, .. }) => {
@@ -339,8 +358,14 @@ pub fn verify_manifest_observed(
                 actual,
             });
         }
-        Err(_) => {
+        Err(StoreError::Missing { .. }) => {
             return Err(VerifyError::ManifestMissing { digest: *expected });
+        }
+        Err(source) => {
+            return Err(VerifyError::ManifestUnreadable {
+                digest: *expected,
+                detail: source.to_string(),
+            });
         }
     };
 
@@ -422,11 +447,19 @@ pub fn verify_manifest_observed(
                     path: path.clone(),
                 });
             }
-            Err(_) => {
+            Err(StoreError::Missing { .. }) => {
                 return Err(VerifyError::BlobMissing {
                     digest: *digest,
                     task_id: task_id.clone(),
                     path: path.clone(),
+                });
+            }
+            Err(source) => {
+                return Err(VerifyError::BlobUnreadable {
+                    digest: *digest,
+                    task_id: task_id.clone(),
+                    path: path.clone(),
+                    detail: source.to_string(),
                 });
             }
         }

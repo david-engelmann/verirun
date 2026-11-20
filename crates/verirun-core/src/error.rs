@@ -468,6 +468,15 @@ pub enum VerifyError {
         /// The requested manifest digest.
         digest: Digest,
     },
+    /// The manifest object exists but could not be read, for a
+    /// reason other than absence or corruption, such as a
+    /// permission failure.
+    ManifestUnreadable {
+        /// The requested manifest digest.
+        digest: Digest,
+        /// The store failure that prevented the read.
+        detail: String,
+    },
     /// The manifest blob does not hash to the requested digest.
     ManifestDigestMismatch {
         /// The requested digest.
@@ -504,6 +513,20 @@ pub enum VerifyError {
         /// `stderr` for a log blob.
         path: String,
     },
+    /// A blob the manifest names exists but could not be read,
+    /// for a reason other than absence or corruption, such as a
+    /// permission failure.
+    BlobUnreadable {
+        /// The unreadable blob digest.
+        digest: Digest,
+        /// One task that references the blob.
+        task_id: String,
+        /// The artifact path that references it, or `stdout` or
+        /// `stderr` for a log blob.
+        path: String,
+        /// The store failure that prevented the read.
+        detail: String,
+    },
     /// A blob the manifest names does not hash to its digest.
     BlobMismatch {
         /// The digest the manifest names.
@@ -524,6 +547,9 @@ impl fmt::Display for VerifyError {
             Self::ManifestMissing { digest } => {
                 write!(f, "no manifest object {digest} in the store")
             }
+            Self::ManifestUnreadable { digest, detail } => {
+                write!(f, "manifest object {digest} could not be read: {detail}")
+            }
             Self::ManifestDigestMismatch { expected, actual } => write!(
                 f,
                 "manifest digest mismatch: requested {expected}, content hashes to {actual}"
@@ -543,6 +569,15 @@ impl fmt::Display for VerifyError {
             } => write!(
                 f,
                 "blob {digest} referenced by task {task_id:?} at {path:?} is missing"
+            ),
+            Self::BlobUnreadable {
+                digest,
+                task_id,
+                path,
+                detail,
+            } => write!(
+                f,
+                "blob {digest} referenced by task {task_id:?} at {path:?} could not be read: {detail}"
             ),
             Self::BlobMismatch {
                 expected,
