@@ -11,6 +11,9 @@ Changes from the post-completion audit programme, after 0.1.0.
 - Cache validation. A stored cache record is honoured only when its artifact paths are exactly the task's declared outputs, so a planted record can no longer be honoured or crash the run (audit finding F2, invariant INV-RUN-7).
 - Verification memory. Manifest verification streams every referenced blob instead of buffering each one whole, so verifying a manifest over large artifacts no longer multiplies memory by the largest blobs (audit finding F13).
 - Planning cost. Run planning builds its producer map and dependency sets once per run instead of rescanning the graph for every input (audit finding F14).
+- Verification error taxonomy (breaking). VerifyError gains ManifestUnreadable and BlobUnreadable: a manifest or blob that exists but cannot be read is reported with the store failure named, no longer as missing (audit findings F18 and F24). Exhaustive matches on VerifyError gain the two variants.
+- Stream capture errors. A pipe read error while capturing a task's output now fails the run instead of finalizing a truncated capture as if the stream had ended cleanly (audit finding F19).
+- Digest length message. Digest::from_hex counts characters in its length error, as the message has always said (audit finding F20).
 
 ## 0.1.0
 
