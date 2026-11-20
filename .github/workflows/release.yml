@@ -4,9 +4,10 @@ name: release
 # project owner (roadmap direction call D1), so this workflow is
 # dispatch-only. It creates the GitHub release for one published
 # version, tagged v<version>, with that version's CHANGELOG
-# section as the notes. It publishes nothing to any registry;
-# the crates.io publication step stays a manual act until D1
-# settles its shape.
+# section as the notes. It publishes nothing to any registry.
+# Publication to crates.io is a separate deliberate act outside
+# this workflow; 0.1.0 was published that way on 2026-11-16
+# after D1 settled in favour of publishing.
 
 on:
   workflow_dispatch:
