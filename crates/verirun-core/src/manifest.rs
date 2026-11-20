@@ -246,7 +246,8 @@ impl TaskRecord {
     /// # Errors
     ///
     /// Returns [`ManifestError`] when a field is missing, mistyped,
-    /// holds an invalid digest, or names an unknown status.
+    /// holds an invalid digest, names an unknown status, or names
+    /// one artifact path twice.
     ///
     /// # Panics
     ///
@@ -268,7 +269,7 @@ impl TaskRecord {
                 });
             }
         };
-        Ok(Self::new(
+        let record = Self::new(
             as_string(get(pairs, "task_id")?, "task_id")?.to_string(),
             as_digest(get(pairs, "exec_digest")?, "exec_digest")?,
             as_status(get(pairs, "status")?)?,
@@ -276,7 +277,20 @@ impl TaskRecord {
             as_digest(get(pairs, "stdout_sha256")?, "stdout_sha256")?,
             as_digest(get(pairs, "stderr_sha256")?, "stderr_sha256")?,
             artifacts,
-        ))
+        );
+        // Construction sorts the artifacts by path. No run can
+        // produce two artifacts at one path, because collection
+        // holds one entry per declared output, so a duplicate is
+        // rejected rather than carried into the framing.
+        for window in record.artifacts.windows(2) {
+            if window[0].path == window[1].path {
+                return Err(ManifestError::DuplicateArtifactPath {
+                    task_id: record.task_id.clone(),
+                    path: window[0].path.clone(),
+                });
+            }
+        }
+        Ok(record)
     }
 }
 
@@ -362,8 +376,8 @@ impl Manifest {
     /// # Errors
     ///
     /// Returns [`ManifestError`] when the format tag differs from
-    /// [`MANIFEST_FORMAT`], a field is missing or mistyped, or a
-    /// record fails to parse.
+    /// [`MANIFEST_FORMAT`], a field is missing or mistyped, a
+    /// record fails to parse, or two records share a task id.
     ///
     /// # Panics
     ///
@@ -397,6 +411,17 @@ impl Manifest {
         // re-encodes to different bytes, which verification
         // reports as a non-canonical manifest (section 9.3).
         tasks.sort_by(|left, right| left.task_id.as_bytes().cmp(right.task_id.as_bytes()));
+        // No run can produce two records for one task id, and a
+        // consumer keyed by task id would silently drop one of
+        // them, so a duplicate is rejected rather than carried.
+        // Sorted order puts duplicates side by side.
+        for window in tasks.windows(2) {
+            if window[0].task_id == window[1].task_id {
+                return Err(ManifestError::DuplicateTaskId {
+                    task_id: window[0].task_id.clone(),
+                });
+            }
+        }
         Ok(Self { tasks, merkle_root })
     }
 
