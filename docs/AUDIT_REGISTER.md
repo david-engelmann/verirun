@@ -350,6 +350,14 @@ public item in the three crates is documented or the gate
 fails. The round closes with the read recorded and no
 finding raised.
 
+Round 38 read. The API surface lens passed over the tree
+again at the Round 37 state and found nothing new to
+disposition. The surface has not changed since the Round 3
+contract clarification and the Round 10 builder contract,
+both of which the later passes keep re-verifying rather
+than re-deciding. The round closes with the read recorded
+and no finding raised.
+
 ## Performance
 
 ### F13. Verify check 4 buffers every referenced blob whole
