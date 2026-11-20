@@ -565,6 +565,18 @@ local runs created are empty, so no discovered failing case
 exists uncommitted. The round closes with the read recorded
 and no finding raised.
 
+Round 21 read. The tests lens passed over the tree again at
+the Round 20 state and found nothing new to disposition.
+Zero ignored tests still, and the regression seed files are
+still empty. The only tests added since the Round 14 read
+are Round 16's two staleness tests, and both are substantive:
+one drives a full sweep through a broken stale lock and
+checks the report, the other pins the fresh lock refusal and
+the remedy text in its message. Every other round since
+carried the proof its register entry prescribed, including
+the rounds that prescribed none. The round closes with the
+read recorded and no finding raised.
+
 ## Docs and examples
 
 ### F23. The release workflow header describes D1 as unsettled
