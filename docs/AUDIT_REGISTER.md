@@ -677,6 +677,12 @@ disposition. Nothing has moved since the Round 34
 settlement. The round closes with the read recorded and no
 finding raised.
 
+Round 48 read. The error handling lens passed over the
+tree again at the Round 47 state and found nothing new to
+disposition. Nothing has changed since the Round 41 read.
+The round closes with the read recorded and no finding
+raised.
+
 ## Tests
 
 ### F21. The distinct put bench measures repeats after its midpoint
