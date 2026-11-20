@@ -884,3 +884,31 @@ it without new evidence.
   LockHeld for the loser.
 - CLI exit code mapping totality, and show verifying in full before
   it renders anything.
+
+## Round 50. The programme closes
+
+Fifty rounds ran in the charter's rotation, seven lenses
+seven times over the finished build. The register raised
+twenty seven findings. Twenty two landed, each through the
+normal gate with its disposition recorded in its entry.
+Three stand deferred with their reasoning revisited on the
+record: the temp name collision (F9), the output walk race
+(F11), and the parser's quadratic key check (F16). Two were
+rejected with counted evidence: the GC reachability
+contract (F10) and the test helper consolidation (F22).
+
+The breaking changes the programme authorized stayed
+inside API behaviour: stricter validation of shapes no run
+can produce, two honest verify error variants, and the
+builder uniqueness contract. The forever surfaces were
+never touched: digest framing, canonical encoding, and
+manifest semantics are byte for byte what 0.1.0 published.
+
+Every later pass re-read its lens against the landed state,
+and the final passes found the tree settled: correctness,
+performance, structure, error handling, tests, and docs
+each closed their last three passes with no finding. The
+programme closes with this register as its record. The two
+standing direction calls, the 1.0 freeze date and Windows
+runtime support, were never the programme's to settle and
+remain the owner's.
