@@ -246,6 +246,17 @@ race the collector's grace period and pin contract already
 bound, not a new exposure. The round closes with the read
 recorded and no finding raised.
 
+Round 30 read. The correctness lens passed over the tree
+again at the Round 29 state and found nothing new to
+disposition. No code has changed since the Round 23 read.
+The pass re-read the F2 cache validation in its landed
+form: the recorded path set is compared against the
+declared set with the length clause first, so a duplicate
+in the record shrinks the set and trips the guard before
+the set comparison runs. The guard the whole cache trust
+story rests on is intact. The round closes with the read
+recorded and no finding raised.
+
 ## API surface and ergonomics
 
 ### F12. copy_to writes unverified bytes before the verdict
