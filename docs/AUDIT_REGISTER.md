@@ -216,6 +216,28 @@ named uniformly across the store, each crate's errors form one enum
 with Display and source, and the CLI command functions share one
 shape.
 
+### F25. The builders accept what the parsers reject
+
+Minor, found by the Round 10 read. Round 9 made manifest parsing
+reject duplicate task ids and duplicate artifact paths, but the
+construction paths kept accepting both. Manifest build sorted
+the records and computed the root over a duplicated id without
+complaint, and record construction sorted a duplicated artifact
+path into place, so a built manifest could fail its own round
+trip through the value form. The invariant belongs to the types,
+not to one door into them.
+
+Disposition. LANDED in Round 10. Both builders now assert the
+uniqueness after their sort and panic on a duplicate, with the
+panic documented as a programming error in the house assignment
+that Manifest digest already uses for its domain. The fallible
+builder shape was considered and set aside, because the only
+producers are the scheduler over a validated run, where the ids
+are unique by validation, and tests. The parse paths keep
+reporting the same shapes as errors, and the record parse now
+checks before it constructs so the two doors never blur. Fault
+tests pin both panics and a built manifest's round trip.
+
 ## Performance
 
 ### F13. Verify check 4 buffers every referenced blob whole
@@ -272,7 +294,18 @@ its entire duration. The fix is a waiter thread and channel design,
 or a polling backoff, proven against the timeout and drain suites
 that pin the current timing behaviour.
 
-Disposition. LAND in Round 11.
+Disposition. LANDED in Round 11 as the polling backoff. The
+supervision wait doubles from 2 milliseconds to a 50 millisecond
+cap while the child runs, and never crosses the deadline, so the
+timeout still fires on time. The drain channel wait doubles from
+5 milliseconds to a 100 millisecond cap while the stream is idle
+and resets on every arrival, and the cap is one percent of the
+drain grace the cutoff serves, so the extra cut latency is
+immaterial. The waiter thread shape was set aside because the
+direct child kill fallback cannot cross the thread boundary
+without weakening it, and the backoff keeps every timing the
+suites pin. No test is added; the pipe and timeout suites are
+the proof surface, as the finding itself prescribed.
 
 ### F16. The parser's duplicate key check is quadratic per object
 
