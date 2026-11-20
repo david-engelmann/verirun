@@ -563,6 +563,15 @@ like every other step, named for the directory it syncs.
 Exit codes did not move. The round closes with the read
 recorded and no finding raised.
 
+Round 27 read. The error handling lens passed over the tree
+again at the Round 26 state and found nothing new to
+disposition. No error code has changed since the Round 20
+read: both error modules are the sizes that read recorded,
+and the four verify JSON kinds sit in the renderer exactly
+as the Round 6 tests pin them, missing and unreadable kept
+distinct for manifests and blobs alike. The round closes
+with the read recorded and no finding raised.
+
 ## Tests
 
 ### F21. The distinct put bench measures repeats after its midpoint
