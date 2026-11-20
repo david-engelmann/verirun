@@ -17,6 +17,8 @@ Changes from the post-completion audit programme, after 0.1.0.
 - Manifest duplicate rejection (breaking). Manifest reading rejects two records for one task id and two artifacts at one path in a record, shapes no run can produce, through the new ManifestError variants DuplicateTaskId and DuplicateArtifactPath (audit finding F3).
 - Encode depth limit. Canonical encoding rejects a programmatically built value nested past the parser's depth limit, through the new CanonicalErrorKind variant DepthLimitExceeded, instead of recursing until the stack fails (audit finding F4).
 - Duplicate input rejection (breaking). Run validation rejects a task that declares the same input path twice, through the new DagError variant DuplicateInput, mirroring the output collision rule (audit finding F5).
+- Builder invariant. Manifest and record construction now panic on a duplicate task id or artifact path, the shapes parsing rejects as errors, so a built manifest always survives its own round trip through the value form (audit finding F25).
+- Supervision backoff. The runner's exit watch and pipe drain waits back off while a task runs (2 to 50 milliseconds, and 5 to 100 milliseconds on an idle stream), so a long task no longer costs hundreds of wakeups a second; timeouts still fire on time (audit finding F15).
 
 ## 0.1.0
 

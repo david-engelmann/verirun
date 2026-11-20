@@ -119,3 +119,69 @@ fn manifest_and_record_without_duplicates_parse() {
     let parsed = Manifest::from_value(&manifest).expect("manifest parses");
     assert_eq!(parsed.tasks.len(), 1);
 }
+
+// The construction paths hold the same invariants by panic
+// (audit finding F25): a duplicate handed to a builder is a
+// programming error, where the same shape handed to a parser
+// is data and earns an error. A minimal factory stands in for
+// the real one; the panic fires before any hashing happens.
+
+use verirun_core::digest::{DomainTag, HasherFactory, StreamingHasher};
+
+struct NullHasher;
+
+impl StreamingHasher for NullHasher {
+    fn update(&mut self, _bytes: &[u8]) {}
+
+    fn finalize(self: Box<Self>) -> Digest {
+        Digest::from_bytes([0u8; 32])
+    }
+}
+
+#[derive(Clone, Default)]
+struct NullFactory;
+
+impl HasherFactory for NullFactory {
+    fn new_hasher(&self, _tag: DomainTag) -> Box<dyn StreamingHasher> {
+        Box::new(NullHasher)
+    }
+}
+
+#[test]
+#[should_panic(expected = "duplicate artifact path")]
+fn built_record_panics_on_duplicate_artifact_paths() {
+    let artifact = ArtifactRecord {
+        path: "out.txt".to_string(),
+        digest: digest(4),
+        bytes: 5,
+        executable: false,
+    };
+    let _record = TaskRecord::new(
+        "only".to_string(),
+        digest(1),
+        TaskStatus::Succeeded,
+        Some(0),
+        digest(2),
+        digest(3),
+        vec![artifact.clone(), artifact],
+    );
+}
+
+#[test]
+#[should_panic(expected = "duplicate task id")]
+fn built_manifest_panics_on_duplicate_task_ids() {
+    let record = record_with_artifact();
+    let _manifest = Manifest::build(&NullFactory, vec![record.clone(), record]);
+}
+
+#[test]
+fn built_manifest_round_trips_through_the_value_form() {
+    let first = record_with_artifact();
+    let mut second = record_with_artifact();
+    second.task_id = "other".to_string();
+    let built = Manifest::build(&NullFactory, vec![second, first]);
+    let parsed = Manifest::from_value(&built.to_value()).expect("a built manifest parses");
+    assert_eq!(parsed.tasks.len(), 2);
+    assert_eq!(parsed.tasks[0].task_id, "only");
+    assert_eq!(parsed.tasks[1].task_id, "other");
+}
