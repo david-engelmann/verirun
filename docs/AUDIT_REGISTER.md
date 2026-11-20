@@ -266,6 +266,20 @@ reporting the same shapes as errors, and the record parse now
 checks before it constructs so the two doors never blur. Fault
 tests pin both panics and a built manifest's round trip.
 
+Round 17 read. The API surface lens passed over the tree again
+at the Round 16 state and found nothing new to disposition.
+The Round 3 cleared list still holds: the digest type carries
+its traits, the record types are symmetric in their value
+forms, the observed variants are named uniformly, and each
+crate's errors form one enum with display and source. The
+additions since then follow the same shapes: the run lock
+error mirrors the collection lock's fields, the verify
+taxonomy's new variants carry the same fields in text and
+JSON, the builder panic contract is documented where the
+builders live, and the new SyncByExec step names itself after
+the Sync family it joins. The round closes with the read
+recorded and no finding raised.
+
 ## Performance
 
 ### F13. Verify check 4 buffers every referenced blob whole
