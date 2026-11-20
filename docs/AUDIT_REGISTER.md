@@ -417,6 +417,19 @@ check 4 maps only StoreError::Missing to BlobMissing. The JSON
 form gains the blob_unreadable kind, and a CLI test denies reads
 on an artifact blob and checks both forms.
 
+Round 13 read. The error handling lens passed over the tree
+again at the Round 12 state and found nothing new to
+disposition. The display chains carry context at every layer,
+the store error names its step and path, the run and
+collection errors prefix their abort, and the command
+functions map store, verify, and collection failures
+uniformly, with diff verifying both sides before comparing.
+One known gap was confirmed rather than raised again: the
+collection lock message names no remedy, where the run lock
+message does, and that gap is the second half of F8, which
+lands with its staleness design in Round 16. The round
+closes with the read recorded and no finding raised.
+
 ## Tests
 
 ### F21. The distinct put bench measures repeats after its midpoint
