@@ -257,6 +257,14 @@ the set comparison runs. The guard the whole cache trust
 story rests on is intact. The round closes with the read
 recorded and no finding raised.
 
+Round 37 read. The correctness lens passed over the tree
+again at the Round 36 state and found nothing new to
+disposition. The correctness account is settled: the two
+deferrals were revisited in Round 23 and stand on their
+recorded reasoning, every other correctness finding has
+landed, and no code has changed since Round 30. The round
+closes with the read recorded and no finding raised.
+
 ## API surface and ergonomics
 
 ### F12. copy_to writes unverified bytes before the verdict
