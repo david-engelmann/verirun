@@ -364,6 +364,12 @@ both of which the later passes keep re-verifying rather
 than re-deciding. The round closes with the read recorded
 and no finding raised.
 
+Round 45 read. The API surface lens passed over the tree
+again at the Round 44 state and found nothing new to
+disposition. Nothing has changed since the Round 38 read.
+The round closes with the read recorded and no finding
+raised.
+
 ## Performance
 
 ### F13. Verify check 4 buffers every referenced blob whole
