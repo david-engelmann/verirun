@@ -694,6 +694,15 @@ replacement landings are re-running on identical trees.
 The round closes with the read recorded and no finding
 raised.
 
+Round 35 read. The tests lens passed over the tree again at
+the Round 34 state and found nothing new to disposition.
+The test tree is unchanged since the Round 28 read, and the
+suite keeps proving itself the honest way: every
+replacement landing re-runs it on an identical tree through
+the hosted gate, so its greenness is re-established per
+landing rather than inherited. The round closes with the
+read recorded and no finding raised.
+
 ## Docs and examples
 
 ### F23. The release workflow header describes D1 as unsettled
