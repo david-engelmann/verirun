@@ -19,6 +19,10 @@ pub enum CanonicalErrorKind {
     IntegerOutOfSafeRange,
     /// An object was constructed or encoded with a duplicate key.
     DuplicateKey,
+    /// A programmatically built value nests deeper than the depth
+    /// limit the parser enforces, so encoding it would recurse
+    /// without bound.
+    DepthLimitExceeded,
 }
 
 /// A canonicalization failure: a domain rejection from the number rules
@@ -316,6 +320,14 @@ pub enum DagError {
         /// The second task that claimed the path.
         second_task: String,
     },
+    /// A task declares the same normalized input path more than
+    /// once.
+    DuplicateInput {
+        /// The task declaring the input.
+        task_id: String,
+        /// The normalized input path declared more than once.
+        path: String,
+    },
     /// A declared input or output path breaks a sandbox path rule.
     InvalidPath {
         /// The task declaring the path.
@@ -351,6 +363,9 @@ impl fmt::Display for DagError {
                 f,
                 "output path {path:?} is claimed by both {first_task:?} and {second_task:?}"
             ),
+            Self::DuplicateInput { task_id, path } => {
+                write!(f, "task {task_id:?} declares input {path:?} more than once")
+            }
             Self::InvalidPath { task_id, source } => {
                 write!(f, "task {task_id:?} declares an invalid path: {source}")
             }
@@ -414,6 +429,22 @@ pub enum ManifestError {
         /// What the number must satisfy and what was found.
         detail: String,
     },
+    /// Two task records in one manifest share a task id. No run
+    /// can produce that, and consumers keyed by task id would
+    /// silently drop one of the records.
+    DuplicateTaskId {
+        /// The duplicated task id.
+        task_id: String,
+    },
+    /// One task record names the same artifact path twice. No
+    /// run can produce that, because collection holds one entry
+    /// per declared output.
+    DuplicateArtifactPath {
+        /// The task holding the record.
+        task_id: String,
+        /// The artifact path named twice.
+        path: String,
+    },
 }
 
 impl fmt::Display for ManifestError {
@@ -440,6 +471,15 @@ impl fmt::Display for ManifestError {
                 write!(
                     f,
                     "manifest field {field:?} holds an invalid number: {detail}"
+                )
+            }
+            Self::DuplicateTaskId { task_id } => {
+                write!(f, "manifest holds two records for task {task_id:?}")
+            }
+            Self::DuplicateArtifactPath { task_id, path } => {
+                write!(
+                    f,
+                    "manifest record for task {task_id:?} names artifact {path:?} more than once"
                 )
             }
         }

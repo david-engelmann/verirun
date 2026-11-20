@@ -72,7 +72,13 @@ from_value. Breaking for hand built manifests that carry duplicates,
 which no run produces. The version consequence is a pre-1.0 minor
 bump shared with the other breaking findings of this programme.
 
-Disposition. LAND in Round 9. Breaking.
+Disposition. LANDED in Round 9. Breaking. Manifest from_value
+rejects a repeated task id after its sort puts duplicates side by
+side, and record from_value rejects a repeated artifact path after
+construction sorts the artifacts. Two new ManifestError variants
+name the duplicates, DuplicateTaskId and DuplicateArtifactPath,
+and a new core fault suite pins both rejections plus the
+unduplicated controls.
 
 ### F4. Canonical encode recursion is unbounded for built values
 
@@ -83,7 +89,13 @@ crash rather than an error. The fix adds an internal depth guard in
 encode mirroring the parser cap, with the public signature
 unchanged.
 
-Disposition. LAND in Round 9.
+Disposition. LANDED in Round 9. Encoding now threads a depth
+counter that enters at 1 exactly as the parser does and rejects a
+container sitting past the shared MAX_DEPTH constant from the
+parse module, so the values encoding accepts are exactly the
+values the parser accepts. The rejection is a new
+CanonicalErrorKind named DepthLimitExceeded, and a fault test
+pins the boundary on both sides.
 
 ### F5. Duplicate inputs in a task are neither rejected nor deduplicated
 
@@ -96,7 +108,12 @@ specs that list an input twice, which gains them nothing today. The
 version consequence is a pre-1.0 minor bump shared with the other
 breaking findings of this programme.
 
-Disposition. LAND in Round 9. Breaking.
+Disposition. LANDED in Round 9. Breaking. Validation check 5
+now rejects a repeated normalized input within one task with a
+new DagError variant named DuplicateInput, after the first
+occurrence passes path validation. A fault test pins the
+adjacent and separated shapes plus the distinct and fan-in
+controls.
 
 ### F6. Read loops propagate interrupted errors instead of retrying
 
