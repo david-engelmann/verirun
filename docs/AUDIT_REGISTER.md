@@ -552,6 +552,12 @@ disposition. The stability recorded in Round 33 continues:
 four passes now without a structural change. The round
 closes with the read recorded and no finding raised.
 
+Round 47 read. The structure lens passed over the tree
+again at the Round 46 state and found nothing new to
+disposition. Nothing has changed since the Round 40 read.
+The round closes with the read recorded and no finding
+raised.
+
 ## Error handling
 
 ### F18. Verify check 1 misreports store access failures as a missing manifest
