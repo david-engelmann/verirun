@@ -54,11 +54,17 @@ fn bench_put_throughput(smoke: bool) {
     let root = fresh_root("put");
     let cas = Cas::open(&root).expect("store opens");
     let iterations: u32 = if smoke { 1 } else { 500 };
+    // Distinct bytes per pass, by construction: the iteration
+    // counter is stamped into the first bytes, so no two passes
+    // ever put the same payload and the presence pre-check
+    // never fires. (A seed cycled mod 256 repeated payloads
+    // from pass 257 on, and the back half of this bench quietly
+    // measured repeat puts instead; audit finding F21.)
+    let mut data = payload(64 * 1024, 3);
     let started = Instant::now();
     for index in 0..iterations {
-        let seed = u8::try_from(index % 256).unwrap_or(0);
-        cas.put_bytes(&payload(64 * 1024, seed))
-            .expect("put succeeds");
+        data[..8].copy_from_slice(&u64::from(index).to_le_bytes());
+        cas.put_bytes(&data).expect("put succeeds");
     }
     let elapsed = started.elapsed().as_secs_f64();
     let puts_per_sec = f64::from(iterations) / elapsed;
