@@ -470,6 +470,19 @@ same variation behind one door, or flatten differences that are
 load bearing. The duplication is the honest shape of these suites
 and stays.
 
+Round 14 read. The tests lens passed over the suites again at
+the Round 13 state and found nothing new to disposition. No
+test in the tree is ignored. Every change since Round 7
+carries the proof its register entry sanctions: new fault
+suites for Rounds 6, 9, and 10, the scale test for Round 4,
+and the pipe and timeout suites pinning Round 11's backoff,
+which added no test by design. The newest suites assert exact
+errors, stderr text, JSON error kinds, and byte exact content;
+none is tautological. The three proptest regression files the
+local runs created are empty, so no discovered failing case
+exists uncommitted. The round closes with the read recorded
+and no finding raised.
+
 ## Docs and examples
 
 ### F23. The release workflow header describes D1 as unsettled
