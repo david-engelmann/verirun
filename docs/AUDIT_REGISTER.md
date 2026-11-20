@@ -528,6 +528,12 @@ consecutive passes: no code has changed since Round 19, no
 module has moved, and no boundary has been crossed. The
 round closes with the read recorded and no finding raised.
 
+Round 40 read. The structure lens passed over the tree
+again at the Round 39 state and found nothing new to
+disposition. The stability recorded in Round 33 continues:
+four passes now without a structural change. The round
+closes with the read recorded and no finding raised.
+
 ## Error handling
 
 ### F18. Verify check 1 misreports store access failures as a missing manifest
