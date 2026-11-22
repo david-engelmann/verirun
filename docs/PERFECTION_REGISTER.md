@@ -17,3 +17,9 @@ The parser checks each new object key against the keys collected so far, which i
 ## Findings raised by the programme
 
 None yet. The first perfection round, P1, opens the finding list.
+
+## Workstream records
+
+### W1. The Windows runner core
+
+The runner now compiles and runs on Windows. Process control goes through a new internal crate, verirun-platform, which holds the workspace's only unsafe blocks behind a safe ProcessGroup API. On Unix the group is the mechanism the runner has always used, the child leading its own process group and termination signalling the group through the shell builtin. On Windows the group is a job object created with kill on job close, assigned the child immediately after spawn, and terminated as a whole at the deadline. Executable resolution on Windows applies the PATHEXT snapshot to bare names and treats the executable extensions as the executable test, where Unix uses permission bits. A portable runner test suite proves exit codes, the hermetic environment, byte exact capture, and whole tree termination with the same test text on both platforms, and the Windows CI job runs it. Two consequences are recorded. The platform crate is a fourth workspace crate and a dependency of the store crate, so the next release publishes it alongside the existing three. Assignment immediately after spawn leaves a narrow window in which a child could spawn a process outside the job; the window is the same class the Unix group has always had with session creation, and the drain grace bounds its cost.

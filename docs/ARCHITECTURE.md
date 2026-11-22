@@ -414,7 +414,7 @@ Before executing a ready task, the scheduler looks up its execution digest in `b
 
 ## 8. Hermetic execution
 
-The runner is POSIX by design, and the boundary is a fence in the code, not a hope. It spawns shells, leads process groups, and kills whole groups on timeout, so `runner` and the `scheduler` that drives it compile only on Unix (`cfg(unix)` in the store crate). Everything outside them, the content-addressed store, garbage collection, the clock, and the whole of the core crate, is platform-independent and carries Windows compile coverage in CI (roadmap lane R6). Running workloads on Windows is a separate question, recorded as direction call D3 in the roadmap; this section's rules describe the Unix runner as it ships.
+The runner is hermetic by design on both platforms it runs on, and the boundary is a fence in the code, not a hope. It builds environments from nothing, leads a process group on Unix and holds a job object on Windows, and kills the whole tree on timeout, with the platform mechanisms fenced behind the `verirun-platform` seam so the `runner` module itself compiles and runs on Unix and Windows alike. The `scheduler` that drives it compiles only on Unix for now; its Windows parity is workstream W5 of the perfection programme. Everything outside them, the content-addressed store, garbage collection, the clock, and the whole of the core crate, is platform-independent and carries Windows compile coverage in CI. This section's rules describe the shared execution contract; where a mechanism differs by platform, the text names both.
 
 ### 8.1 Environment
 
@@ -426,7 +426,7 @@ The child process environment is built from nothing, via `env_clear()`, then pop
 
 There is no `PATH` inheritance. See section 8.2. The effective environment is sorted by key before spawn for stable diagnostics, though spawn order itself is not observable by well-behaved children.
 
-### 8.2 Executable resolution
+### 8.2 Executable resolution On Windows a bare name is also tried with each extension from the runner's `PATHEXT` snapshot in order, matching the host's own command resolution, and a file counts as executable by its extension rather than by permission bits.
 
 The spec's `executable` string is recorded verbatim in the execution digest. Resolution at run time works as follows. If the string contains a path separator, it is interpreted relative to the sandbox working directory and must pass section 8.4, which in practice means tasks run executables they brought in as inputs. If it is a bare name, the runner resolves it against the runner's own `PATH` snapshot taken at process start. That snapshot is a host detail and enters no digest. Portability note: a bare name pins intent, not binary identity. Two hosts with different binaries under one name produce records that differ only where their outputs differ, and the manifest shows that difference honestly. A run that needs binary identity pins the executable as an input file instead.
 
