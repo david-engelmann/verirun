@@ -94,7 +94,8 @@ The commands were `cargo bench -p verirun-core --bench canonical_bench` and `car
 - [The invariant list](docs/INVARIANTS.md) states every rule the system keeps. Each rule names the test that enforces it.
 - [The decisions file](DECISIONS.md) records the locked project choices, including the licence and the dependency rules.
 - [The roadmap](docs/ROADMAP.md) is the ordered forward program after Milestone 4, with the direction calls only the project owner can settle recorded at its end.
-- [The audit programme](docs/AUDIT_PROGRAMME.md) is the 50 round audit now running over the finished build. Its register records every finding and its disposition.
+- [The audit programme](docs/AUDIT_PROGRAMME.md) was the 50 round audit of the finished build. Its register records every finding and its disposition.
+- [The perfection programme](docs/PERFECTION_ROADMAP.md) is the forward programme after the audit, perfecting the repo and building Windows runtime support. Its register records every finding and its disposition.
 - [The tutorial](docs/TUTORIAL.md) walks a first run from the run file to verification, a cached rerun, a diff, and a collection dry run, with real captured output.
 
 ## Licence
