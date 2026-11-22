@@ -67,7 +67,7 @@ fn run_task(
     timeout_ms: Option<u64>,
 ) -> (PathBuf, Cas, TaskExecution, Duration) {
     let root = fresh_root(label);
-    let cas = Cas::open(&root.join("cas")).expect("store opens");
+    let cas = Cas::open(root.join("cas")).expect("store opens");
     let runner = Runner::new(&cas);
     let task = TaskSpec {
         task_id: "portable".to_string(),
@@ -92,10 +92,7 @@ fn run_task(
 /// The platform's shell invocation for a one-line script.
 #[cfg(unix)]
 fn shell_invocation(script: &str) -> (String, Vec<String>) {
-    (
-        "sh".to_string(),
-        vec!["-c".to_string(), script.to_string()],
-    )
+    ("sh".to_string(), vec!["-c".to_string(), script.to_string()])
 }
 
 /// The platform's shell invocation for a one-line script.
@@ -118,13 +115,13 @@ fn exit_code_is_propagated() {
 
 /// The script that exits with code 7 on each platform.
 #[cfg(unix)]
-fn exit_script() -> &'static str {
+const fn exit_script() -> &'static str {
     "exit 7"
 }
 
 /// The script that exits with code 7 on each platform.
 #[cfg(windows)]
-fn exit_script() -> &'static str {
+const fn exit_script() -> &'static str {
     "exit 7"
 }
 
@@ -190,13 +187,13 @@ fn streams_are_captured_byte_exactly() {
 
 /// The script that writes a known line to each stream.
 #[cfg(unix)]
-fn stream_script() -> &'static str {
+const fn stream_script() -> &'static str {
     "printf 'hello out'; printf 'hello err' >&2"
 }
 
 /// The script that writes a known line to each stream.
 #[cfg(windows)]
-fn stream_script() -> &'static str {
+const fn stream_script() -> &'static str {
     "echo hello out & echo hello err>&2"
 }
 
@@ -249,7 +246,7 @@ fn timeout_kills_the_whole_tree() {
 /// The script that sleeps for thirty seconds with a grandchild
 /// holding the stdout pipe open.
 #[cfg(unix)]
-fn tree_script() -> &'static str {
+const fn tree_script() -> &'static str {
     "sleep 30 & wait"
 }
 
@@ -258,6 +255,6 @@ fn tree_script() -> &'static str {
 /// the pipe; the foreground `ping` is redirected away so only
 /// the grandchild's membership in the job is under test.
 #[cfg(windows)]
-fn tree_script() -> &'static str {
+const fn tree_script() -> &'static str {
     "start /B ping -n 30 127.0.0.1 & ping -n 30 127.0.0.1 > NUL"
 }

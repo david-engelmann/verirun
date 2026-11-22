@@ -8,8 +8,8 @@ use std::process::Child;
 
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 use windows_sys::Win32::System::JobObjects::{
-    AssignProcessToJobObject, CreateJobObjectW, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-    JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JobObjectExtendedLimitInformation,
+    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
     SetInformationJobObject, TerminateJobObject,
 };
 
@@ -39,7 +39,7 @@ impl ProcessGroup {
     /// Creates an empty group. The job object itself is created
     /// at the first attach.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { job: None }
     }
 
@@ -53,10 +53,13 @@ impl ProcessGroup {
     /// attach failure as a spawn failure, because a child outside
     /// the job is a child the deadline cannot kill as a tree.
     pub fn attach(&mut self, child: &Child) -> io::Result<()> {
-        if self.job.is_none() {
-            self.job = Some(create_job()?);
-        }
-        let job = self.job.expect("the job was created above");
+        let job = if let Some(job) = self.job {
+            job
+        } else {
+            let created = create_job()?;
+            self.job = Some(created);
+            created
+        };
         // SAFETY: `job` is a live job object handle owned by
         // this group, and the child's handle is valid while the
         // child is alive, which the caller guarantees by keeping
@@ -118,7 +121,7 @@ fn create_job() -> io::Result<HANDLE> {
     let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { core::mem::zeroed() };
     info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
     let size = u32::try_from(core::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
-        .expect("the job information structure fits in a u32 size");
+        .map_err(|_| io::Error::other("the job information structure exceeds a u32 size"))?;
     // SAFETY: `job` is a live job object handle, `info` points
     // to a valid structure of the stated size, and the API reads
     // it synchronously during the call.

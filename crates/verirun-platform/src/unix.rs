@@ -24,7 +24,7 @@ pub struct ProcessGroup {
 impl ProcessGroup {
     /// Creates an empty group with no leader attached.
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { leader: None }
     }
 

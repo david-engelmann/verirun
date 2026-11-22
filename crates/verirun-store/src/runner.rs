@@ -196,7 +196,10 @@ impl<'a> Runner<'a> {
     fn bare_candidates(&self, executable: &str) -> Vec<PathBuf> {
         #[cfg(unix)]
         {
-            self.path_dirs.iter().map(|dir| dir.join(executable)).collect()
+            self.path_dirs
+                .iter()
+                .map(|dir| dir.join(executable))
+                .collect()
         }
         #[cfg(windows)]
         {
@@ -295,15 +298,10 @@ impl<'a> Runner<'a> {
         // runs. A child that could not be grouped is a child the
         // deadline cannot kill as a tree, so it is killed at once
         // and reported as a spawn failure.
-        let mut group = verirun_platform::ProcessGroup::new();
-        if let Err(source) = group.attach(&child) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return self.unspawned(format!(
-                "assigning the child of {} to its process group failed: {source}",
-                resolved.display()
-            ));
-        }
+        let group = match group_child(&mut child, &resolved) {
+            Ok(group) => group,
+            Err(detail) => return self.unspawned(detail),
+        };
         let stdout_pipe = child.stdout.take().expect("stdout was piped");
         let stderr_pipe = child.stderr.take().expect("stderr was piped");
 
@@ -932,7 +930,7 @@ fn supervise(
                 return Supervision {
                     exit_code: status.code(),
                     timed_out: false,
-                    detail: exit_detail(&status),
+                    detail: exit_detail(status),
                 };
             }
             Ok(None) => {
@@ -971,12 +969,33 @@ fn supervise(
     }
 }
 
+/// Groups a freshly spawned child through the platform seam.
+/// A child that cannot be grouped is killed and reaped at
+/// once, and the failure is returned as the detail text of a
+/// spawn failure, because an ungrouped child is a child the
+/// deadline cannot kill as a tree.
+fn group_child(
+    child: &mut Child,
+    resolved: &Path,
+) -> Result<verirun_platform::ProcessGroup, String> {
+    let mut group = verirun_platform::ProcessGroup::new();
+    if let Err(source) = group.attach(child) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(format!(
+            "assigning the child of {} to its process group failed: {source}",
+            resolved.display()
+        ));
+    }
+    Ok(group)
+}
+
 /// The failure detail for a child that exited without an exit
 /// code the status can report: on Unix, the signal that
 /// terminated it; on Windows, an externally terminated process
 /// still reports an exit code, so there is never a detail.
 #[cfg(unix)]
-fn exit_detail(status: &std::process::ExitStatus) -> Option<String> {
+fn exit_detail(status: std::process::ExitStatus) -> Option<String> {
     use std::os::unix::process::ExitStatusExt;
     status
         .signal()
@@ -988,6 +1007,6 @@ fn exit_detail(status: &std::process::ExitStatus) -> Option<String> {
 /// terminated process still reports an exit code, so there is
 /// never a detail.
 #[cfg(windows)]
-fn exit_detail(_status: &std::process::ExitStatus) -> Option<String> {
+const fn exit_detail(_status: std::process::ExitStatus) -> Option<String> {
     None
 }
