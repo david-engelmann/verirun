@@ -38,7 +38,6 @@ use windows_sys::Win32::System::JobObjects::{
     SetInformationJobObject, TerminateJobObject,
 };
 use windows_sys::Win32::System::Kernel::OBJ_CASE_INSENSITIVE;
-use windows_sys::core::PCWSTR;
 
 use crate::TraversalError;
 
@@ -450,11 +449,14 @@ pub fn rename_durable(from: &Path, to: &Path) -> io::Result<()> {
     let to_wide: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
     // SAFETY: both paths are valid nul terminated UTF-16
     // strings that outlive the call, and the flags are the
-    // documented replace and write through constants.
+    // documented replace and write through constants. The
+    // native call takes the string pointers directly, the
+    // wide pointer type being a plain pointer alias in
+    // windows-sys.
     let ok = unsafe {
         MoveFileExW(
-            PCWSTR(from_wide.as_ptr()),
-            PCWSTR(to_wide.as_ptr()),
+            from_wide.as_ptr(),
+            to_wide.as_ptr(),
             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
         )
     };
