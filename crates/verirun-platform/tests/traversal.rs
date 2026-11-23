@@ -53,20 +53,6 @@ fn make_link(link: &Path, target: &Path) {
     assert!(status.success(), "mklink succeeds");
 }
 
-/// Removes a link created by [`make_link`] without touching
-/// its target.
-#[cfg(unix)]
-fn remove_link(link: &Path) {
-    fs::remove_file(link).expect("link removes");
-}
-
-/// Removes a link created by [`make_link`] without touching
-/// its target.
-#[cfg(windows)]
-fn remove_link(link: &Path) {
-    fs::remove_dir(link).expect("link removes");
-}
-
 /// The tolerant link creation the race swapper uses: failure
 /// is a normal mid-race outcome there.
 #[cfg(unix)]
