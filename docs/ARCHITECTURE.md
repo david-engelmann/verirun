@@ -379,7 +379,7 @@ The same protocol runs on Windows, with each step mapped to the platform's own p
 
 The directory entry gap is the one place the Windows guarantee is weaker than the Unix one, and it is recorded as finding PF-1 in the perfection register rather than smoothed over.
 
-A pin carries the same directory entry residual with no rename in its path at all, because a pin is a small file created in place and synced, so a crash lost pin reads as an unpinned manifest at the next collection. A destination file with wrong bytes planted by an outside writer between the presence check and the rename is the one read-only replace case whose outcome differs, because the Unix rename replaces it with the put’s verified bytes while the Windows discard path leaves it in place, and reads then report the integrity failure until the object is deleted and re-derived.
+A pin carries the same directory entry residual with no rename in its path at all, because a pin is a small file created in place and synced, so a crash lost pin reads as an unpinned manifest at the next collection. A destination file with wrong bytes planted by an outside writer between the presence check and the rename is the one read-only replace case whose outcome differs, because the Unix rename replaces it with the put's verified bytes while the Windows discard path leaves it in place, and reads then report the integrity failure until the object is deleted and re-derived.
 
 ### 6.3 Same-filesystem and aliasing rules
 
