@@ -92,9 +92,22 @@ fn io_error(path: &Path, step: StoreStep, source: std::io::Error) -> StoreError 
 
 /// Opens a directory read-only and syncs it, the POSIX durability
 /// primitive for directory entries.
+#[cfg(unix)]
 fn sync_directory(path: &Path, step: StoreStep) -> Result<(), StoreError> {
     let dir = File::open(path).map_err(|err| io_error(path, step, err))?;
     dir.sync_all().map_err(|err| io_error(path, step, err))
+}
+
+/// Directory sync has no Windows equivalent: a directory cannot
+/// be opened for flushing the way Unix allows, and the platform
+/// offers no call that orders a rename's durability against a
+/// crash. The step is therefore a no-op on Windows in W1, and
+/// the residual durability difference is a recorded item for
+/// workstream W4, whose slice re-proves this protocol under
+/// Windows file semantics and writes the mapping down.
+#[cfg(windows)]
+fn sync_directory(_path: &Path, _step: StoreStep) -> Result<(), StoreError> {
+    Ok(())
 }
 
 impl Cas {
@@ -462,8 +475,28 @@ impl Cas {
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => false,
             Err(err) => return Err(io_error(&shard_dir, StoreStep::CreateShard, err)),
         };
-        std::fs::rename(temp_path, &destination)
-            .map_err(|err| io_error(temp_path, StoreStep::Rename, err))?;
+        match std::fs::rename(temp_path, &destination) {
+            Ok(()) => {}
+            Err(_err) if destination.is_file() => {
+                // A concurrent put of the same digest landed the
+                // object between the presence check above and
+                // this rename. On Unix the rename replaces the
+                // identical bytes and hides the race; on Windows
+                // replacing a read-only object is refused, so
+                // the race surfaces here instead. The bytes are
+                // the same by digest, so this put completes the
+                // way the discard path above does, syncs and
+                // phases included.
+                std::fs::remove_file(temp_path)
+                    .map_err(|err| io_error(temp_path, StoreStep::RemoveTemp, err))?;
+                sync_directory(&shard_dir, StoreStep::SyncShard)?;
+                sync_directory(&self.root.join("objects"), StoreStep::SyncObjects)?;
+                observer.on_phase(PutPhase::Renamed);
+                observer.on_phase(PutPhase::Durable);
+                return Ok(*digest);
+            }
+            Err(err) => return Err(io_error(temp_path, StoreStep::Rename, err)),
+        }
         observer.on_phase(PutPhase::Renamed);
         sync_directory(&shard_dir, StoreStep::SyncShard)?;
         if shard_created {

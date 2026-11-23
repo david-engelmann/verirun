@@ -169,6 +169,10 @@ jobs:
         shell: bash
         run: cargo test -p verirun-core
 
+      - name: Test the store runner on Windows
+        shell: bash
+        run: cargo test -p verirun-store --test runner_portable
+
   audit:
     name: audit
     runs-on: ubuntu-latest
