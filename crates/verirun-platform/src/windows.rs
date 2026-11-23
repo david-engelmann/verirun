@@ -458,7 +458,7 @@ pub fn rename_durable(from: &Path, to: &Path) -> io::Result<()> {
             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
         )
     };
-    if ok.as_bool() {
+    if ok != 0 {
         Ok(())
     } else {
         Err(io::Error::last_os_error())
