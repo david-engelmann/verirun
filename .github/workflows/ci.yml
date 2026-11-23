@@ -177,6 +177,10 @@ jobs:
         shell: bash
         run: cargo test -p verirun-platform
 
+      - name: Test the store fault suite on Windows
+        shell: bash
+        run: cargo test -p verirun-store --test cas_faults
+
   audit:
     name: audit
     runs-on: ubuntu-latest
