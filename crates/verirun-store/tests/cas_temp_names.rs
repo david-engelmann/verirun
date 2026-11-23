@@ -12,9 +12,7 @@
 use std::io::Cursor;
 use std::path::PathBuf;
 
-use verirun_core::digest::DigestFactory;
 use verirun_store::cas_fs::Cas;
-use verirun_store::sha256::Sha256Factory;
 
 fn fresh_root(label: &str) -> PathBuf {
     let root =
@@ -39,7 +37,10 @@ fn puts_survive_debris_minted_under_a_reused_pid() {
     let cas = Cas::open(root.join("cas")).expect("store opens");
     let pid = std::process::id();
     let payload: &[u8] = b"p1 collision payload";
-    let digest = Sha256Factory.digest(payload);
+    let scratch = Cas::open(root.join("scratch-cas")).expect("scratch store opens");
+    let digest = scratch
+        .put_bytes(payload)
+        .expect("scratch put computes the digest");
     let tmp_dir = root.join("cas").join("tmp");
     for worker in 0..2 {
         for counter in 0..32 {
