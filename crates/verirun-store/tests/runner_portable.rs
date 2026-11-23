@@ -385,7 +385,7 @@ fn interpreter_env() -> Vec<(String, String)> {
 
 /// The declared environment for the interpreter children.
 #[cfg(unix)]
-fn interpreter_env() -> Vec<(String, String)> {
+const fn interpreter_env() -> Vec<(String, String)> {
     Vec::new()
 }
 
