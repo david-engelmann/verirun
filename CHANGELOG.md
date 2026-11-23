@@ -10,6 +10,8 @@ Changes from the perfection programme, after the audit programme closed.
 
 - Windows runner. The runner executes tasks on Windows as well as Unix (perfection programme workstream W1). Process control goes through the new verirun-platform crate, a process group on Unix and a job object with kill on job close on Windows, and a portable test suite proves the runner's contract with the same test text on both platforms. The scheduler's Windows parity lands later in the programme as workstream W5.
 
+- Temp names after pid reuse. Store temporary file names carry a per-process nonce minted once by the store adapter, so crash debris left by an earlier holder of the same process id can no longer fail a put (audit finding F9). The two temp name functions in verirun-core take the nonce as a new parameter.
+
 - Sandbox freshness. A task's sandbox is cleared before the task executes, so an output collected for a run was always written by that run (audit finding F1, invariant INV-SBX-6).
 - Work root ownership. A run holds its work root under a lock file for its whole duration, and a second run against the same work root fails with the new RunError::WorkLocked error instead of sharing sandboxes (audit finding F1, invariant INV-RUN-8). The CLI maps the refusal to exit code 3.
 - Cache validation. A stored cache record is honoured only when its artifact paths are exactly the task's declared outputs, so a planted record can no longer be honoured or crash the run (audit finding F2, invariant INV-RUN-7).
