@@ -331,16 +331,16 @@ The fan-out prefix is a performance device only. It carries no meaning, and veri
 Putting a stream into the store is one protocol with two entry shapes:
 
 - Known digest. The caller already hashed the content (for example a file on disk hashed in a first pass). The temporary file name embeds the digest.
-- Streamed. The digest is only known at end of stream (for example a live stdout drain). The temporary file name embeds a nonce instead. The protocol joins the known path at step 2, once the stream ends and the digest exists.
+- Streamed. The digest is only known at end of stream (for example a live stdout drain). The temporary file name carries a stream marker instead. The protocol joins the known path at step 2, once the stream ends and the digest exists.
 
 Temporary file grammar, inside `<cas>/tmp/`:
 
 ```text
-<digest>.<pid>.<worker>.<counter>.tmp     known digest puts
-stream-<pid>.<worker>.<counter>.tmp       streamed puts
+<digest>.<pid>.<worker>.<counter>.<nonce>.tmp     known digest puts
+stream-<pid>.<worker>.<counter>.<nonce>.tmp       streamed puts
 ```
 
-`pid` is the process id, `worker` is the worker index or 0 for the main thread, and `counter` is a per-process atomic counter. Uniqueness comes from the tuple, never from clock or randomness. Temporary names never enter any digest.
+`pid` is the process id, `worker` is the worker index or 0 for the main thread, `counter` is a per-process atomic counter, and `nonce` is a per-process value the store adapter mints once from the clock at first use. Uniqueness within a process comes from the counter and across processes from the nonce, so a name minted by an earlier process whose pid this process now holds cannot meet that process’s crash debris (finding F9). Temporary names never enter any digest.
 
 The four steps, in order, with no step skippable:
 

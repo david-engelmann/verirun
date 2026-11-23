@@ -16,7 +16,9 @@
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::UNIX_EPOCH;
 
 use verirun_core::cas::{
     PutPhase, STREAM_BUFFER_BYTES, object_relative_path, pin_relative_path, temp_file_name_known,
@@ -34,6 +36,28 @@ const WORKER_ID: u32 = 0;
 
 /// Process-wide counter making temp file names unique per attempt.
 static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Per-process nonce making temp file names unique across
+/// processes, minted once from the clock and this process's id.
+/// The counter alone cannot see across processes, so after pid
+/// reuse a name minted from pid and counter alone could meet
+/// crash debris from the pid's earlier holder and fail a put
+/// spuriously (finding F9). Two processes that hold the same
+/// pid one after another start at different times, so their
+/// nonces differ.
+static PROCESS_NONCE: OnceLock<u64> = OnceLock::new();
+
+/// This process's temp name nonce, minted on first use.
+fn process_nonce() -> u64 {
+    *PROCESS_NONCE.get_or_init(|| {
+        let elapsed = crate::clock::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
+        elapsed.as_secs()
+            ^ (u64::from(elapsed.subsec_nanos()) << 32)
+            ^ (u64::from(std::process::id()) << 1)
+    })
+}
 
 /// Observes a put in progress.
 ///
@@ -340,6 +364,7 @@ impl Cas {
             std::process::id(),
             WORKER_ID,
             TEMP_COUNTER.fetch_add(1, Ordering::SeqCst),
+            process_nonce(),
         ));
         let mut file = File::create_new(&temp_path)
             .map_err(|err| io_error(&temp_path, StoreStep::CreateTemp, err))?;
@@ -392,6 +417,7 @@ impl Cas {
             std::process::id(),
             WORKER_ID,
             TEMP_COUNTER.fetch_add(1, Ordering::SeqCst),
+            process_nonce(),
         ));
         let mut file = File::create_new(&temp_path)
             .map_err(|err| io_error(&temp_path, StoreStep::CreateTemp, err))?;

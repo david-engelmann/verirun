@@ -41,18 +41,32 @@ pub fn by_exec_relative_path(exec_digest: &Digest) -> PathBuf {
 }
 
 /// The temporary file name for a put whose digest is already known:
-/// `<digest>.<pid>.<worker>.<counter>.tmp`, created inside `<cas>/tmp/`.
-/// Temporary names never enter any digest.
+/// `<digest>.<pid>.<worker>.<counter>.<nonce>.tmp`, created inside
+/// `<cas>/tmp/`. The nonce is a per-process value the store adapter
+/// mints once, so a name minted by an earlier process whose pid this
+/// process now holds cannot collide with that process's crash
+/// debris (finding F9). Temporary names never enter any digest.
 #[must_use]
-pub fn temp_file_name_known(digest: &Digest, pid: u32, worker: u32, counter: u64) -> String {
-    format!("{}.{pid}.{worker}.{counter}.tmp", digest.to_hex())
+pub fn temp_file_name_known(
+    digest: &Digest,
+    pid: u32,
+    worker: u32,
+    counter: u64,
+    nonce: u64,
+) -> String {
+    format!(
+        "{}.{pid}.{worker}.{counter}.{nonce:016x}.tmp",
+        digest.to_hex()
+    )
 }
 
 /// The temporary file name for a streamed put, whose digest is known
-/// only at end of stream: `stream-<pid>.<worker>.<counter>.tmp`.
+/// only at end of stream: `stream-<pid>.<worker>.<counter>.<nonce>.tmp`.
+/// The nonce carries the same cross-process guarantee as in
+/// [`temp_file_name_known`].
 #[must_use]
-pub fn temp_file_name_stream(pid: u32, worker: u32, counter: u64) -> String {
-    format!("stream-{pid}.{worker}.{counter}.tmp")
+pub fn temp_file_name_stream(pid: u32, worker: u32, counter: u64, nonce: u64) -> String {
+    format!("stream-{pid}.{worker}.{counter}.{nonce:016x}.tmp")
 }
 
 /// One phase of the put state machine.
