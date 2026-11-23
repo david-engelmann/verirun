@@ -19,7 +19,7 @@ use std::process::Child;
 use windows_sys::Wdk::Foundation::OBJECT_ATTRIBUTES;
 use windows_sys::Wdk::Storage::FileSystem::{
     FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN,
-    FILE_OPEN_REPARSE_POINT as NT_OPEN_REPARSE_POINT, NtCreateFile,
+    FILE_OPEN_REPARSE_POINT as NT_OPEN_REPARSE_POINT, FILE_SYNCHRONOUS_IO_NONALERT, NtCreateFile,
 };
 use windows_sys::Win32::Foundation::{
     CloseHandle, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE, STATUS_FILE_IS_A_DIRECTORY,
@@ -276,11 +276,16 @@ impl DirHandle {
     /// for the reparse point itself rather than its target,
     /// so a link is opened as a link and the caller's
     /// attribute check on the resulting handle rejects it.
-    /// The create does not ask for synchronous I/O: the
-    /// native create rejects that option unless the access
-    /// mask carries the synchronize right in its raw form,
-    /// which the generic read mask does not, and the plain
-    /// handle serves the caller's reads as they are.
+    /// The create asks for synchronous I/O, because the
+    /// caller reads the opened file through ordinary
+    /// synchronous reads, and carries the synchronize right
+    /// in its raw form in the access mask: the native create
+    /// checks that right in the raw mask when the
+    /// synchronous option is set, and the generic read mask
+    /// does not satisfy the check (the first hosted run of
+    /// this backend proved the point with invalid parameter
+    /// failures on every relative open, and a variant probe
+    /// isolated the mask as the cause).
     fn open_relative(&self, name: &str, directory: bool) -> Result<HANDLE, TraversalError> {
         let mut name16: Vec<u16> = component(name)?;
         let byte_len = u16::try_from(name16.len() * 2).map_err(|_| {
@@ -313,11 +318,18 @@ impl DirHandle {
         let mut status_block: IO_STATUS_BLOCK = unsafe { core::mem::zeroed() };
         let mut handle: HANDLE = core::ptr::null_mut();
         let options = NT_OPEN_REPARSE_POINT
+            | FILE_SYNCHRONOUS_IO_NONALERT
             | if directory {
                 FILE_DIRECTORY_FILE
             } else {
                 FILE_NON_DIRECTORY_FILE
             };
+        // The access masks, built from the individual
+        // rights. Both carry synchronize (0x0010_0000) and
+        // read attributes (0x0000_0080). A directory adds
+        // list (0x0000_0001) and traverse (0x0000_0020); a
+        // file adds read data (0x0000_0001).
+        let access = if directory { 0x0010_00A1 } else { 0x0010_0081 };
         // SAFETY: `attributes` names `unicode`, which outlives
         // the call because `name16` is alive in this frame;
         // the parent handle is this handle's live directory;
@@ -327,7 +339,7 @@ impl DirHandle {
         let status = unsafe {
             NtCreateFile(
                 &mut handle,
-                GENERIC_READ,
+                access,
                 &attributes,
                 &mut status_block,
                 core::ptr::null(),
