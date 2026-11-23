@@ -1,17 +1,45 @@
 //! The Windows job object: created with kill on job close,
 //! assigned the spawned child, and terminated as a whole.
+//!
+//! The same file holds the Windows traversal backend: handle
+//! relative creates through the native `NtCreateFile`, with
+//! each component opened relative to its parent's handle and
+//! reparse points rejected from the opened handle's own
+//! attributes.
 
 use std::ffi::c_void;
+use std::fs::File;
 use std::io;
-use std::os::windows::io::AsRawHandle;
+use std::os::windows::ffi::OsStrExt;
+use std::os::windows::fs::MetadataExt;
+use std::os::windows::io::{AsRawHandle, FromRawHandle};
+use std::path::Path;
 use std::process::Child;
 
-use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+use windows_sys::Wdk::Foundation::OBJECT_ATTRIBUTES;
+use windows_sys::Wdk::Storage::FileSystem::{
+    FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN,
+    FILE_OPEN_REPARSE_POINT as NT_OPEN_REPARSE_POINT, FILE_SYNCHRONOUS_IO_NONALERT, NtCreateFile,
+};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE, STATUS_FILE_IS_A_DIRECTORY,
+    STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND, UNICODE_STRING,
+};
+use windows_sys::Win32::Storage::FileSystem::{
+    BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
+    FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+    FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle,
+    OPEN_EXISTING,
+};
+use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
 use windows_sys::Win32::System::JobObjects::{
     AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
     SetInformationJobObject, TerminateJobObject,
 };
+use windows_sys::Win32::System::Kernel::OBJ_CASE_INSENSITIVE;
+
+use crate::TraversalError;
 
 /// A Windows job object holding one task's process tree.
 ///
@@ -143,4 +171,248 @@ fn create_job() -> io::Result<HANDLE> {
         return Err(source);
     }
     Ok(job)
+}
+
+/// A directory held open for handle relative traversal.
+///
+/// Each child is created with `NtCreateFile` relative to this
+/// directory's handle, with reparse point inspection, so the
+/// object checked is the object opened and a component
+/// swapped after the open cannot redirect the traversal: the
+/// handle names the object itself, not its path.
+pub struct DirHandle {
+    /// The held directory handle.
+    handle: HANDLE,
+}
+
+// SAFETY: a directory handle is a kernel handle. It names the
+// same object from any thread, and every operation this type
+// performs through it is a file API call, which the operating
+// system serializes. The handle is never shared except
+// through this type's own methods.
+unsafe impl Send for DirHandle {}
+
+impl DirHandle {
+    /// Opens the traversal root, a directory the caller
+    /// names by path. The root is opened with reparse point
+    /// inspection like every component below it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TraversalError::NotFound`] when the root does
+    /// not exist, [`TraversalError::Link`] when it is a
+    /// reparse point, and [`TraversalError::Io`] for any other
+    /// operating system failure.
+    pub fn open_root(path: &Path) -> Result<Self, TraversalError> {
+        let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+        // SAFETY: `wide` is a valid nul terminated UTF-16
+        // path that outlives the call, the security attributes
+        // and template are null, which the API accepts, and
+        // the returned handle is checked before use.
+        let handle = unsafe {
+            CreateFileW(
+                wide.as_ptr(),
+                GENERIC_READ,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                core::ptr::null(),
+                OPEN_EXISTING,
+                FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                core::ptr::null_mut(),
+            )
+        };
+        if handle == INVALID_HANDLE_VALUE {
+            return Err(map_create_error(io::Error::last_os_error()));
+        }
+        let dir = Self { handle };
+        dir.require_directory()?;
+        Ok(dir)
+    }
+
+    /// Opens one component below this directory as the next
+    /// directory of the traversal.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TraversalError::NotFound`] when the component
+    /// does not exist, [`TraversalError::Link`] when it is a
+    /// reparse point, and [`TraversalError::Io`] for any other
+    /// failure, including the component existing but not
+    /// being a directory.
+    pub fn open_dir(&self, name: &str) -> Result<Self, TraversalError> {
+        let dir = Self {
+            handle: self.open_relative(name, true)?,
+        };
+        dir.require_directory()?;
+        Ok(dir)
+    }
+
+    /// Opens one component below this directory as the file
+    /// the traversal ends at.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TraversalError::NotFound`] when the component
+    /// does not exist, [`TraversalError::Link`] when it is a
+    /// reparse point, [`TraversalError::NotRegularFile`] when
+    /// it exists but is not a regular file, and
+    /// [`TraversalError::Io`] for any other failure.
+    pub fn open_file(&self, name: &str) -> Result<File, TraversalError> {
+        let handle = self.open_relative(name, false)?;
+        // SAFETY: `handle` is a fresh handle this call created
+        // and nothing else owns it.
+        let file = unsafe { File::from_raw_handle(handle) };
+        let metadata = file.metadata()?;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(TraversalError::Link);
+        }
+        if !metadata.is_file() {
+            return Err(TraversalError::NotRegularFile);
+        }
+        Ok(file)
+    }
+
+    /// Creates one component relative to this directory's
+    /// handle through the native create call. The create asks
+    /// for the reparse point itself rather than its target,
+    /// so a link is opened as a link and the caller's
+    /// attribute check on the resulting handle rejects it.
+    fn open_relative(&self, name: &str, directory: bool) -> Result<HANDLE, TraversalError> {
+        let mut name16: Vec<u16> = component(name)?;
+        let byte_len = u16::try_from(name16.len() * 2).map_err(|_| {
+            TraversalError::Io(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "a traversal component is too long",
+            ))
+        })?;
+        let unicode = UNICODE_STRING {
+            Length: byte_len,
+            MaximumLength: byte_len,
+            Buffer: name16.as_mut_ptr(),
+        };
+        // SAFETY: every field of the attributes structure is
+        // plain data with no invalid bit patterns, so the
+        // zeroed value is a valid starting point for the
+        // fields set below.
+        let mut attributes: OBJECT_ATTRIBUTES = unsafe { core::mem::zeroed() };
+        attributes.Length =
+            u32::try_from(core::mem::size_of::<OBJECT_ATTRIBUTES>()).map_err(|_| {
+                TraversalError::Io(io::Error::other(
+                    "the object attributes structure exceeds a u32 size",
+                ))
+            })?;
+        attributes.RootDirectory = self.handle;
+        attributes.ObjectName = &unicode;
+        attributes.Attributes = OBJ_CASE_INSENSITIVE as u32;
+        // SAFETY: the status block is plain data, zeroed here
+        // and written by the call before it is read.
+        let mut status_block: IO_STATUS_BLOCK = unsafe { core::mem::zeroed() };
+        let mut handle: HANDLE = core::ptr::null_mut();
+        let options = NT_OPEN_REPARSE_POINT
+            | FILE_SYNCHRONOUS_IO_NONALERT
+            | if directory {
+                FILE_DIRECTORY_FILE
+            } else {
+                FILE_NON_DIRECTORY_FILE
+            };
+        // SAFETY: `attributes` names `unicode`, which outlives
+        // the call because `name16` is alive in this frame;
+        // the parent handle is this handle's live directory;
+        // the out parameters are valid writable locations; and
+        // the returned handle is checked through the status
+        // before any use.
+        let status = unsafe {
+            NtCreateFile(
+                &mut handle,
+                GENERIC_READ,
+                &attributes,
+                &mut status_block,
+                core::ptr::null(),
+                0,
+                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                FILE_OPEN,
+                options,
+                core::ptr::null(),
+                0,
+            )
+        };
+        if status < 0 {
+            return Err(map_nt_status(status));
+        }
+        Ok(handle)
+    }
+
+    /// Reads this handle's own attributes and requires the
+    /// directory the traversal expects: not a reparse point,
+    /// and a directory.
+    fn require_directory(&self) -> Result<(), TraversalError> {
+        // SAFETY: the information structure is plain data,
+        // zeroed here and written by the call before it is
+        // read, and the handle is this handle's live directory.
+        let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { core::mem::zeroed() };
+        // SAFETY: the handle is live and `info` points to a
+        // valid structure the API fills synchronously.
+        let read = unsafe { GetFileInformationByHandle(self.handle, &mut info) };
+        if read == 0 {
+            return Err(TraversalError::Io(io::Error::last_os_error()));
+        }
+        if info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(TraversalError::Link);
+        }
+        if info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY == 0 {
+            return Err(TraversalError::Io(io::Error::new(
+                io::ErrorKind::NotADirectory,
+                "the component is not a directory",
+            )));
+        }
+        Ok(())
+    }
+}
+
+impl Drop for DirHandle {
+    fn drop(&mut self) {
+        // SAFETY: the handle is a live directory handle owned
+        // by this value, and this is its last use.
+        unsafe {
+            CloseHandle(self.handle);
+        }
+    }
+}
+
+/// Validates one traversal component and converts it to the
+/// UTF-16 the native create takes. A component is a single
+/// name: never empty, never a dot segment, and never carrying
+/// a separator of either platform.
+fn component(name: &str) -> Result<Vec<u16>, TraversalError> {
+    if name.is_empty() || name == "." || name == ".." || name.contains('/') || name.contains('\\') {
+        return Err(TraversalError::Io(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "a traversal component must be a single name",
+        )));
+    }
+    Ok(name.encode_utf16().collect())
+}
+
+/// Maps a `CreateFileW` failure to the traversal error for
+/// it.
+fn map_create_error(source: io::Error) -> TraversalError {
+    match source.raw_os_error() {
+        // ERROR_FILE_NOT_FOUND and ERROR_PATH_NOT_FOUND.
+        Some(2 | 3) => TraversalError::NotFound,
+        _ => TraversalError::Io(source),
+    }
+}
+
+/// Maps a native create status to the traversal error for
+/// it.
+fn map_nt_status(status: i32) -> TraversalError {
+    if status == STATUS_OBJECT_NAME_NOT_FOUND || status == STATUS_OBJECT_PATH_NOT_FOUND {
+        TraversalError::NotFound
+    } else if status == STATUS_FILE_IS_A_DIRECTORY {
+        TraversalError::NotRegularFile
+    } else {
+        TraversalError::Io(io::Error::other(format!(
+            "the native create failed with status 0x{:08x}",
+            status as u32
+        )))
+    }
 }

@@ -173,6 +173,10 @@ jobs:
         shell: bash
         run: cargo test -p verirun-store --test runner_portable
 
+      - name: Test the platform seam on Windows
+        shell: bash
+        run: cargo test -p verirun-platform
+
   audit:
     name: audit
     runs-on: ubuntu-latest

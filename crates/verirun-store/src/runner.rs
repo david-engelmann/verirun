@@ -424,8 +424,10 @@ impl<'a> Runner<'a> {
     }
 
     /// Collects exactly the declared outputs of a task that exited
-    /// with code 0, in normalized path order, under the component
-    /// walk of section 8.4 rules 1 to 4.
+    /// with code 0, in normalized path order. Each output is
+    /// opened by handle relative traversal under section 8.4
+    /// rules 1 to 4, so the file the store reads is the file the
+    /// traversal checked.
     fn collect(
         &self,
         task: &TaskSpec,
@@ -446,10 +448,10 @@ impl<'a> Runner<'a> {
         let mut artifacts = Vec::with_capacity(declared.len());
         for output in &declared {
             let candidate = outputs_dir.join(output.as_str());
-            let metadata = walk_output(outputs_dir, output)?;
+            let (file, metadata) = open_output(outputs_dir, output)?;
             let digest = self
                 .cas
-                .put_file(&candidate)
+                .put_stream(&file)
                 .map_err(|source| PrepFailure::Run(RunError::from(source)))?;
             artifacts.push(ArtifactRecord {
                 path: output.to_string(),
@@ -855,41 +857,73 @@ fn create_parent_dirs(area: &Path, path: &NormalizedPath) -> Result<(), PrepFail
     Ok(())
 }
 
-/// Walks the components of `declared` below the outputs area
-/// under section 8.4: every component is inspected with
-/// `symlink_metadata`, any symbolic link component fails
-/// regardless of its target, and the final component must be a
-/// regular file. Returns the final component's metadata. The
-/// area directory itself is runner-created and trusted.
-fn walk_output(area: &Path, declared: &NormalizedPath) -> Result<fs::Metadata, PrepFailure> {
+/// Opens one declared output below the outputs area by handle
+/// relative traversal under section 8.4: every component is
+/// opened relative to the held handle of its parent directory,
+/// any symbolic link or reparse point component fails
+/// regardless of its target, and the final component must be
+/// a regular file. Returns the opened file and its metadata,
+/// read from the same handle. The area directory itself is
+/// runner-created; the traversal opens it with the same
+/// no-follow rule as every component below it. Because each
+/// step opens the object it checks, a component swapped
+/// between the check and the open cannot redirect the
+/// collection to a different object (audit finding F11).
+fn open_output(
+    area: &Path,
+    declared: &NormalizedPath,
+) -> Result<(fs::File, fs::Metadata), PrepFailure> {
+    let root = verirun_platform::DirHandle::open_root(area).map_err(|source| {
+        PrepFailure::Task(format!(
+            "inspecting declared output {declared} failed: {source}"
+        ))
+    })?;
+    let components: Vec<&str> = declared.as_str().split('/').collect();
     let mut current = area.to_path_buf();
-    let mut metadata = None;
-    for component in declared.as_str().split('/') {
+    let mut dir = root;
+    for (index, component) in components.iter().enumerate() {
         current.push(component);
-        let step = fs::symlink_metadata(&current).map_err(|source| {
-            if source.kind() == io::ErrorKind::NotFound {
-                PrepFailure::Task(format!(
-                    "declared output {declared} is missing from the sandbox"
-                ))
-            } else {
+        if index + 1 == components.len() {
+            let file = dir
+                .open_file(component)
+                .map_err(|source| map_traversal_error(&source, declared, &current))?;
+            let metadata = file.metadata().map_err(|source| {
                 PrepFailure::Task(format!(
                     "inspecting declared output {declared} failed: {source}"
                 ))
-            }
-        })?;
-        if step.file_type().is_symlink() {
-            return Err(PrepFailure::Task(format!(
-                "declared output {declared} passes through a symbolic link at {}",
-                current.display()
-            )));
+            })?;
+            return Ok((file, metadata));
         }
-        metadata = Some(step);
+        dir = dir
+            .open_dir(component)
+            .map_err(|source| map_traversal_error(&source, declared, &current))?;
     }
-    match metadata {
-        Some(metadata) if metadata.is_file() => Ok(metadata),
-        _ => Err(PrepFailure::Task(format!(
-            "declared output {declared} is not a regular file"
-        ))),
+    Err(PrepFailure::Task(format!(
+        "declared output {declared} is not a regular file"
+    )))
+}
+
+/// Maps a traversal failure to the collection failure the
+/// runner has always reported for it.
+fn map_traversal_error(
+    source: &verirun_platform::TraversalError,
+    declared: &NormalizedPath,
+    current: &Path,
+) -> PrepFailure {
+    match source {
+        verirun_platform::TraversalError::NotFound => PrepFailure::Task(format!(
+            "declared output {declared} is missing from the sandbox"
+        )),
+        verirun_platform::TraversalError::Link => PrepFailure::Task(format!(
+            "declared output {declared} passes through a symbolic link at {}",
+            current.display()
+        )),
+        verirun_platform::TraversalError::NotRegularFile => {
+            PrepFailure::Task(format!("declared output {declared} is not a regular file"))
+        }
+        verirun_platform::TraversalError::Io(source) => PrepFailure::Task(format!(
+            "inspecting declared output {declared} failed: {source}"
+        )),
     }
 }
 

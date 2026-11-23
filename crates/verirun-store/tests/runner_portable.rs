@@ -493,3 +493,145 @@ const fn tree_script() -> &'static str {
 const fn tree_script() -> &'static str {
     "start /B ping -n 30 127.0.0.1 & ping -n 30 127.0.0.1 > NUL"
 }
+
+/// Executes one task with declared outputs and returns its
+/// execution record and the store (workstream W3).
+fn run_collect_task(
+    label: &str,
+    executable: String,
+    args: Vec<String>,
+    declared_env: &[(&str, &str)],
+    outputs: Vec<String>,
+) -> (PathBuf, Cas, TaskExecution) {
+    let root = fresh_root(label);
+    let cas = Cas::open(root.join("cas")).expect("store opens");
+    let runner = Runner::new(&cas);
+    let task = TaskSpec {
+        task_id: "collect".to_string(),
+        executable,
+        args,
+        env: declared_env
+            .iter()
+            .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+            .collect(),
+        inputs: Vec::new(),
+        outputs,
+        depends_on: Vec::new(),
+        timeout_ms: None,
+    };
+    let execution = runner
+        .execute(&task, &[], &root.join("sandbox"))
+        .expect("execution completes");
+    (root, cas, execution)
+}
+
+#[test]
+fn nested_outputs_are_collected() {
+    // Collection walks declared outputs through held handles
+    // (workstream W3); a nested output and a top level output
+    // both land with their exact bytes.
+    let (executable, args) = collect_invocation();
+    let declared = interpreter_env();
+    let pairs: Vec<(&str, &str)> = declared
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+    let outputs = vec!["sub/inner.txt".to_string(), "top.txt".to_string()];
+    let (root, cas, execution) = run_collect_task("nested", executable, args, &pairs, outputs);
+    assert!(
+        execution.failure_detail.is_none(),
+        "collection succeeded: {execution:?}"
+    );
+    assert_eq!(execution.artifacts.len(), 2);
+    let inner = &execution.artifacts[0];
+    assert_eq!(inner.path, "sub/inner.txt");
+    assert_eq!(inner.bytes, 11);
+    assert_eq!(
+        cas.read_to_vec(&inner.digest).expect("inner blob reads"),
+        b"inner-bytes"
+    );
+    let top = &execution.artifacts[1];
+    assert_eq!(top.path, "top.txt");
+    assert_eq!(top.bytes, 9);
+    assert_eq!(
+        cas.read_to_vec(&top.digest).expect("top blob reads"),
+        b"top-bytes"
+    );
+    remove_tree(&root);
+}
+
+#[test]
+fn linked_output_component_is_rejected() {
+    // A declared output that passes through a link component
+    // is a collection failure on both platforms, and nothing
+    // is collected (workstream W3, INV-SBX-3).
+    let (executable, args) = linked_invocation();
+    let declared = interpreter_env();
+    let pairs: Vec<(&str, &str)> = declared
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+    let outputs = vec!["linkdir/inner.txt".to_string()];
+    let (root, _cas, execution) = run_collect_task("linked", executable, args, &pairs, outputs);
+    let detail = execution
+        .failure_detail
+        .expect("collection through a link fails the task");
+    assert!(
+        detail.contains("passes through a symbolic link"),
+        "the failure names the link: {detail}"
+    );
+    assert!(execution.artifacts.is_empty(), "nothing was collected");
+    remove_tree(&root);
+}
+
+/// The invocation that writes one nested and one top level
+/// output with known bytes.
+#[cfg(unix)]
+fn collect_invocation() -> (String, Vec<String>) {
+    shell_invocation(
+        "mkdir -p outputs/sub && printf 'inner-bytes' > outputs/sub/inner.txt && printf 'top-bytes' > outputs/top.txt",
+    )
+}
+
+/// The invocation that writes one nested and one top level
+/// output with known bytes.
+#[cfg(windows)]
+fn collect_invocation() -> (String, Vec<String>) {
+    let script = "New-Item -ItemType Directory -Force outputs/sub | Out-Null; \
+                  [IO.File]::WriteAllText('outputs/sub/inner.txt', 'inner-bytes'); \
+                  [IO.File]::WriteAllText('outputs/top.txt', 'top-bytes')";
+    (
+        "powershell".to_string(),
+        vec![
+            "-NoProfile".to_string(),
+            "-Command".to_string(),
+            script.to_string(),
+        ],
+    )
+}
+
+/// The invocation that plants a link as an intermediate
+/// component of a declared output.
+#[cfg(unix)]
+fn linked_invocation() -> (String, Vec<String>) {
+    shell_invocation(
+        "mkdir -p outputs/decoy && printf 'x' > outputs/decoy/inner.txt && ln -s decoy outputs/linkdir",
+    )
+}
+
+/// The invocation that plants a link as an intermediate
+/// component of a declared output.
+#[cfg(windows)]
+fn linked_invocation() -> (String, Vec<String>) {
+    let script = "New-Item -ItemType Directory -Force outputs/decoy | Out-Null; \
+                  [IO.File]::WriteAllText('outputs/decoy/inner.txt', 'x'); \
+                  New-Item -ItemType Junction -Path outputs/linkdir -Target outputs/decoy | Out-Null";
+    (
+        "powershell".to_string(),
+        vec![
+            "-NoProfile".to_string(),
+            "-Command".to_string(),
+            script.to_string(),
+        ],
+    )
+}
