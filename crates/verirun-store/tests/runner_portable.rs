@@ -232,6 +232,180 @@ fn expected_stderr() -> Vec<u8> {
     b"hello err\r\n".to_vec()
 }
 
+/// The full size case from the roadmap: eight mebibytes on
+/// each stream in one task, both streams in flight together,
+/// captured byte exactly (workstream W2).
+const VOLUME_BYTES: usize = 8 * 1024 * 1024;
+
+/// One stream's volume content: a short unit tiled and cut to
+/// exactly `total` bytes, the same construction the child
+/// programs are asked to produce.
+fn volume_pattern(unit: &[u8], total: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(total);
+    while out.len() < total {
+        let take = (total - out.len()).min(unit.len());
+        out.extend_from_slice(&unit[..take]);
+    }
+    out
+}
+
+#[test]
+fn streams_at_volume_are_byte_exact() {
+    let (executable, args) = volume_invocation();
+    let (root, cas, execution, _elapsed) = run_task("volume", executable, args, &[], None);
+    assert_eq!(execution.exit_code, Some(0));
+    let stdout = cas
+        .read_to_vec(&execution.stdout_digest)
+        .expect("stdout blob reads");
+    let stderr = cas
+        .read_to_vec(&execution.stderr_digest)
+        .expect("stderr blob reads");
+    assert_eq!(stdout, volume_pattern(volume_stdout_unit(), VOLUME_BYTES));
+    assert_eq!(stderr, volume_pattern(volume_stderr_unit(), VOLUME_BYTES));
+    remove_tree(&root);
+}
+
+/// The repeated unit the volume child leaves on stdout.
+#[cfg(unix)]
+const fn volume_stdout_unit() -> &'static [u8] {
+    b"verirun!\n"
+}
+
+/// The repeated unit the volume child leaves on stdout.
+#[cfg(windows)]
+const fn volume_stdout_unit() -> &'static [u8] {
+    b"verirun!\n"
+}
+
+/// The repeated unit the volume child leaves on stderr.
+#[cfg(unix)]
+const fn volume_stderr_unit() -> &'static [u8] {
+    b"Verirun?\n"
+}
+
+/// The repeated unit the volume child leaves on stderr.
+#[cfg(windows)]
+const fn volume_stderr_unit() -> &'static [u8] {
+    b"Verirun?\n"
+}
+
+/// The invocation that writes the volume patterns: two
+/// concurrent pipelines on Unix, byte writes through the
+/// standard streams on Windows.
+#[cfg(unix)]
+fn volume_invocation() -> (String, Vec<String>) {
+    shell_invocation(
+        "yes 'verirun!' | head -c 8388608 & yes 'Verirun?' | head -c 8388608 >&2 & wait",
+    )
+}
+
+/// The invocation that writes the volume patterns.
+#[cfg(windows)]
+fn volume_invocation() -> (String, Vec<String>) {
+    let script = "$o=[Console]::OpenStandardOutput(); $e=[Console]::OpenStandardError(); \
+                  $so=[Text.Encoding]::ASCII.GetBytes(('verirun!' + \"`n\") * 932068); \
+                  $se=[Text.Encoding]::ASCII.GetBytes(('Verirun?' + \"`n\") * 932068); \
+                  $o.Write($so, 0, 8388608); $o.Flush(); $e.Write($se, 0, 8388608); $e.Flush()";
+    (
+        "powershell".to_string(),
+        vec![
+            "-NoProfile".to_string(),
+            "-Command".to_string(),
+            script.to_string(),
+        ],
+    )
+}
+
+#[test]
+fn timeout_capture_is_an_exact_prefix() {
+    // The child writes a known prefix, flushes it, and then
+    // sleeps holding both pipes. The deadline kills the tree,
+    // the pipes close, and the captured stream must be exactly
+    // the prefix: nothing lost that was delivered, nothing
+    // invented past it (workstream W2).
+    let (executable, args) = prefix_invocation();
+    let (root, cas, execution, elapsed) = run_task("prefix", executable, args, &[], Some(500));
+    assert!(execution.timed_out, "the deadline fired: {execution:?}");
+    let stdout = cas
+        .read_to_vec(&execution.stdout_digest)
+        .expect("stdout blob reads");
+    assert_eq!(stdout, expected_prefix());
+    let stderr = cas
+        .read_to_vec(&execution.stderr_digest)
+        .expect("stderr blob reads");
+    assert!(stderr.is_empty(), "stderr stayed empty: {stderr:?}");
+    assert!(
+        elapsed < Duration::from_secs(8),
+        "execution returned well inside the drain grace: {elapsed:?}"
+    );
+    remove_tree(&root);
+}
+
+/// The invocation that writes the prefix and then sleeps for
+/// thirty seconds holding the pipes.
+#[cfg(unix)]
+fn prefix_invocation() -> (String, Vec<String>) {
+    shell_invocation(
+        "i=0; while [ $i -lt 32 ]; do printf 'verirun-prefix-line\\n'; i=$((i+1)); done; exec sleep 30",
+    )
+}
+
+/// The invocation that writes the prefix and then sleeps for
+/// thirty seconds holding the pipes.
+#[cfg(windows)]
+fn prefix_invocation() -> (String, Vec<String>) {
+    shell_invocation(
+        "for /L %i in (1,1,32) do @echo verirun-prefix-line & ping -n 30 127.0.0.1 > NUL",
+    )
+}
+
+/// The prefix bytes the child delivers before it sleeps.
+#[cfg(unix)]
+fn expected_prefix() -> Vec<u8> {
+    volume_pattern(b"verirun-prefix-line\n", 32 * 20)
+}
+
+/// The prefix bytes the child delivers before it sleeps.
+#[cfg(windows)]
+fn expected_prefix() -> Vec<u8> {
+    volume_pattern(b"verirun-prefix-line\r\n", 32 * 21)
+}
+
+/// The cutoff itself, on the one platform whose children can
+/// escape the tree kill: a detached grandchild keeps writing
+/// after the deadline kills the child, the drain waits out
+/// the grace, and the finalized stream is an exact prefix of
+/// the endless stream, with the cut noted (workstream W2).
+/// Windows children cannot break out of their job object, so
+/// there the grace parity rests on the shared collection
+/// code and the prefix case above.
+#[cfg(unix)]
+#[test]
+fn cut_stream_is_an_exact_prefix() {
+    let (executable, args) = shell_invocation(
+        "setsid sh -c 'i=0; while [ $i -lt 300 ]; do printf x; i=$((i+1)); sleep 0.1; done' & sleep 30",
+    );
+    let (root, cas, execution, elapsed) = run_task("cut", executable, args, &[], Some(500));
+    assert!(execution.timed_out, "the deadline fired: {execution:?}");
+    assert!(
+        execution.failure_detail.is_some(),
+        "the stream was cut after the grace: {execution:?}"
+    );
+    let stdout = cas
+        .read_to_vec(&execution.stdout_digest)
+        .expect("stdout blob reads");
+    assert!(
+        !stdout.is_empty() && stdout.iter().all(|byte| *byte == b'x'),
+        "the cut stream is an exact prefix of the endless stream: {} bytes",
+        stdout.len()
+    );
+    assert!(
+        elapsed >= Duration::from_secs(9) && elapsed < Duration::from_secs(25),
+        "the grace bounded the drain: {elapsed:?}"
+    );
+    remove_tree(&root);
+}
+
 #[test]
 fn timeout_kills_the_whole_tree() {
     // The script leaves a grandchild holding the stdout pipe

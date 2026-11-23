@@ -28,6 +28,10 @@ The first hosted run of the portable suite failed all four tests, and a staged p
 
 With those two fixes in, three of the four portable tests pass on Windows and the runner itself probes clean end to end. The remaining failure is the hermetic environment test's expectation, not the runner: a staged dump of the environment inside a task shows exactly the runner's five pairs, plus three variables `cmd` synthesizes for itself when they are absent (its own path, its extension list, and its prompt). The test now removes those three on Windows before its exact comparison, the same shell bookkeeping that makes the Unix side run the `env` program directly rather than a shell, so the comparison stays exact over everything the runner controls.
 
+### W2. Pipes, draining, and timeout parity
+
+The drain machinery was already platform neutral, so this slice adds its gate evidence to the portable suite and changes no production code. The volume case runs eight mebibytes on each stream in one task with both streams in flight together and asserts the captured blobs byte for byte against patterns built in process. The timeout case has the child write a known prefix, flush it, and sleep holding both pipes; the captured stream equals exactly the prefix. A third case, Unix only, detaches a writer that escapes the tree kill, so the ten second drain grace and the stream cutoff are exercised directly and the finalized stream is an exact prefix of the endless stream with the cut noted. Windows children cannot break out of their job object, so on Windows the grace parity rests on the shared collection code and the prefix case, and this entry states that plainly rather than claiming a Windows cutoff run. Hosted evidence: this slice's own pull request CI, whose windows job runs the grown portable suite on windows-latest and whose rust job runs it inside the full workspace suite, both green on the merged head. No production difference was forced by the evidence.
+
 ## Perfection rounds
 
 ### P1. Correctness, first cycle
