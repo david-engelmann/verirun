@@ -302,9 +302,14 @@ fn volume_invocation() -> (String, Vec<String>) {
 /// The invocation that writes the volume patterns.
 #[cfg(windows)]
 fn volume_invocation() -> (String, Vec<String>) {
+    // No double quotes anywhere in the script: the runner
+    // quotes the argument for the command line, and a quoted
+    // string inside it makes PowerShell fail the parse and
+    // exit with 0xFFFF0000. The newline is built from its
+    // character code instead.
     let script = "$o=[Console]::OpenStandardOutput(); $e=[Console]::OpenStandardError(); \
-                  $so=[Text.Encoding]::ASCII.GetBytes(('verirun!' + \"`n\") * 932068); \
-                  $se=[Text.Encoding]::ASCII.GetBytes(('Verirun?' + \"`n\") * 932068); \
+                  $so=[Text.Encoding]::ASCII.GetBytes(('verirun!' + [string][char]10) * 932068); \
+                  $se=[Text.Encoding]::ASCII.GetBytes(('Verirun?' + [string][char]10) * 932068); \
                   $o.Write($so, 0, 8388608); $o.Flush(); $e.Write($se, 0, 8388608); $e.Flush()";
     (
         "powershell".to_string(),
@@ -324,7 +329,11 @@ fn timeout_capture_is_an_exact_prefix() {
     // the prefix: nothing lost that was delivered, nothing
     // invented past it (workstream W2).
     let (executable, args) = prefix_invocation();
-    let (root, cas, execution, elapsed) = run_task("prefix", executable, args, &[], Some(500));
+    // Three seconds, not the tree case's five hundred
+    // milliseconds: the Windows child's interpreter needs a
+    // moment to start before it can write its prefix, and the
+    // deadline must land after the write, inside the sleep.
+    let (root, cas, execution, elapsed) = run_task("prefix", executable, args, &[], Some(3000));
     assert!(execution.timed_out, "the deadline fired: {execution:?}");
     let stdout = cas
         .read_to_vec(&execution.stdout_digest)
@@ -351,11 +360,22 @@ fn prefix_invocation() -> (String, Vec<String>) {
 }
 
 /// The invocation that writes the prefix and then sleeps for
-/// thirty seconds holding the pipes.
+/// thirty seconds holding the pipes. A `cmd` for loop's
+/// variable does not survive the runner's command line, so
+/// the prefix is written through the standard stream from
+/// PowerShell, again with no double quotes in the script.
 #[cfg(windows)]
 fn prefix_invocation() -> (String, Vec<String>) {
-    shell_invocation(
-        "for /L %i in (1,1,32) do @echo verirun-prefix-line & ping -n 30 127.0.0.1 > NUL",
+    let script = "$o=[Console]::OpenStandardOutput(); \
+                  $b=[Text.Encoding]::ASCII.GetBytes(('verirun-prefix-line' + [string][char]13 + [string][char]10) * 32); \
+                  $o.Write($b, 0, $b.Length); $o.Flush(); Start-Sleep -Seconds 30";
+    (
+        "powershell".to_string(),
+        vec![
+            "-NoProfile".to_string(),
+            "-Command".to_string(),
+            script.to_string(),
+        ],
     )
 }
 
