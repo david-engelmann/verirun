@@ -25,6 +25,7 @@ use verirun_core::cas::{
     temp_file_name_stream,
 };
 use verirun_core::digest::{Digest, DomainTag, begin, hash_bytes};
+use verirun_platform::rename_durable;
 
 use crate::error::{StoreError, StoreStep};
 use crate::sha256::Sha256Factory;
@@ -122,16 +123,51 @@ fn sync_directory(path: &Path, step: StoreStep) -> Result<(), StoreError> {
     dir.sync_all().map_err(|err| io_error(path, step, err))
 }
 
-/// Directory sync has no Windows equivalent: a directory cannot
-/// be opened for flushing the way Unix allows, and the platform
-/// offers no call that orders a rename's durability against a
-/// crash. The step is therefore a no-op on Windows in W1, and
-/// the residual durability difference is a recorded item for
-/// workstream W4, whose slice re-proves this protocol under
-/// Windows file semantics and writes the mapping down.
+/// Directory sync has no Windows equivalent: a directory
+/// cannot be opened for flushing the way Unix allows. The
+/// put protocol's rename therefore carries the write
+/// through flag on Windows, the ordering tool the platform
+/// offers for the entry itself, and the residual difference
+/// is written down in the durability mapping in
+/// ARCHITECTURE.md section 6.2. The step stays as a no-op
+/// call so the protocol keeps one shape on both platforms.
 #[cfg(windows)]
 fn sync_directory(_path: &Path, _step: StoreStep) -> Result<(), StoreError> {
     Ok(())
+}
+
+/// Removes a file that may carry the read only attribute
+/// the store sets on its objects and on a put's temp file
+/// before the rename. Unix unlink ignores the attribute.
+/// Windows refuses to delete a read only file, so a failed
+/// removal of a read only file clears the attribute and
+/// retries once. Every other failure returns as it came.
+///
+/// # Errors
+///
+/// Returns the failure that ends the attempt, the first
+/// removal failure for a file that is not read only, the
+/// attribute failure, or the retry's removal failure.
+pub(crate) fn remove_stored_file(path: &Path) -> std::io::Result<()> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(first) => {
+            let Ok(meta) = std::fs::metadata(path) else {
+                return Err(first);
+            };
+            if !meta.permissions().readonly() {
+                return Err(first);
+            }
+            let mut permissions = meta.permissions();
+            #[allow(
+                clippy::permissions_set_readonly_false,
+                reason = "deleting a stored file on Windows requires clearing its read only attribute first"
+            )]
+            permissions.set_readonly(false);
+            std::fs::set_permissions(path, permissions)?;
+            std::fs::remove_file(path)
+        }
+    }
 }
 
 impl Cas {
@@ -481,7 +517,7 @@ impl Cas {
             // landed the object may not have synced its
             // directories yet, so sync them on this path too
             // before reporting durability.
-            std::fs::remove_file(temp_path)
+            remove_stored_file(temp_path)
                 .map_err(|err| io_error(temp_path, StoreStep::RemoveTemp, err))?;
             sync_directory(&shard_dir, StoreStep::SyncShard)?;
             sync_directory(&self.root.join("objects"), StoreStep::SyncObjects)?;
@@ -501,7 +537,7 @@ impl Cas {
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => false,
             Err(err) => return Err(io_error(&shard_dir, StoreStep::CreateShard, err)),
         };
-        match std::fs::rename(temp_path, &destination) {
+        match rename_durable(temp_path, &destination) {
             Ok(()) => {}
             Err(_err) if destination.is_file() => {
                 // A concurrent put of the same digest landed the
@@ -513,7 +549,7 @@ impl Cas {
                 // the same by digest, so this put completes the
                 // way the discard path above does, syncs and
                 // phases included.
-                std::fs::remove_file(temp_path)
+                remove_stored_file(temp_path)
                     .map_err(|err| io_error(temp_path, StoreStep::RemoveTemp, err))?;
                 sync_directory(&shard_dir, StoreStep::SyncShard)?;
                 sync_directory(&self.root.join("objects"), StoreStep::SyncObjects)?;

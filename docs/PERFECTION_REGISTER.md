@@ -16,7 +16,9 @@ The parser checks each new object key against the keys collected so far, which i
 
 ## Findings raised by the programme
 
-None yet. The first perfection round, P1, opens the finding list.
+### PF-1. Directory entry durability is weaker on Windows
+
+Raised in W4. Unix syncs the destination directory after the rename, so a reported success means the entry itself is durable. Windows offers no directory sync, and the put protocol's answer there is the write-through rename, the strongest ordering the platform gives for an entry. A crash can still lose the newest entry on Windows where the Unix sequence would keep it. The consequence is bounded by the store's own rules, because every read rehashes what it returns, so a lost entry reads as a missing object and never as corrupt data, and a missing object is a retry and not a wrong answer. The disposition is to accept the difference as a recorded platform fact, with the mapping written into section 6.2 of the architecture document. The finding reopens if a future Windows primitive offers directory level ordering.
 
 ## Workstream records
 
@@ -35,6 +37,10 @@ The drain machinery was already platform neutral, so this slice adds its gate ev
 ### W3. Sandbox, collection, and the F11 window
 
 Collection no longer walks a declared output by path and opens it afterwards. The platform seam grew a second safe API, a directory handle that opens one component at a time relative to itself, descriptor relative through openat with no-follow semantics on Unix and handle relative through the native create call with reparse point inspection on Windows. The runner's collection opens every declared output through that traversal and streams the opened file into the store, so the file checked is the file read, and a component swapped between a check and an open has nothing to redirect. Carried item C2 and audit finding F11 close on this slice. The gate evidence is the traversal suite in the platform crate, whose race case flips a component between a real directory and a link to a decoy tree while traversals run and asserts the decoy's bytes are never collected, plus the portable suite's nested collection and linked component cases, running on both platforms. Hosted evidence: this slice's own pull request CI, whose windows job runs the traversal and portable suites on windows-latest and whose rust job runs them inside the full workspace suite, both green on the merged head.
+
+### W4. Store durability on Windows file semantics
+
+The put protocol now renames through the platform seam, where the Windows rename is the native move call with the replace and write-through flags, so the rename itself carries the strongest ordering the platform offers for a directory entry. File sync was already the platform flush through the standard library. Directory sync stays a no-op call on Windows because no equivalent exists, and section 6.2 of the architecture document now maps every protocol step to its Windows counterpart with the residual difference named. Two latent defects fell out of reading the removal sites. A put's temp file carries the read-only attribute by the time the discard paths remove it, and the collector removes read-only objects with a plain delete, and Windows refuses both, so stored file removals now clear the attribute and retry once when a read-only file refuses. The discard path is pinned by a deterministic fault test that lands the same bytes through a second store handle mid put. The directory entry difference is recorded as finding PF-1, not smoothed over. Hosted evidence: this slice's own pull request CI, whose windows job runs the crash recovery and fault suites on windows-latest and whose rust job runs them inside the full workspace suite, both green on the merged head.
 
 ## Perfection rounds
 

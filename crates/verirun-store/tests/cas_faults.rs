@@ -310,3 +310,51 @@ fn fault_counting_sink_chunk_bound() {
     assert_eq!(back, payload);
     remove_store(&root);
 }
+
+/// An observer that lands the same bytes through a second
+/// store handle when the first put reports its file synced.
+/// The first put then reaches its presence check with the
+/// object already in place and must complete by discarding
+/// its own temp file, which by then carries the read only
+/// attribute the protocol sets before the rename.
+struct LandMidPut {
+    store: Cas,
+    payload: Vec<u8>,
+    landed: bool,
+}
+
+impl PutObserver for LandMidPut {
+    fn on_phase(&mut self, phase: PutPhase) {
+        if phase == PutPhase::FileSynced && !self.landed {
+            self.landed = true;
+            self.store
+                .put_bytes(&self.payload)
+                .expect("the racing put lands the object");
+        }
+    }
+}
+
+#[test]
+fn put_discards_its_temp_when_the_object_lands_mid_put() {
+    let root = fresh_root("mid-put");
+    let cas = Cas::open(&root).expect("store opens");
+    let payload = b"mid put payload".to_vec();
+    let mut observer = LandMidPut {
+        store: Cas::open(&root).expect("second handle opens"),
+        payload: payload.clone(),
+        landed: false,
+    };
+    let digest = cas
+        .put_bytes_observed(&payload, &mut observer)
+        .expect("the put completes through the discard path");
+    assert!(observer.landed, "the race was actually forced");
+    assert_eq!(
+        digest,
+        hash_bytes(&Sha256Factory, DomainTag::Blob, &payload)
+    );
+    assert_eq!(
+        cas.read_to_vec(&digest).expect("object reads back"),
+        payload
+    );
+    remove_store(&root);
+}

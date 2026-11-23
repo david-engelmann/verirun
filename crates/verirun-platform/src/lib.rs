@@ -43,9 +43,9 @@ mod unix;
 mod windows;
 
 #[cfg(unix)]
-pub use unix::{DirHandle, ProcessGroup};
+pub use unix::{DirHandle, ProcessGroup, rename_durable};
 #[cfg(windows)]
-pub use windows::{DirHandle, ProcessGroup};
+pub use windows::{DirHandle, ProcessGroup, rename_durable};
 
 use std::fmt;
 use std::io;

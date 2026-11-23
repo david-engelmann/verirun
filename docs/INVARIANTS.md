@@ -67,7 +67,7 @@ A blob is never observable in a partial state. At the destination path, a reader
 Edge cases: crash during write, after file sync, and after rename before directory sync, per the ARCHITECTURE.md section 6.2 table.
 
 ### INV-CAS-2. Durability ordering
-`put` reports success only after the file sync, the rename, and the destination directory sync have all completed, in that order. When the put created the shard directory, the `objects/` directory sync after the rename is part of the required order, so the shard entry is durable along with the file entry. A success result followed by a power loss never loses the blob on a filesystem that honours sync semantics.
+`put` reports success only after the file sync, the rename, and the destination directory sync have all completed, in that order. When the put created the shard directory, the `objects/` directory sync after the rename is part of the required order, so the shard entry is durable along with the file entry. A success result followed by a power loss never loses the blob on a filesystem that honours sync semantics. On Windows the directory sync step has no equivalent, so a success there follows the file flush and the write-through rename, and the entry rests on that rename and the filesystem journal. The mapping and the residual difference stand in ARCHITECTURE.md section 6.2 and in finding PF-1 of the perfection register.
 Edge case: fault injection that records the call order of sync and rename operations through a test filesystem seam, asserting the order rather than the timing, including a put into a shard directory that does not exist yet.
 
 ### INV-CAS-3. Immutability and read-only storage

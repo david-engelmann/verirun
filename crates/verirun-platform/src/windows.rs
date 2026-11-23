@@ -29,7 +29,7 @@ use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle,
-    OPEN_EXISTING,
+    MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW, OPEN_EXISTING,
 };
 use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
 use windows_sys::Win32::System::JobObjects::{
@@ -38,6 +38,7 @@ use windows_sys::Win32::System::JobObjects::{
     SetInformationJobObject, TerminateJobObject,
 };
 use windows_sys::Win32::System::Kernel::OBJ_CASE_INSENSITIVE;
+use windows_sys::core::PCWSTR;
 
 use crate::TraversalError;
 
@@ -430,5 +431,36 @@ fn map_nt_status(status: i32) -> TraversalError {
             "the native create failed with status 0x{:08x}",
             status as u32
         )))
+    }
+}
+
+/// Renames `from` to `to`, replacing any file at `to`, with
+/// the write through flag set. The standard library rename
+/// passes no write through flag, so the rename itself would
+/// carry no ordering against a crash. The flag makes the
+/// platform flush the rename's own metadata before the call
+/// returns, which is the strongest ordering Windows offers
+/// for a directory entry, there being no directory sync.
+///
+/// # Errors
+///
+/// Returns the rename failure from the operating system.
+pub fn rename_durable(from: &Path, to: &Path) -> io::Result<()> {
+    let from_wide: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
+    let to_wide: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
+    // SAFETY: both paths are valid nul terminated UTF-16
+    // strings that outlive the call, and the flags are the
+    // documented replace and write through constants.
+    let ok = unsafe {
+        MoveFileExW(
+            PCWSTR(from_wide.as_ptr()),
+            PCWSTR(to_wide.as_ptr()),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if ok.as_bool() {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
     }
 }

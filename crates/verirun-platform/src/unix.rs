@@ -227,3 +227,15 @@ fn map_open_error(source: io::Error) -> TraversalError {
         _ => TraversalError::Io(source),
     }
 }
+
+/// Renames `from` to `to`, replacing any file at `to`. The
+/// rename is atomic on one filesystem. Its durability comes
+/// from the caller's directory syncs after it returns, the
+/// protocol the store's put follows.
+///
+/// # Errors
+///
+/// Returns the rename failure from the operating system.
+pub fn rename_durable(from: &Path, to: &Path) -> io::Result<()> {
+    std::fs::rename(from, to)
+}
