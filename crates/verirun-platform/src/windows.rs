@@ -5,7 +5,8 @@
 //! relative creates through the native `NtCreateFile`, with
 //! each component opened relative to its parent's handle and
 //! reparse points rejected from the opened handle's own
-//! attributes.
+//! attributes. It also holds the write through rename the
+//! store's put protocol uses.
 
 use std::ffi::c_void;
 use std::fs::File;
@@ -433,13 +434,20 @@ fn map_nt_status(status: i32) -> TraversalError {
     }
 }
 
-/// Renames `from` to `to`, replacing any file at `to`, with
-/// the write through flag set. The standard library rename
-/// passes no write through flag, so the rename itself would
-/// carry no ordering against a crash. The flag makes the
-/// platform flush the rename's own metadata before the call
-/// returns, which is the strongest ordering Windows offers
-/// for a directory entry, there being no directory sync.
+/// Renames `from` to `to` with the write through flag set.
+///
+/// The standard library rename passes no write through
+/// flag, so the rename itself would carry no ordering
+/// against a crash. The flag makes the platform flush the
+/// rename's own metadata before the call returns, which is
+/// the strongest ordering Windows offers for a directory
+/// entry, there being no directory sync. One behavior of
+/// the standard library rename is deliberately not carried
+/// over. Its Windows form retries a refused rename through
+/// a second call that ignores the read only attribute,
+/// where this rename refuses, and the store's put completes
+/// through its discard path instead, which the identical
+/// bytes by digest make equivalent.
 ///
 /// # Errors
 ///

@@ -182,7 +182,6 @@ fn fault_cross_device_tmp_refused() {
     let target = shm.join(format!("verirun-fault-xdev-target-{}", std::process::id()));
     std::fs::create_dir_all(root.join("objects")).expect("objects dir");
     std::fs::create_dir_all(&target).expect("shm target dir");
-    #[cfg(unix)]
     std::os::unix::fs::symlink(&target, root.join("tmp")).expect("tmp symlink");
     let result = Cas::open(&root);
     match result {
@@ -359,6 +358,13 @@ fn put_discards_its_temp_when_the_object_lands_mid_put() {
     assert_eq!(
         cas.read_to_vec(&digest).expect("object reads back"),
         payload
+    );
+    let tmp_entries: Vec<_> = std::fs::read_dir(root.join("tmp"))
+        .expect("temp dir reads")
+        .collect();
+    assert!(
+        tmp_entries.is_empty(),
+        "the discard removed the put's temp file"
     );
     remove_store(&root);
 }

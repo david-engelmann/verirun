@@ -177,7 +177,7 @@ jobs:
         shell: bash
         run: cargo test -p verirun-platform
 
-      - name: Test the store durability suites on Windows
+      - name: Test the store fault suite on Windows
         shell: bash
         run: cargo test -p verirun-store --test cas_faults
 

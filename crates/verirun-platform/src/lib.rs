@@ -2,8 +2,9 @@
 //!
 //! One safe API over the platform mechanisms the runner
 //! needs: a Unix process group and a Windows job object for
-//! process control, and handle relative path traversal for
-//! output collection. The rest of the workspace forbids
+//! process control, handle relative path traversal for
+//! output collection, and a write through rename for the
+//! store's put protocol. The rest of the workspace forbids
 //! unsafe code, and the Windows interfaces are foreign
 //! function interfaces, so this crate exists to hold the
 //! workspace's only unsafe blocks, each one small, behind a

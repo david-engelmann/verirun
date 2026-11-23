@@ -94,8 +94,9 @@ impl GcReport {
 /// [`GcError::InvalidPinnedManifest`] when a pin's manifest
 /// cannot be produced and verified, [`GcError::LockHeld`] when
 /// another sweep holds the lock on a real run, and
-/// [`GcError::Store`] for store failures. On every error the
-/// sweep deletes nothing.
+/// [`GcError::Store`] for store failures. A failure during
+/// the sweep leaves the deletions already made in place, a
+/// prefix of the plan, and the store consistent (INV-GC-5).
 ///
 /// # Panics
 ///

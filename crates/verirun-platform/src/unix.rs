@@ -228,10 +228,11 @@ fn map_open_error(source: io::Error) -> TraversalError {
     }
 }
 
-/// Renames `from` to `to`, replacing any file at `to`. The
-/// rename is atomic on one filesystem. Its durability comes
-/// from the caller's directory syncs after it returns, the
-/// protocol the store's put follows.
+/// Renames `from` to `to`, replacing any file at `to`.
+///
+/// The rename is atomic on one filesystem. Its durability
+/// comes from the caller's directory syncs after it
+/// returns, the protocol the store's put follows.
 ///
 /// # Errors
 ///
