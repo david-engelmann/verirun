@@ -104,11 +104,13 @@ impl DirHandle {
         })?;
         // SAFETY: `c_path` is a valid nul terminated string
         // that outlives the call, and the descriptor returned
-        // is checked before use.
+        // is checked before use. The open carries no
+        // O_DIRECTORY; `open_dir` explains why, and the
+        // directory check below does that flag's work.
         let fd = unsafe {
             libc::open(
                 c_path.as_ptr(),
-                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
             )
         };
         if fd < 0 {
@@ -117,6 +119,12 @@ impl DirHandle {
         // SAFETY: `fd` is a fresh descriptor this call created
         // and nothing else owns it.
         let dir = unsafe { File::from_raw_fd(fd) };
+        let metadata = dir.metadata()?;
+        if !metadata.is_dir() {
+            return Err(TraversalError::Io(io::Error::from_raw_os_error(
+                libc::ENOTDIR,
+            )));
+        }
         Ok(Self { dir })
     }
 
@@ -131,10 +139,20 @@ impl DirHandle {
     /// failure, including the component existing but not
     /// being a directory.
     pub fn open_dir(&self, name: &str) -> Result<Self, TraversalError> {
-        let dir = self.open_at(
-            name,
-            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
-        )?;
+        // The open carries no O_DIRECTORY on purpose. With
+        // O_DIRECTORY and O_NOFOLLOW set together, the kernel
+        // reports a linked component as not a directory
+        // instead of as a link, which would misname the
+        // failure the runner reports for it. The directory
+        // check here, on the opened descriptor, keeps the
+        // two failures distinct.
+        let dir = self.open_at(name, libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC)?;
+        let metadata = dir.metadata()?;
+        if !metadata.is_dir() {
+            return Err(TraversalError::Io(io::Error::from_raw_os_error(
+                libc::ENOTDIR,
+            )));
+        }
         Ok(Self { dir })
     }
 

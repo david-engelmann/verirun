@@ -19,7 +19,7 @@ use std::process::Child;
 use windows_sys::Wdk::Foundation::OBJECT_ATTRIBUTES;
 use windows_sys::Wdk::Storage::FileSystem::{
     FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN,
-    FILE_OPEN_REPARSE_POINT as NT_OPEN_REPARSE_POINT, FILE_SYNCHRONOUS_IO_NONALERT, NtCreateFile,
+    FILE_OPEN_REPARSE_POINT as NT_OPEN_REPARSE_POINT, NtCreateFile,
 };
 use windows_sys::Win32::Foundation::{
     CloseHandle, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE, STATUS_FILE_IS_A_DIRECTORY,
@@ -276,6 +276,11 @@ impl DirHandle {
     /// for the reparse point itself rather than its target,
     /// so a link is opened as a link and the caller's
     /// attribute check on the resulting handle rejects it.
+    /// The create does not ask for synchronous I/O: the
+    /// native create rejects that option unless the access
+    /// mask carries the synchronize right in its raw form,
+    /// which the generic read mask does not, and the plain
+    /// handle serves the caller's reads as they are.
     fn open_relative(&self, name: &str, directory: bool) -> Result<HANDLE, TraversalError> {
         let mut name16: Vec<u16> = component(name)?;
         let byte_len = u16::try_from(name16.len() * 2).map_err(|_| {
@@ -308,7 +313,6 @@ impl DirHandle {
         let mut status_block: IO_STATUS_BLOCK = unsafe { core::mem::zeroed() };
         let mut handle: HANDLE = core::ptr::null_mut();
         let options = NT_OPEN_REPARSE_POINT
-            | FILE_SYNCHRONOUS_IO_NONALERT
             | if directory {
                 FILE_DIRECTORY_FILE
             } else {

@@ -191,19 +191,16 @@ fn traversal_never_collects_the_decoy_during_a_swap() {
 
     let mut successes = 0_usize;
     for _ in 0..400 {
-        match read_through(&root, &["slot", "out.txt"]) {
-            Ok(bytes) => {
-                successes += 1;
-                assert_eq!(
-                    bytes, b"real bytes",
-                    "the traversal collected through a swapped component"
-                );
-            }
-            Err(_) => {
-                // A link error while the component is flipped,
-                // or a not found while it is parked: both are
-                // the contract working.
-            }
+        // A link error while the component is flipped, or a
+        // not found while it is parked, are both the contract
+        // working; only a successful read is checked, and it
+        // must be the real bytes.
+        if let Ok(bytes) = read_through(&root, &["slot", "out.txt"]) {
+            successes += 1;
+            assert_eq!(
+                bytes, b"real bytes",
+                "the traversal collected through a swapped component"
+            );
         }
     }
     stop.store(true, Ordering::Relaxed);
