@@ -170,6 +170,10 @@ fn fault_stored_object_write_attempt() {
     remove_store(&root);
 }
 
+/// The cross device refusal compares Unix device ids at
+/// store open (ARCHITECTURE.md section 6.3), so the check
+/// and this test exist only on Unix.
+#[cfg(unix)]
 #[test]
 fn fault_cross_device_tmp_refused() {
     let shm = Path::new("/dev/shm");

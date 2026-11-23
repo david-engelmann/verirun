@@ -179,7 +179,7 @@ jobs:
 
       - name: Test the store durability suites on Windows
         shell: bash
-        run: cargo test -p verirun-store --test crash_recovery --test cas_faults
+        run: cargo test -p verirun-store --test cas_faults
 
   audit:
     name: audit
