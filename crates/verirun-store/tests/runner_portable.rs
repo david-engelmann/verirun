@@ -142,6 +142,17 @@ fn environment_is_hermetic() {
             seen.insert(key.to_string(), value.to_string());
         }
     }
+    #[cfg(windows)]
+    {
+        // `cmd` synthesizes these three for itself when they
+        // are absent, the same shell bookkeeping that makes
+        // the Unix side run `env` directly rather than a
+        // shell. They are not the runner's doing, so they
+        // leave the map before the exact comparison below.
+        for key in ["COMSPEC", "PATHEXT", "PROMPT"] {
+            seen.remove(key);
+        }
+    }
     assert_eq!(seen.get("LC_ALL").map(String::as_str), Some("C"));
     assert_eq!(seen.get("SOURCE_DATE_EPOCH").map(String::as_str), Some("0"));
     assert_eq!(seen.get("TZ").map(String::as_str), Some("UTC"));
