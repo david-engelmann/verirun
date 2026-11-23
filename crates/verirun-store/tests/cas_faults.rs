@@ -170,6 +170,10 @@ fn fault_stored_object_write_attempt() {
     remove_store(&root);
 }
 
+/// The cross device refusal compares Unix device ids at
+/// store open (ARCHITECTURE.md section 6.3), so the check
+/// and this test exist only on Unix.
+#[cfg(unix)]
 #[test]
 fn fault_cross_device_tmp_refused() {
     let shm = Path::new("/dev/shm");
@@ -178,7 +182,6 @@ fn fault_cross_device_tmp_refused() {
     let target = shm.join(format!("verirun-fault-xdev-target-{}", std::process::id()));
     std::fs::create_dir_all(root.join("objects")).expect("objects dir");
     std::fs::create_dir_all(&target).expect("shm target dir");
-    #[cfg(unix)]
     std::os::unix::fs::symlink(&target, root.join("tmp")).expect("tmp symlink");
     let result = Cas::open(&root);
     match result {
@@ -308,5 +311,60 @@ fn fault_counting_sink_chunk_bound() {
     assert_eq!(observer.chunks.len(), 4, "ceil(200000 / 65536)");
     let back = cas.read_to_vec(&digest).expect("verifies");
     assert_eq!(back, payload);
+    remove_store(&root);
+}
+
+/// An observer that lands the same bytes through a second
+/// store handle when the first put reports its file synced.
+/// The first put then reaches its presence check with the
+/// object already in place and must complete by discarding
+/// its own temp file, which by then carries the read only
+/// attribute the protocol sets before the rename.
+struct LandMidPut {
+    store: Cas,
+    payload: Vec<u8>,
+    landed: bool,
+}
+
+impl PutObserver for LandMidPut {
+    fn on_phase(&mut self, phase: PutPhase) {
+        if phase == PutPhase::FileSynced && !self.landed {
+            self.landed = true;
+            self.store
+                .put_bytes(&self.payload)
+                .expect("the racing put lands the object");
+        }
+    }
+}
+
+#[test]
+fn put_discards_its_temp_when_the_object_lands_mid_put() {
+    let root = fresh_root("mid-put");
+    let cas = Cas::open(&root).expect("store opens");
+    let payload = b"mid put payload".to_vec();
+    let mut observer = LandMidPut {
+        store: Cas::open(&root).expect("second handle opens"),
+        payload: payload.clone(),
+        landed: false,
+    };
+    let digest = cas
+        .put_bytes_observed(&payload, &mut observer)
+        .expect("the put completes through the discard path");
+    assert!(observer.landed, "the race was actually forced");
+    assert_eq!(
+        digest,
+        hash_bytes(&Sha256Factory, DomainTag::Blob, &payload)
+    );
+    assert_eq!(
+        cas.read_to_vec(&digest).expect("object reads back"),
+        payload
+    );
+    let tmp_entries: Vec<_> = std::fs::read_dir(root.join("tmp"))
+        .expect("temp dir reads")
+        .collect();
+    assert!(
+        tmp_entries.is_empty(),
+        "the discard removed the put's temp file"
+    );
     remove_store(&root);
 }

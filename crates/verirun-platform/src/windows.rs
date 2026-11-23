@@ -5,7 +5,8 @@
 //! relative creates through the native `NtCreateFile`, with
 //! each component opened relative to its parent's handle and
 //! reparse points rejected from the opened handle's own
-//! attributes.
+//! attributes. It also holds the write through rename the
+//! store's put protocol uses.
 
 use std::ffi::c_void;
 use std::fs::File;
@@ -29,7 +30,7 @@ use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle,
-    OPEN_EXISTING,
+    MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW, OPEN_EXISTING,
 };
 use windows_sys::Win32::System::IO::IO_STATUS_BLOCK;
 use windows_sys::Win32::System::JobObjects::{
@@ -430,5 +431,46 @@ fn map_nt_status(status: i32) -> TraversalError {
             "the native create failed with status 0x{:08x}",
             status as u32
         )))
+    }
+}
+
+/// Renames `from` to `to` with the write through flag set.
+///
+/// The standard library rename passes no write through
+/// flag, so the rename itself would carry no ordering
+/// against a crash. The flag makes the platform flush the
+/// rename's own metadata before the call returns, which is
+/// the strongest ordering Windows offers for a directory
+/// entry, there being no directory sync. One behavior of
+/// the standard library rename is deliberately not carried
+/// over. Its Windows form retries a refused rename through
+/// a second call that ignores the read only attribute,
+/// where this rename refuses, and the store's put completes
+/// through its discard path instead, which the identical
+/// bytes by digest make equivalent.
+///
+/// # Errors
+///
+/// Returns the rename failure from the operating system.
+pub fn rename_durable(from: &Path, to: &Path) -> io::Result<()> {
+    let from_wide: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
+    let to_wide: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
+    // SAFETY: both paths are valid nul terminated UTF-16
+    // strings that outlive the call, and the flags are the
+    // documented replace and write through constants. The
+    // native call takes the string pointers directly, the
+    // wide pointer type being a plain pointer alias in
+    // windows-sys.
+    let ok = unsafe {
+        MoveFileExW(
+            from_wide.as_ptr(),
+            to_wide.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if ok != 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
     }
 }

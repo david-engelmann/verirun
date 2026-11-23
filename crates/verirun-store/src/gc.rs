@@ -26,7 +26,7 @@ use verirun_core::digest::Digest;
 use verirun_core::manifest::Manifest;
 use verirun_core::parse::parse;
 
-use crate::cas_fs::Cas;
+use crate::cas_fs::{Cas, remove_stored_file};
 use crate::clock;
 use crate::error::{GcError, StoreError, StoreStep};
 
@@ -94,8 +94,9 @@ impl GcReport {
 /// [`GcError::InvalidPinnedManifest`] when a pin's manifest
 /// cannot be produced and verified, [`GcError::LockHeld`] when
 /// another sweep holds the lock on a real run, and
-/// [`GcError::Store`] for store failures. On every error the
-/// sweep deletes nothing.
+/// [`GcError::Store`] for store failures. A failure during
+/// the sweep leaves the deletions already made in place, a
+/// prefix of the plan, and the store consistent (INV-GC-5).
 ///
 /// # Panics
 ///
@@ -171,7 +172,7 @@ pub fn collect(
     let _lock = LockGuard::take(&cas.root().join("gc.lock"), now)?;
     for digest in &candidates {
         let path = cas.object_path(digest);
-        fs::remove_file(&path).map_err(|source| GcError::Store {
+        remove_stored_file(&path).map_err(|source| GcError::Store {
             source: StoreError::Io {
                 path: path.clone(),
                 step: StoreStep::RemoveObject,
@@ -180,7 +181,7 @@ pub fn collect(
         })?;
     }
     for path in &tmp_plan {
-        fs::remove_file(path).map_err(|source| GcError::Store {
+        remove_stored_file(path).map_err(|source| GcError::Store {
             source: StoreError::Io {
                 path: path.clone(),
                 step: StoreStep::RemoveTemp,
