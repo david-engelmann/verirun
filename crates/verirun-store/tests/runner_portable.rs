@@ -252,7 +252,12 @@ fn volume_pattern(unit: &[u8], total: usize) -> Vec<u8> {
 #[test]
 fn streams_at_volume_are_byte_exact() {
     let (executable, args) = volume_invocation();
-    let (root, cas, execution, _elapsed) = run_task("volume", executable, args, &[], None);
+    let declared = interpreter_env();
+    let pairs: Vec<(&str, &str)> = declared
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
+    let (root, cas, execution, _elapsed) = run_task("volume", executable, args, &pairs, None);
     assert_eq!(execution.exit_code, Some(0));
     let stdout = cas
         .read_to_vec(&execution.stdout_digest)
@@ -302,11 +307,9 @@ fn volume_invocation() -> (String, Vec<String>) {
 /// The invocation that writes the volume patterns.
 #[cfg(windows)]
 fn volume_invocation() -> (String, Vec<String>) {
-    // No double quotes anywhere in the script: the runner
-    // quotes the argument for the command line, and a quoted
-    // string inside it makes PowerShell fail the parse and
-    // exit with 0xFFFF0000. The newline is built from its
-    // character code instead.
+    // The script carries no double quotes, so nothing in it
+    // needs escaping through the runner's command line
+    // quoting. The newline is built from its character code.
     let script = "$o=[Console]::OpenStandardOutput(); $e=[Console]::OpenStandardError(); \
                   $so=[Text.Encoding]::ASCII.GetBytes(('verirun!' + [string][char]10) * 932068); \
                   $se=[Text.Encoding]::ASCII.GetBytes(('Verirun?' + [string][char]10) * 932068); \
@@ -329,11 +332,16 @@ fn timeout_capture_is_an_exact_prefix() {
     // the prefix: nothing lost that was delivered, nothing
     // invented past it (workstream W2).
     let (executable, args) = prefix_invocation();
+    let declared = interpreter_env();
+    let pairs: Vec<(&str, &str)> = declared
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .collect();
     // Three seconds, not the tree case's five hundred
     // milliseconds: the Windows child's interpreter needs a
     // moment to start before it can write its prefix, and the
     // deadline must land after the write, inside the sleep.
-    let (root, cas, execution, elapsed) = run_task("prefix", executable, args, &[], Some(3000));
+    let (root, cas, execution, elapsed) = run_task("prefix", executable, args, &pairs, Some(3000));
     assert!(execution.timed_out, "the deadline fired: {execution:?}");
     let stdout = cas
         .read_to_vec(&execution.stdout_digest)
@@ -357,6 +365,28 @@ fn prefix_invocation() -> (String, Vec<String>) {
     shell_invocation(
         "i=0; while [ $i -lt 32 ]; do printf 'verirun-prefix-line\\n'; i=$((i+1)); done; exec sleep 30",
     )
+}
+
+/// The declared environment for the interpreter children.
+///
+/// A PowerShell child cannot start under the runner's
+/// hermetic environment on its own: the interpreter loads
+/// its managed runtime from the system root and exits with
+/// 0xFFFF0000 when SystemRoot is not in its environment
+/// (proven by a hosted probe that varied one variable at a
+/// time). Declaring it is the spec's business, like any
+/// other pair a child needs, so the interpreter cases here
+/// declare the value this process itself runs under.
+#[cfg(windows)]
+fn interpreter_env() -> Vec<(String, String)> {
+    let root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_string());
+    vec![("SystemRoot".to_string(), root)]
+}
+
+/// The declared environment for the interpreter children.
+#[cfg(unix)]
+fn interpreter_env() -> Vec<(String, String)> {
+    Vec::new()
 }
 
 /// The invocation that writes the prefix and then sleeps for
