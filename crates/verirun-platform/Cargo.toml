@@ -6,12 +6,15 @@ license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 readme.workspace = true
-description = "The platform seam for verirun. Process group control behind one safe API, a process group on Unix and a job object on Windows."
+description = "The platform seam for verirun. Process control and handle relative path traversal behind one safe API, a process group and descriptor relative opens on Unix, a job object and handle relative creates on Windows."
 keywords = ["process", "job-object", "cross-platform", "sandbox"]
 categories = ["os"]
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_Kernel", "Win32_System_Threading", "Wdk_Foundation", "Wdk_Storage_FileSystem"] }
 
 [lints]
 workspace = true

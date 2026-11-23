@@ -12,6 +12,8 @@ Changes from the perfection programme, after the audit programme closed.
 
 - Temp names after pid reuse. Store temporary file names carry a per-process nonce minted once by the store adapter, so crash debris left by an earlier holder of the same process id can no longer fail a put (audit finding F9). The two temp name functions in verirun-core take the nonce as a new parameter.
 
+- Output collection without a check then open window. Collection opens each declared output component by component relative to held directory handles, so the file the store reads is the file the traversal checked and a component swapped mid collection cannot redirect it (audit finding F11). The traversal lives in the verirun-platform crate beside process control, descriptor relative on Unix and handle relative on Windows.
+
 - Sandbox freshness. A task's sandbox is cleared before the task executes, so an output collected for a run was always written by that run (audit finding F1, invariant INV-SBX-6).
 - Work root ownership. A run holds its work root under a lock file for its whole duration, and a second run against the same work root fails with the new RunError::WorkLocked error instead of sharing sandboxes (audit finding F1, invariant INV-RUN-8). The CLI maps the refusal to exit code 3.
 - Cache validation. A stored cache record is honoured only when its artifact paths are exactly the task's declared outputs, so a planted record can no longer be honoured or crash the run (audit finding F2, invariant INV-RUN-7).

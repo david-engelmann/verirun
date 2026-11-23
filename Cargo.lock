@@ -614,6 +614,7 @@ dependencies = [
 name = "verirun-platform"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "windows-sys 0.59.0",
 ]
 
