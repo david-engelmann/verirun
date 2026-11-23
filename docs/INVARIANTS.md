@@ -169,7 +169,7 @@ A declared path that is absolute is rejected during validation with exit code 3.
 Edge cases: `/etc/passwd` as an output, a Windows-style rooted path on a Unix host (still a path string with components that fail the relative rule or the component rules).
 
 ### INV-SBX-3. Symlink path components rejected
-At collection and at input materialization, every component of the joined path is examined with `symlink_metadata`, walking each prefix from the sandbox root, not only the final path. Any component that is a symbolic link fails the task at collection, or aborts materialization, whatever the link target and whatever its position in the path. The walk fires before any open through the path. Checking the final component alone is a known insufficient form of this invariant: a symlinked intermediate directory would carry the joined path outside the sandbox undetected.
+At collection, every component of the joined path is opened relative to a held handle for its parent directory, starting from the sandbox root, not only the final path. At input materialization, every component of the joined path is examined with `symlink_metadata`, walking each prefix from the sandbox root. Any component that is a symbolic link fails the task at collection, or aborts materialization, whatever the link target and whatever its position in the path. At collection the examination is the open itself, so no component is ever opened through a path that was checked in a separate pass. Checking the final component alone is a known insufficient form of this invariant: a symlinked intermediate directory would carry the joined path outside the sandbox undetected.
 Edge cases: a final-component link to a file inside the sandbox (still rejected), a final-component link to a file outside the sandbox, a dangling link, a link created by the task itself during execution pointing at a host file whose content must never enter the store, an intermediate directory component that is a symlink to a directory outside the sandbox (the escape this invariant exists to catch), an intermediate symlink to a directory inside the sandbox (still rejected, the rule admits no judgement about targets), and an intermediate symlink planted in the input area before materialization.
 
 ### INV-SBX-4. Collection is exact and metadata is normalized
@@ -283,7 +283,7 @@ The cases below cut across families and are named here so the fault suites canno
 - A run file that is valid JSON but not valid UTF-8 in a string (rejected by the parser with an offset).
 - A task id that sorts differently in byte order than in locale collation (byte order wins everywhere).
 - Two tasks whose outputs differ only by a `.` component (collision after normalization, INV-DAG-4).
-- A child that replaces a declared output file with a symlink between the existence check and collection (the `symlink_metadata` check at collection time is the one that counts, INV-SBX-3).
+- A child that replaces a declared output file with a symlink between the existence check and collection (the handle relative open at collection time is the one that counts, INV-SBX-3).
 - A child that keeps a pipe open through a grandchild process after the child itself exits (drains see the pipe held open; the task is not complete until the pipes close or the deadline fires, INV-RUN-4).
 - A store with a blob file whose name is a valid digest but whose permissions deny reading (verify reports an integrity class failure naming the digest, never a panic).
 - A manifest digest given to `verify` that names no object in the store (exit code 2, reported as a missing manifest, never a panic or a code 3).
@@ -332,7 +332,7 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-RUN-8 | F | `scheduler_faults::fault_work_root_lock_blocks_second_run` | Audit R2 |
 | INV-SBX-1 | F | `paths_faults::fault_parent_traversal_table` in `crates/verirun-core/tests/` | M2 |
 | INV-SBX-2 | F | `paths_faults::fault_absolute_path_table` | M2 |
-| INV-SBX-3 | F | `runner_collect::fault_symlink_output_rejected` in `crates/verirun-store/tests/` | M2 |
+| INV-SBX-3 | F | `runner_collect::fault_symlink_output_rejected` in `crates/verirun-store/tests/`, `traversal::linked_component_is_rejected` and `traversal::traversal_never_collects_the_decoy_during_a_swap` in `crates/verirun-platform/tests/` | M2, Perfection W3 |
 | INV-SBX-4 | F | `runner_collect::fault_collection_exactness_and_metadata` | M2 |
 | INV-SBX-5 | F | `runner_collect::fault_corrupt_input_aborts_before_spawn` | M2 |
 | INV-SBX-6 | F | `runner_collect::fault_stale_output_from_earlier_run_not_collected` in `crates/verirun-store/tests/` | Audit R2 |
