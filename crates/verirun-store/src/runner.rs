@@ -8,6 +8,12 @@
 //! collecting exactly its declared outputs under the component
 //! walk of section 8.4.
 //!
+//! Process control goes through the `verirun_platform` seam, a
+//! process group on Unix and a job object on Windows, so the
+//! runner's own code is platform-independent apart from the
+//! spawn configuration and the executable rules, which differ
+//! by platform and are fenced where they differ.
+//!
 //! Outcomes that belong to the task (a nonzero exit, death by
 //! signal, a spawn failure, a missing or linked or non-regular
 //! output) are reported in [`TaskExecution`], never as errors.
@@ -18,8 +24,8 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Read};
-use std::os::unix::fs::PermissionsExt;
-use std::os::unix::process::{CommandExt, ExitStatusExt};
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -89,6 +95,11 @@ pub struct TaskExecution {
 pub struct Runner<'a> {
     cas: &'a Cas,
     path_dirs: Vec<PathBuf>,
+    /// The executable extensions a bare name resolves through,
+    /// snapshotted from `PATHEXT` at construction (section 8.2's
+    /// Windows rule). Windows only.
+    #[cfg(windows)]
+    path_exts: Vec<String>,
 }
 
 impl<'a> Runner<'a> {
@@ -99,7 +110,14 @@ impl<'a> Runner<'a> {
         let path_dirs = std::env::var_os("PATH")
             .map(|value| std::env::split_paths(&value).collect())
             .unwrap_or_default();
-        Self { cas, path_dirs }
+        #[cfg(windows)]
+        let path_exts = snapshot_path_exts();
+        Self {
+            cas,
+            path_dirs,
+            #[cfg(windows)]
+            path_exts,
+        }
     }
 
     /// Builds the child's full environment, sorted by key: the
@@ -158,8 +176,7 @@ impl<'a> Runner<'a> {
                 ))
             }
         } else {
-            for dir in &self.path_dirs {
-                let candidate = dir.join(executable);
+            for candidate in self.bare_candidates(executable) {
                 if is_executable_file(&candidate) {
                     return Ok(candidate);
                 }
@@ -167,6 +184,36 @@ impl<'a> Runner<'a> {
             Err(format!(
                 "executable {executable:?} was not found on the runner's PATH snapshot"
             ))
+        }
+    }
+
+    /// The candidate paths a bare name resolves through, in
+    /// order: each `PATH` directory holding the name itself on
+    /// Unix, and each `PATH` directory holding the name with
+    /// each `PATHEXT` extension on Windows, matching how the
+    /// host's own command resolution searches. A Windows name
+    /// that already carries an extension is tried as written.
+    fn bare_candidates(&self, executable: &str) -> Vec<PathBuf> {
+        #[cfg(unix)]
+        {
+            self.path_dirs
+                .iter()
+                .map(|dir| dir.join(executable))
+                .collect()
+        }
+        #[cfg(windows)]
+        {
+            let mut candidates = Vec::new();
+            if executable.contains('.') {
+                candidates.extend(self.path_dirs.iter().map(|dir| dir.join(executable)));
+            } else {
+                for dir in &self.path_dirs {
+                    for ext in &self.path_exts {
+                        candidates.push(dir.join(format!("{executable}.{ext}")));
+                    }
+                }
+            }
+            candidates
         }
     }
 
@@ -224,12 +271,14 @@ impl<'a> Runner<'a> {
 
         let environment = Self::build_environment(&task.env, &tmp_dir);
         let mut command = Command::new(&resolved);
-        // The child leads its own process group, so the deadline
+        // The child leads its own process group on Unix and is
+        // assigned to a job object on Windows, so the deadline
         // can kill the whole tree: a child that forks (the shell
         // running a sleeper, a build spawning a daemon) would
         // otherwise leave grandchildren holding the output pipes
         // open long past the kill, and the drains could not
         // finish (INV-RUN-4).
+        #[cfg(unix)]
         command.process_group(0);
         command
             .args(&task.args)
@@ -244,6 +293,14 @@ impl<'a> Runner<'a> {
             Err(source) => {
                 return self.unspawned(format!("spawning {} failed: {source}", resolved.display()));
             }
+        };
+        // The child joins its process group before anything else
+        // runs. A child that could not be grouped is a child the
+        // deadline cannot kill as a tree, so it is killed at once
+        // and reported as a spawn failure.
+        let group = match group_child(&mut child, &resolved) {
+            Ok(group) => group,
+            Err(detail) => return self.unspawned(detail),
         };
         let stdout_pipe = child.stdout.take().expect("stdout was piped");
         let stderr_pipe = child.stderr.take().expect("stderr was piped");
@@ -275,7 +332,7 @@ impl<'a> Runner<'a> {
                 let reader = ChannelReader::new(stderr_chunks, stderr_reader_cutoff);
                 let _ = stderr_report_tx.send(cas.put_stream(reader));
             });
-            let supervision = supervise(&mut child, task.timeout_ms);
+            let supervision = supervise(&mut child, &group, task.timeout_ms);
             let stdout_collected = collect_stream(
                 &stdout_report_rx,
                 supervision.timed_out,
@@ -398,7 +455,7 @@ impl<'a> Runner<'a> {
                 path: output.to_string(),
                 digest,
                 bytes: metadata.len(),
-                executable: metadata.permissions().mode() & 0o111 != 0,
+                executable: artifact_executable(&candidate, &metadata),
             });
         }
         Ok(artifacts)
@@ -626,11 +683,27 @@ fn clear_sandbox(sandbox: &Path) -> Result<(), String> {
 /// read-only can still be removed. Symlinks are never
 /// followed: a linked directory is left for the removal to
 /// unlink as a link.
+#[allow(
+    clippy::permissions_set_readonly_false,
+    reason = "on Windows, clearing the read-only attribute is the only way to make a directory tree removable"
+)]
 fn make_removable(dir: &Path) {
     if let Ok(metadata) = fs::metadata(dir) {
-        let mut permissions = metadata.permissions();
-        permissions.set_mode(permissions.mode() | 0o700);
-        let _ = fs::set_permissions(dir, permissions);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(permissions.mode() | 0o700);
+            let _ = fs::set_permissions(dir, permissions);
+        }
+        #[cfg(windows)]
+        {
+            if metadata.permissions().readonly() {
+                let mut permissions = metadata.permissions();
+                permissions.set_readonly(false);
+                let _ = fs::set_permissions(dir, permissions);
+            }
+        }
     }
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
@@ -663,12 +736,81 @@ enum PrepFailure {
     Run(RunError),
 }
 
-/// Whether `path` names a regular file with at least one
-/// executable permission bit, following links the way the host's
-/// own command resolution does.
+/// Whether `path` names a regular file the host would execute,
+/// following links the way the host's own command resolution
+/// does. On Unix that is a file with at least one executable
+/// permission bit. On Windows that is a file whose extension is
+/// one of the executable extensions.
+#[cfg(unix)]
 fn is_executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
     fs::metadata(path)
         .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+}
+
+/// Whether `path` names a regular file the host would execute,
+/// following links the way the host's own command resolution
+/// does. On Windows that is a file whose extension is one of
+/// the executable extensions.
+#[cfg(windows)]
+fn is_executable_file(path: &Path) -> bool {
+    fs::metadata(path).is_ok_and(|metadata| metadata.is_file()) && has_executable_extension(path)
+}
+
+/// The extensions Windows treats as executable: the default
+/// `PATHEXT` set, matched case-insensitively.
+#[cfg(windows)]
+fn has_executable_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            ["com", "exe", "bat", "cmd"]
+                .iter()
+                .any(|known| extension.eq_ignore_ascii_case(known))
+        })
+}
+
+/// Snapshots the `PATHEXT` extensions for bare name resolution:
+/// the variable's entries in order, without their dots,
+/// lowercased. An absent or empty variable falls back to the
+/// host's default set.
+#[cfg(windows)]
+fn snapshot_path_exts() -> Vec<String> {
+    let parsed: Vec<String> = std::env::var("PATHEXT")
+        .map(|value| {
+            value
+                .split(';')
+                .map(|entry| entry.trim().trim_start_matches('.').to_lowercase())
+                .filter(|entry| !entry.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    if parsed.is_empty() {
+        vec![
+            "com".to_string(),
+            "exe".to_string(),
+            "bat".to_string(),
+            "cmd".to_string(),
+        ]
+    } else {
+        parsed
+    }
+}
+
+/// Whether a collected artifact counts as executable in its
+/// record: on Unix, any executable permission bit; on Windows,
+/// an executable extension.
+#[cfg(unix)]
+fn artifact_executable(_path: &Path, metadata: &fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    metadata.permissions().mode() & 0o111 != 0
+}
+
+/// Whether a collected artifact counts as executable in its
+/// record: on Windows, an executable extension.
+#[cfg(windows)]
+fn artifact_executable(path: &Path, _metadata: &fs::Metadata) -> bool {
+    has_executable_extension(path)
 }
 
 /// Creates the parent directories of `path` below `area`, walking
@@ -764,11 +906,17 @@ struct Supervision {
 
 /// Watches `child` until it exits or its deadline passes.
 ///
-/// On the deadline the child's whole process group is killed
-/// (the child was spawned as its group leader) and the child is
-/// reaped through `wait`; the caller then joins the drain
-/// threads, which finish when the pipes close (section 8.3).
-fn supervise(child: &mut Child, timeout_ms: Option<u64>) -> Supervision {
+/// On the deadline the child's whole process group is
+/// terminated through the platform seam (the child was spawned
+/// as its group leader on Unix and assigned to its job object
+/// on Windows) and the child is reaped through `wait`; the
+/// caller then joins the drain threads, which finish when the
+/// pipes close (section 8.3).
+fn supervise(
+    child: &mut Child,
+    group: &verirun_platform::ProcessGroup,
+    timeout_ms: Option<u64>,
+) -> Supervision {
     let deadline = timeout_ms.map(|ms| Instant::now() + Duration::from_millis(ms));
     // The wait between exit checks backs off while the child
     // runs, from 2 milliseconds up to a 50 millisecond cap, so a
@@ -782,16 +930,14 @@ fn supervise(child: &mut Child, timeout_ms: Option<u64>) -> Supervision {
                 return Supervision {
                     exit_code: status.code(),
                     timed_out: false,
-                    detail: status
-                        .signal()
-                        .map(|signal| format!("the child was terminated by signal {signal}")),
+                    detail: exit_detail(status),
                 };
             }
             Ok(None) => {
                 if let Some(deadline) = deadline {
                     let remaining = deadline.saturating_duration_since(Instant::now());
                     if remaining.is_zero() {
-                        kill_process_group(child.id());
+                        group.terminate();
                         let _ = child.kill();
                         return match child.wait() {
                             Ok(_) => Supervision {
@@ -823,22 +969,44 @@ fn supervise(child: &mut Child, timeout_ms: Option<u64>) -> Supervision {
     }
 }
 
-/// Kills every process in the group led by `leader`, through
-/// the shell's builtin `kill`: this crate forbids unsafe code,
-/// so the group signal cannot be sent through a syscall binding.
-/// (The standalone `kill` utility's negative-pid form was
-/// observed to be a silent no-op in the development sandbox;
-/// the builtin reaches the syscall directly.) A grandchild that
-/// escaped the group by creating its own session is beyond this
-/// kill; the drain grace in `collect_stream` bounds what that
-/// can cost. Falls back silently to the caller's direct kill
-/// when the shell is unavailable.
-fn kill_process_group(leader: u32) {
-    let script = format!("kill -KILL -{leader}");
-    let _ = Command::new("/bin/sh")
-        .args(["-c", &script])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status();
+/// Groups a freshly spawned child through the platform seam.
+/// A child that cannot be grouped is killed and reaped at
+/// once, and the failure is returned as the detail text of a
+/// spawn failure, because an ungrouped child is a child the
+/// deadline cannot kill as a tree.
+fn group_child(
+    child: &mut Child,
+    resolved: &Path,
+) -> Result<verirun_platform::ProcessGroup, String> {
+    let mut group = verirun_platform::ProcessGroup::new();
+    if let Err(source) = group.attach(child) {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(format!(
+            "assigning the child of {} to its process group failed: {source}",
+            resolved.display()
+        ));
+    }
+    Ok(group)
+}
+
+/// The failure detail for a child that exited without an exit
+/// code the status can report: on Unix, the signal that
+/// terminated it; on Windows, an externally terminated process
+/// still reports an exit code, so there is never a detail.
+#[cfg(unix)]
+fn exit_detail(status: std::process::ExitStatus) -> Option<String> {
+    use std::os::unix::process::ExitStatusExt;
+    status
+        .signal()
+        .map(|signal| format!("the child was terminated by signal {signal}"))
+}
+
+/// The failure detail for a child that exited without an exit
+/// code the status can report: on Windows, an externally
+/// terminated process still reports an exit code, so there is
+/// never a detail.
+#[cfg(windows)]
+const fn exit_detail(_status: std::process::ExitStatus) -> Option<String> {
+    None
 }
