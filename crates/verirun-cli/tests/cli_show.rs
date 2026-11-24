@@ -11,7 +11,26 @@
 #![forbid(unsafe_code)]
 
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+
+/// Makes a stored object writable so a test can corrupt
+/// it, in the platform's own terms, mode bits on Unix and
+/// the read only attribute on Windows.
+fn make_writable(path: &Path) {
+    #[cfg(unix)]
+    fs::set_permissions(path, fs::Permissions::from_mode(0o644)).expect("make writable");
+    #[cfg(windows)]
+    {
+        let mut perms = fs::metadata(path).expect("object exists").permissions();
+        #[allow(
+            clippy::permissions_set_readonly_false,
+            reason = "the corruption fixture must write over the object"
+        )]
+        perms.set_readonly(false);
+        fs::set_permissions(path, perms).expect("make writable");
+    }
+}
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -125,7 +144,7 @@ fn fault_show_verifies_before_display() {
     let path = object_path(&cas, &artifact_digest);
     let mut bytes = fs::read(&path).expect("read object");
     bytes[0] ^= 0xff;
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("make writable");
+    make_writable(&path);
     fs::write(&path, &bytes).expect("write corrupted object");
 
     let output = invoke(&["show", &digest, "--cas", cas_text]);

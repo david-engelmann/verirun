@@ -249,13 +249,22 @@ fn stress_escaped_grandchild_output_collected() {
     // its own session with setsid, keeps the stdout pipe, and
     // writes after the child has exited cleanly. The run waits for
     // the pipe to close and collects the escaped bytes in full.
-    let spec = r#"{"tasks":[{
+    // On Windows the grandchild cannot escape the job object, so
+    // the script omits setsid and the same drain collects the
+    // bytes of the grandchild that outlives its parent in the job.
+    #[cfg(unix)]
+    let script = "setsid sh -c 'sleep 2; printf escaped-tail' & exit 0";
+    #[cfg(windows)]
+    let script = "sh -c 'sleep 2; printf escaped-tail' & exit 0";
+    let spec = format!(
+        r#"{{"tasks":[{{
         "task_id": "escape",
         "executable": "sh",
-        "args": ["-c", "setsid sh -c 'sleep 2; printf escaped-tail' & exit 0"],
-        "env": {}, "inputs": [], "outputs": [], "depends_on": [], "timeout_ms": 60000
-    }]}"#;
-    let outcome = run_under_deadline(&root, spec, 1, Duration::from_secs(30));
+        "args": ["-c", "{script}"],
+        "env": {{}}, "inputs": [], "outputs": [], "depends_on": [], "timeout_ms": 60000
+    }}]}}"#
+    );
+    let outcome = run_under_deadline(&root, &spec, 1, Duration::from_secs(30));
     assert_eq!(outcome.exit_code, 0, "the escaped run still succeeds");
     let record = &outcome.manifest.tasks[0];
     assert_eq!(record.status, TaskStatus::Succeeded);

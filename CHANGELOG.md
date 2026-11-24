@@ -18,6 +18,8 @@ Changes from the perfection programme, after the audit programme closed.
 
 - Scheduler parity and platform identity. The scheduler and the full run path now work on Windows, the by-exec record publish follows the put protocol's platform discipline, and the tutorial spec produces the identical manifest digest on Linux and on Windows, pinned as INV-PLAT-1. The crash recovery and tamper suites run on Windows in CI.
 
+- Test suites ported to Windows. Every test suite in the workspace now runs in the windows CI job, with the fixture couplings fixed in the platform's own terms and no new test fenced off.
+
 - Sandbox freshness. A task's sandbox is cleared before the task executes, so an output collected for a run was always written by that run (audit finding F1, invariant INV-SBX-6).
 - Work root ownership. A run holds its work root under a lock file for its whole duration, and a second run against the same work root fails with the new RunError::WorkLocked error instead of sharing sandboxes (audit finding F1, invariant INV-RUN-8). The CLI maps the refusal to exit code 3.
 - Cache validation. A stored cache record is honoured only when its artifact paths are exactly the task's declared outputs, so a planted record can no longer be honoured or crash the run (audit finding F2, invariant INV-RUN-7).

@@ -9,7 +9,26 @@
 #![forbid(unsafe_code)]
 
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+
+/// Makes a stored object writable so a test can corrupt
+/// it, in the platform's own terms, mode bits on Unix and
+/// the read only attribute on Windows.
+fn make_writable(path: &Path) {
+    #[cfg(unix)]
+    fs::set_permissions(path, fs::Permissions::from_mode(0o644)).expect("make writable");
+    #[cfg(windows)]
+    {
+        let mut perms = fs::metadata(path).expect("object exists").permissions();
+        #[allow(
+            clippy::permissions_set_readonly_false,
+            reason = "the corruption fixture must write over the object"
+        )]
+        perms.set_readonly(false);
+        fs::set_permissions(path, perms).expect("make writable");
+    }
+}
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -175,7 +194,7 @@ fn fault_diff_semantics_table() {
         .join(&baseline);
     let mut bytes = fs::read(&manifest_path).expect("read manifest object");
     bytes[0] ^= 0xff;
-    fs::set_permissions(&manifest_path, fs::Permissions::from_mode(0o644)).expect("make writable");
+    make_writable(&manifest_path);
     fs::write(&manifest_path, &bytes).expect("corrupt manifest object");
     let output = diff(&dir, &baseline, &baseline);
     assert_eq!(code(&output), 2, "corrupted side: {}", stderr(&output));
