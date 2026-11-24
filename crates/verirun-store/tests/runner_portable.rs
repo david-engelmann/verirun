@@ -372,7 +372,7 @@ fn prefix_invocation() -> (String, Vec<String>) {
 /// A PowerShell child cannot start under the runner's
 /// hermetic environment on its own: the interpreter loads
 /// its managed runtime from the system root and exits with
-/// 0xFFFF0000 when SystemRoot is not in its environment
+/// 0xFFFF0000 when `SystemRoot` is not in its environment
 /// (proven by a hosted probe that varied one variable at a
 /// time). Declaring it is the spec's business, like any
 /// other pair a child needs, so the interpreter cases here
