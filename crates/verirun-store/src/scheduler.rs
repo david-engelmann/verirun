@@ -52,7 +52,7 @@ use verirun_core::digest::{self, Digest, HasherFactory, TaskStatus};
 use verirun_core::manifest::{Manifest, TaskRecord};
 use verirun_core::paths::NormalizedPath;
 
-use crate::cas_fs::Cas;
+use crate::cas_fs::{Cas, sync_directory};
 use crate::error::{RunError, StoreError, StoreStep};
 use crate::runner::{FIXED_ENV, Runner};
 
@@ -867,46 +867,20 @@ fn store_cache_entry(cas: &Cas, record: &TaskRecord) -> Result<(), RunError> {
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
-    fs::rename(&temp_path, &entry_path).map_err(|source| {
+    verirun_platform::rename_durable(&temp_path, &entry_path).map_err(|source| {
         RunError::from(StoreError::Io {
             path: entry_path.clone(),
             step: StoreStep::Rename,
             source,
         })
     })?;
-    let shard_dir = fs::File::open(&shard).map_err(|source| {
-        RunError::from(StoreError::Io {
-            path: shard.clone(),
-            step: StoreStep::SyncShard,
-            source,
-        })
-    })?;
-    shard_dir.sync_all().map_err(|source| {
-        RunError::from(StoreError::Io {
-            path: shard.clone(),
-            step: StoreStep::SyncShard,
-            source,
-        })
-    })?;
+    sync_directory(&shard, StoreStep::SyncShard)?;
     if shard_created {
         // The shard's own directory entry lives in by-exec/,
         // and only the call that created the shard can owe it
         // this sync (F7).
         let by_exec = cas.root().join("by-exec");
-        let by_exec_dir = fs::File::open(&by_exec).map_err(|source| {
-            RunError::from(StoreError::Io {
-                path: by_exec.clone(),
-                step: StoreStep::SyncByExec,
-                source,
-            })
-        })?;
-        by_exec_dir.sync_all().map_err(|source| {
-            RunError::from(StoreError::Io {
-                path: by_exec,
-                step: StoreStep::SyncByExec,
-                source,
-            })
-        })?;
+        sync_directory(&by_exec, StoreStep::SyncByExec)?;
     }
     Ok(())
 }

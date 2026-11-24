@@ -118,7 +118,7 @@ fn io_error(path: &Path, step: StoreStep, source: std::io::Error) -> StoreError 
 /// Opens a directory read-only and syncs it, the POSIX durability
 /// primitive for directory entries.
 #[cfg(unix)]
-fn sync_directory(path: &Path, step: StoreStep) -> Result<(), StoreError> {
+pub(crate) fn sync_directory(path: &Path, step: StoreStep) -> Result<(), StoreError> {
     let dir = File::open(path).map_err(|err| io_error(path, step, err))?;
     dir.sync_all().map_err(|err| io_error(path, step, err))
 }
@@ -132,7 +132,7 @@ fn sync_directory(path: &Path, step: StoreStep) -> Result<(), StoreError> {
 /// ARCHITECTURE.md section 6.2. The step stays as a no-op
 /// call so the protocol keeps one shape on both platforms.
 #[cfg(windows)]
-fn sync_directory(_path: &Path, _step: StoreStep) -> Result<(), StoreError> {
+pub(crate) fn sync_directory(_path: &Path, _step: StoreStep) -> Result<(), StoreError> {
     Ok(())
 }
 
