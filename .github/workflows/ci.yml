@@ -151,10 +151,12 @@ jobs:
     name: windows
     runs-on: windows-latest
     env:
-      # Roadmap lane R6: compile coverage on a second platform for the
-      # crates that claim portability. Compatibility is the point of
-      # this job, not volume; the rust job owns the case-count policy.
-      PROPTEST_CASES: "100"
+      # Perfection slice W7: this job carries the full gate. Pull
+      # requests run the same 1,000 cases as the rust job; pushes
+      # keep 100, because the full suite at 1,000 cases measured
+      # 1,251 seconds on this runner in the W7 probe and the
+      # 10,000 case main policy stays with the rust job.
+      PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '1000' || '100' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install the pinned toolchain
@@ -162,44 +164,32 @@ jobs:
         run: |
           rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
           rustup show active-toolchain
-      - name: Check the portable crates
+          rustup component add rustfmt clippy
+      - name: Format
         shell: bash
-        run: cargo check -p verirun-core -p verirun-store
-      - name: Test the core crate
-        shell: bash
-        run: cargo test -p verirun-core
+        run: cargo fmt --all -- --check
 
-      - name: Test the store runner on Windows
+      - name: Clippy
         shell: bash
-        run: cargo test -p verirun-store --test runner_portable
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-      - name: Test the platform seam on Windows
+      - name: Test
         shell: bash
-        run: cargo test -p verirun-platform
+        run: cargo test --workspace --all-features --no-fail-fast
 
-      - name: Test the store fault suite on Windows
+      - name: Doc
         shell: bash
-        run: cargo test -p verirun-store --test cas_faults
+        run: cargo doc --workspace --all-features --no-deps
 
-      - name: Test the crash recovery suite on Windows
+      - name: Run the examples
         shell: bash
-        run: cargo test -p verirun-store --test crash_recovery
+        run: |
+          cargo run -p verirun-core --example canonical_and_digests
+          cargo run -p verirun-store --example store_roundtrip
 
-      - name: Test the tamper suite on Windows
+      - name: Bench compile and smoke run
         shell: bash
-        run: cargo test -p verirun-cli --test tamper_suite
-
-      - name: Test platform identity on Windows
-        shell: bash
-        run: cargo test -p verirun-store --test platform_identity
-
-      - name: Test the remaining store suites on Windows
-        shell: bash
-        run: cargo test -p verirun-store --test sha256_vectors --test cas_prop --test cas_concurrent --test cas_temp_names --test gc_faults --test runner_collect --test runner_env --test runner_pipes --test runner_timeout --test scheduler_faults --test scheduler_prop --test scheduler_scale
-
-      - name: Test the remaining CLI suites on Windows
-        shell: bash
-        run: cargo test -p verirun-cli --test cli_diff --test cli_exit_codes --test cli_seed --test cli_show --test cli_verify_access --test dag_faults --test manifest_faults --test manifest_prop
+        run: cargo bench --workspace -- --test
 
   audit:
     name: audit
