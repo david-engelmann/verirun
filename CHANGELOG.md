@@ -20,6 +20,8 @@ Changes from the perfection programme, after the audit programme closed.
 
 - Test suites ported to Windows. Every test suite in the workspace now runs in the windows CI job, with the fixture couplings fixed in the platform's own terms and no new test fenced off.
 
+- The Windows full gate. The windows CI job now runs the format check, clippy with warnings denied, the full workspace test, the docs, the examples, and the benches, at the pull request case count of the Linux job.
+
 - Sandbox freshness. A task's sandbox is cleared before the task executes, so an output collected for a run was always written by that run (audit finding F1, invariant INV-SBX-6).
 - Work root ownership. A run holds its work root under a lock file for its whole duration, and a second run against the same work root fails with the new RunError::WorkLocked error instead of sharing sandboxes (audit finding F1, invariant INV-RUN-8). The CLI maps the refusal to exit code 3.
 - Cache validation. A stored cache record is honoured only when its artifact paths are exactly the task's declared outputs, so a planted record can no longer be honoured or crash the run (audit finding F2, invariant INV-RUN-7).
