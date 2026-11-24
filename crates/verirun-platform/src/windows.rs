@@ -312,8 +312,8 @@ impl DirHandle {
                 ))
             })?;
         attributes.RootDirectory = self.handle;
-        attributes.ObjectName = &unicode;
-        attributes.Attributes = OBJ_CASE_INSENSITIVE as u32;
+        attributes.ObjectName = core::ptr::addr_of!(unicode);
+        attributes.Attributes = OBJ_CASE_INSENSITIVE.cast_unsigned();
         // SAFETY: the status block is plain data, zeroed here
         // and written by the call before it is read.
         let mut status_block: IO_STATUS_BLOCK = unsafe { core::mem::zeroed() };
@@ -339,10 +339,10 @@ impl DirHandle {
         // before any use.
         let status = unsafe {
             NtCreateFile(
-                &mut handle,
+                core::ptr::addr_of_mut!(handle),
                 access,
-                &attributes,
-                &mut status_block,
+                core::ptr::addr_of!(attributes),
+                core::ptr::addr_of_mut!(status_block),
                 core::ptr::null(),
                 0,
                 FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -368,7 +368,8 @@ impl DirHandle {
         let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { core::mem::zeroed() };
         // SAFETY: the handle is live and `info` points to a
         // valid structure the API fills synchronously.
-        let read = unsafe { GetFileInformationByHandle(self.handle, &mut info) };
+        let read =
+            unsafe { GetFileInformationByHandle(self.handle, core::ptr::addr_of_mut!(info)) };
         if read == 0 {
             return Err(TraversalError::Io(io::Error::last_os_error()));
         }
@@ -429,7 +430,7 @@ fn map_nt_status(status: i32) -> TraversalError {
     } else {
         TraversalError::Io(io::Error::other(format!(
             "the native create failed with status 0x{:08x}",
-            status as u32
+            status.cast_unsigned()
         )))
     }
 }

@@ -132,7 +132,11 @@ pub(crate) fn sync_directory(path: &Path, step: StoreStep) -> Result<(), StoreEr
 /// ARCHITECTURE.md section 6.2. The step stays as a no-op
 /// call so the protocol keeps one shape on both platforms.
 #[cfg(windows)]
-pub(crate) fn sync_directory(_path: &Path, _step: StoreStep) -> Result<(), StoreError> {
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "the signature matches the Unix variant so the put protocol keeps one shape on both platforms"
+)]
+pub(crate) const fn sync_directory(_path: &Path, _step: StoreStep) -> Result<(), StoreError> {
     Ok(())
 }
 
