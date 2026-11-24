@@ -54,13 +54,17 @@ fn remove_tree(root: &Path) {
 }
 
 fn task_json(id: &str, script: &str, outputs: &[&str]) -> String {
+    task_json_with_env(id, script, outputs, "")
+}
+
+fn task_json_with_env(id: &str, script: &str, outputs: &[&str], env_inner: &str) -> String {
     let outputs = outputs
         .iter()
         .map(|o| format!("\"{o}\""))
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        r#"{{"task_id":"{id}","executable":"sh","args":["-c","{script}"],"env":{{}},"inputs":[],"outputs":[{outputs}],"depends_on":[]}}"#
+        r#"{{"task_id":"{id}","executable":"sh","args":["-c","{script}"],"env":{{{env_inner}}},"inputs":[],"outputs":[{outputs}],"depends_on":[]}}"#
     )
 }
 
@@ -75,21 +79,34 @@ fn fault_symlink_output_rejected() {
 
     // Three tasks, three link shapes: a final component linking
     // out of the sandbox, an intermediate component linking
-    // within it, and a dangling final component.
-    let final_link = task_json(
+    // within it, and a dangling final component. The secret
+    // path enters the scripts with forward slashes, which both
+    // shells accept, and on Windows the tasks declare the
+    // native link mode, because the shell's default there is
+    // to copy instead of linking.
+    let secret_path = secret.display().to_string().replace('\\', "/");
+    let link_env = if cfg!(windows) {
+        "\"MSYS\":\"winsymlinks:nativestrict\""
+    } else {
+        ""
+    };
+    let final_link = task_json_with_env(
         "finallink",
-        &format!("ln -s {} outputs/out.txt", secret.display()),
+        &format!("ln -s {secret_path} outputs/out.txt"),
         &["out.txt"],
+        link_env,
     );
-    let middle_link = task_json(
+    let middle_link = task_json_with_env(
         "middlelink",
         "mkdir outputs/real; ln -s real outputs/link; printf x > outputs/link/f.txt",
         &["link/f.txt"],
+        link_env,
     );
-    let dangling = task_json(
+    let dangling = task_json_with_env(
         "dangling",
         "ln -s no-such-target outputs/dangling.txt",
         &["dangling.txt"],
+        link_env,
     );
     let spec = format!(r#"{{"tasks":[{final_link},{middle_link},{dangling}]}}"#);
     let value = parse(spec.as_bytes()).expect("spec parses");
@@ -159,7 +176,13 @@ fn fault_collection_exactness_and_metadata() {
     let a = &writer_rec.artifacts[0];
     assert_eq!(a.path, "a.sh");
     assert_eq!(a.bytes, 14);
+    // The executable flag follows the platform's own rule, a
+    // mode bit on Unix and the extension set on Windows, so
+    // the shell script reads executable only on Unix.
+    #[cfg(unix)]
     assert!(a.executable);
+    #[cfg(windows)]
+    assert!(!a.executable);
     assert_eq!(
         cas.read_to_vec(&a.digest).expect("a.sh blob"),
         b"#!/bin/sh\ntrue"

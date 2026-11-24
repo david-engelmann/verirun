@@ -193,6 +193,14 @@ jobs:
         shell: bash
         run: cargo test -p verirun-store --test platform_identity
 
+      - name: Test the remaining store suites on Windows
+        shell: bash
+        run: cargo test -p verirun-store --test sha256_vectors --test cas_prop --test cas_concurrent --test cas_temp_names --test gc_faults --test runner_collect --test runner_env --test runner_pipes --test runner_timeout --test scheduler_faults --test scheduler_prop --test scheduler_scale
+
+      - name: Test the remaining CLI suites on Windows
+        shell: bash
+        run: cargo test -p verirun-cli --test cli_diff --test cli_exit_codes --test cli_seed --test cli_show --test cli_verify_access --test dag_faults --test manifest_faults --test manifest_prop
+
   audit:
     name: audit
     runs-on: ubuntu-latest
