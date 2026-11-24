@@ -5,6 +5,8 @@
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+// The disk full test below is the only Command user in this
+// file, and it is fenced to Unix, so the import is too.
 #[cfg(unix)]
 use std::process::Command;
 use std::sync::Once;
@@ -13,6 +15,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use verirun_core::cas::PutPhase;
 use verirun_core::digest::{DomainTag, hash_bytes};
 use verirun_store::cas_fs::{Cas, PutObserver};
+// The cross device and disk full tests are the only users of
+// these names in this file, and both are fenced to Unix.
 #[cfg(unix)]
 use verirun_store::error::{StoreError, StoreStep};
 use verirun_store::sha256::Sha256Factory;
@@ -228,6 +232,7 @@ fn fault_source_mutation_after_put() {
 /// The payload the disk-full child tries to store: far larger
 /// than the file-size limit the child runs under, so the temp
 /// write runs out of room partway through the first chunk.
+/// Fenced to Unix with the test below, its only caller.
 #[cfg(unix)]
 fn disk_full_payload() -> Vec<u8> {
     (0_u32..262_144).map(|i| (i % 251) as u8).collect()
