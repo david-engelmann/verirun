@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -73,18 +72,35 @@ fn run_spec(root: &Path, spec: &str) -> (Cas, RunOutcome) {
     (cas, outcome)
 }
 
+/// Sets the object file writable or read only in the
+/// platform's own terms, mode bits on Unix and the read
+/// only attribute on Windows.
+fn set_writable(path: &Path, writable: bool) {
+    let mut perms = fs::metadata(path).expect("object exists").permissions();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        perms.set_mode(if writable { 0o644 } else { 0o444 });
+    }
+    #[cfg(windows)]
+    {
+        #[allow(
+            clippy::permissions_set_readonly_false,
+            reason = "the tamper fixture must restore the read only attribute"
+        )]
+        perms.set_readonly(!writable);
+    }
+    fs::set_permissions(path, perms).expect("object permissions change");
+}
+
 /// Writes `bytes` over the object file for `digest`, bypassing the
 /// store's read-only mode the way an attacker with filesystem
 /// access would.
 fn overwrite_object(cas: &Cas, digest: &Digest, bytes: &[u8]) {
     let path = cas.object_path(digest);
-    let mut perms = fs::metadata(&path).expect("object exists").permissions();
-    perms.set_mode(0o644);
-    fs::set_permissions(&path, perms).expect("object becomes writable");
+    set_writable(&path, true);
     fs::write(&path, bytes).expect("object overwritten");
-    let mut perms = fs::metadata(&path).expect("object exists").permissions();
-    perms.set_mode(0o444);
-    fs::set_permissions(&path, perms).expect("object restored read-only");
+    set_writable(&path, false);
 }
 
 fn flip_byte(cas: &Cas, digest: &Digest, position: usize) -> Vec<u8> {

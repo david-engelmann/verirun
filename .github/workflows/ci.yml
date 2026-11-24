@@ -181,6 +181,18 @@ jobs:
         shell: bash
         run: cargo test -p verirun-store --test cas_faults
 
+      - name: Test the crash recovery suite on Windows
+        shell: bash
+        run: cargo test -p verirun-store --test crash_recovery
+
+      - name: Test the tamper suite on Windows
+        shell: bash
+        run: cargo test -p verirun-cli --test tamper_suite
+
+      - name: Test platform identity on Windows
+        shell: bash
+        run: cargo test -p verirun-store --test platform_identity
+
   audit:
     name: audit
     runs-on: ubuntu-latest

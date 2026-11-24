@@ -276,7 +276,13 @@ Edge case: a manifest with many tasks sharing one large blob reads that blob exa
 All validation errors (DAG family, SBX-1, SBX-2, CAN family) are reported before any sandbox is created, any blob is written, or any process is spawned. An invalid run leaves the store and the work directory untouched.
 Edge case: a graph whose last task is invalid, run against a fresh store. The store stays empty.
 
-## 11. Adversarial case catalogue
+## 11. Platform invariants (PLAT)
+
+### INV-PLAT-1. Cross platform manifest identity
+The same run spec, executed on Linux and on Windows, produces the same manifest digest. The identity holds for a spec whose named tools behave byte identically on both platforms, and the proven environment is Linux and Windows with the Git Bash shell, as the identity suite runs in CI. The environment digest excludes host specific values, artifact records frame declared paths rather than host paths, and the platform seam keeps execution semantics equal across the two, so nothing host shaped reaches the manifest.
+Edge case: the tutorial spec, whose two tasks print and count bytes through a shell, produces the identical digest under the Linux shell and under the Windows Git Bash shell.
+
+## 12. Adversarial case catalogue
 
 The cases below cut across families and are named here so the fault suites cannot quietly drop them:
 
@@ -290,7 +296,7 @@ The cases below cut across families and are named here so the fault suites canno
 - Concurrent `run` invocations sharing one CAS root (INV-CAS-5 covers the writer side; pins and by-exec writes follow the same atomic rules).
 - A GC sweep racing a put: the grace rule (INV-GC-2) is the specified protection, and the race test sets a long grace and asserts survival.
 
-## 12. Traceability matrix
+## 13. Traceability matrix
 
 Enforcement key: P property test, F fault oracle, V unit or vector test, B benchmark (compile and smoke run in CI).
 
@@ -357,3 +363,4 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-LAT-2 | F | `runner_pipes::stress_unbounded_output_under_deadline`, `runner_pipes::stress_never_closes_pipes_at_full_size` | M4, R3 |
 | INV-LAT-3 | F, B | `manifest_faults::fault_verify_single_pass_counting_reader`, benchmark `cas_bench::bench_verify_throughput` | M4 |
 | INV-LAT-4 | F | `dag_faults::fault_invalid_run_leaves_store_untouched` (in crates/verirun-cli/tests/) | M2 |
+| INV-PLAT-1 | F | `platform_identity::tutorial_spec_manifest_digest_is_platform_identical` in `crates/verirun-store/tests/` | Perfection W5 |
