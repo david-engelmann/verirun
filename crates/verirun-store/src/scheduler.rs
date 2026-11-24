@@ -51,6 +51,7 @@ use verirun_core::dag::ValidatedDag;
 use verirun_core::digest::{self, Digest, HasherFactory, TaskStatus};
 use verirun_core::manifest::{Manifest, TaskRecord};
 use verirun_core::paths::NormalizedPath;
+use verirun_platform::rename_durable;
 
 use crate::cas_fs::{Cas, sync_directory};
 use crate::error::{RunError, StoreError, StoreStep};
@@ -867,7 +868,7 @@ fn store_cache_entry(cas: &Cas, record: &TaskRecord) -> Result<(), RunError> {
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
-    verirun_platform::rename_durable(&temp_path, &entry_path).map_err(|source| {
+    rename_durable(&temp_path, &entry_path).map_err(|source| {
         RunError::from(StoreError::Io {
             path: entry_path.clone(),
             step: StoreStep::Rename,

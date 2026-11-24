@@ -279,7 +279,7 @@ Edge case: a graph whose last task is invalid, run against a fresh store. The st
 ## 11. Platform invariants (PLAT)
 
 ### INV-PLAT-1. Cross platform manifest identity
-The same run spec, executed on Linux and on Windows, produces the same manifest digest. The environment digest excludes host specific values, artifact records frame declared paths rather than host paths, and the platform seam keeps execution semantics equal across the two, so nothing host shaped reaches the manifest.
+The same run spec, executed on Linux and on Windows, produces the same manifest digest. The identity holds for a spec whose named tools behave byte identically on both platforms, and the proven environment is Linux and Windows with the Git Bash shell, as the identity suite runs in CI. The environment digest excludes host specific values, artifact records frame declared paths rather than host paths, and the platform seam keeps execution semantics equal across the two, so nothing host shaped reaches the manifest.
 Edge case: the tutorial spec, whose two tasks print and count bytes through a shell, produces the identical digest under the Linux shell and under the Windows Git Bash shell.
 
 ## 12. Adversarial case catalogue

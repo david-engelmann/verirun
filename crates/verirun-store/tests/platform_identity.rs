@@ -24,10 +24,28 @@ use verirun_store::sha256::Sha256Factory;
 /// of both platforms and pinned here.
 const EXPECTED_HEX: &str = "e63fe409816ad93c944a2043c6c0dba09adf4686ceaf2a1e230c84096223f84a";
 
+/// The tutorial spec, as a fallback copy.
+///
+/// The test reads the fenced block from docs/TUTORIAL.md
+/// when it can, so the suite tracks the tutorial, and
+/// falls back to this copy when the file is not present.
 const TUTORIAL_SPEC: &str = r#"{"tasks":[
   {"task_id":"greet","executable":"sh","args":["-c","printf 'hello from verirun\\n' > outputs/greeting.txt"],"env":{},"inputs":[],"outputs":["greeting.txt"],"depends_on":[]},
   {"task_id":"count","executable":"sh","args":["-c","wc -c < inputs/greeting.txt > outputs/size.txt"],"env":{},"inputs":["greeting.txt"],"outputs":["size.txt"],"depends_on":["greet"]}
 ]}"#;
+
+/// Reads the tutorial spec from docs/TUTORIAL.md.
+///
+/// Returns None when the file cannot be read or carries
+/// no fenced json block.
+fn tutorial_spec_from_docs() -> Option<String> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/TUTORIAL.md");
+    let text = std::fs::read_to_string(path).ok()?;
+    let start = text.find("```json")? + "```json".len();
+    let rest = &text[start..];
+    let end = rest.find("```")?;
+    Some(rest[..end].trim().to_string())
+}
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -66,7 +84,8 @@ fn remove_store(root: &Path) {
 fn tutorial_spec_manifest_digest_is_platform_identical() {
     let root = fresh_root("tutorial");
     let cas = Cas::open(&root).expect("store opens");
-    let value = parse(TUTORIAL_SPEC.as_bytes()).expect("spec parses");
+    let spec_text = tutorial_spec_from_docs().unwrap_or_else(|| TUTORIAL_SPEC.to_string());
+    let value = parse(spec_text.as_bytes()).expect("spec parses");
     let dag = validate_run_spec(&value).expect("spec validates");
     let outcome = scheduler::run(
         &cas,

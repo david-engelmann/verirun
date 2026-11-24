@@ -72,9 +72,9 @@ fn run_spec(root: &Path, spec: &str) -> (Cas, RunOutcome) {
     (cas, outcome)
 }
 
-/// Sets the object file writable or read only, in the
-/// platform's own terms: mode bits on Unix, the read only
-/// attribute on Windows.
+/// Sets the object file writable or read only in the
+/// platform's own terms, mode bits on Unix and the read
+/// only attribute on Windows.
 fn set_writable(path: &Path, writable: bool) {
     let mut perms = fs::metadata(path).expect("object exists").permissions();
     #[cfg(unix)]
@@ -83,7 +83,13 @@ fn set_writable(path: &Path, writable: bool) {
         perms.set_mode(if writable { 0o644 } else { 0o444 });
     }
     #[cfg(windows)]
-    perms.set_readonly(!writable);
+    {
+        #[allow(
+            clippy::permissions_set_readonly_false,
+            reason = "the tamper fixture must restore the read only attribute"
+        )]
+        perms.set_readonly(!writable);
+    }
     fs::set_permissions(path, perms).expect("object permissions change");
 }
 
