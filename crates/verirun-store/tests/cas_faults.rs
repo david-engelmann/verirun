@@ -5,6 +5,7 @@
 
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+#[cfg(unix)]
 use std::process::Command;
 use std::sync::Once;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -12,6 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use verirun_core::cas::PutPhase;
 use verirun_core::digest::{DomainTag, hash_bytes};
 use verirun_store::cas_fs::{Cas, PutObserver};
+#[cfg(unix)]
 use verirun_store::error::{StoreError, StoreStep};
 use verirun_store::sha256::Sha256Factory;
 
@@ -226,6 +228,7 @@ fn fault_source_mutation_after_put() {
 /// The payload the disk-full child tries to store: far larger
 /// than the file-size limit the child runs under, so the temp
 /// write runs out of room partway through the first chunk.
+#[cfg(unix)]
 fn disk_full_payload() -> Vec<u8> {
     (0_u32..262_144).map(|i| (i % 251) as u8).collect()
 }
