@@ -8,6 +8,7 @@
 #![forbid(unsafe_code)]
 
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -72,12 +73,37 @@ fn object_path(cas: &Path, digest_hex: &str) -> PathBuf {
     cas.join("objects").join(&digest_hex[..2]).join(digest_hex)
 }
 
+/// Denies every read of the file, in the platform's own
+/// terms, the mode bits removed on Unix and a deny entry
+/// in the access control list on Windows.
+#[cfg(unix)]
 fn make_unreadable(path: &Path) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o000)).expect("deny reads");
 }
 
+#[cfg(windows)]
+fn make_unreadable(path: &Path) {
+    let status = std::process::Command::new("icacls")
+        .arg(path)
+        .args(["/deny", "Everyone:(R)"])
+        .status()
+        .expect("icacls runs");
+    assert!(status.success(), "icacls denies reads");
+}
+
+#[cfg(unix)]
 fn restore(path: &Path) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o444)).expect("restore reads");
+}
+
+#[cfg(windows)]
+fn restore(path: &Path) {
+    let status = std::process::Command::new("icacls")
+        .arg(path)
+        .args(["/remove:d", "Everyone"])
+        .status()
+        .expect("icacls runs");
+    assert!(status.success(), "icacls restores reads");
 }
 
 #[test]

@@ -108,6 +108,14 @@ fn fault_sentinel_variable_absent() {
         Ok("leak-me-not".to_string())
     );
     let seen = dump_environment("sentinel");
+    // The MSYS2 runtime synthesizes HOME and TERM for its
+    // own processes on Windows. They are not the runner's
+    // doing, so the exactness assertions discount them.
+    #[cfg(windows)]
+    let seen: BTreeMap<String, String> = seen
+        .into_iter()
+        .filter(|(key, _)| key != "HOME" && key != "TERM")
+        .collect();
     assert!(
         !seen.contains_key("VR_SENTINEL_XYZ"),
         "host sentinel leaked into the child: {seen:?}"
