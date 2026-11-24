@@ -14,9 +14,8 @@
 //!   group on Unix and a job object on Windows.
 //! - [`scheduler`]: the worker pool over a validated DAG. Lexicographic
 //!   ready order, failure propagation, the by-exec execution cache,
-//!   and manifest production (section 7.3). Unix only for now,
-//!   because its parity with the Windows runner is workstream W5
-//!   of the perfection programme.
+//!   and manifest production (section 7.3). Runs on Unix and
+//!   Windows over the same platform seam as the runner.
 //! - [`gc`]: garbage collection execution. Mark from pins, plan
 //!   against the grace threshold, sweep under the lock, with a dry
 //!   run that deletes nothing (section 10).
@@ -33,6 +32,5 @@ pub mod clock;
 pub mod error;
 pub mod gc;
 pub mod runner;
-#[cfg(unix)]
 pub mod scheduler;
 pub mod sha256;
