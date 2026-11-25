@@ -114,8 +114,7 @@ impl ProcessGroup {
             // is plain data with no invalid bit patterns, so the
             // zeroed value is valid, and its zeroed limit flags
             // are exactly the cleared state this call installs.
-            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION =
-                unsafe { core::mem::zeroed() };
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { core::mem::zeroed() };
             info.BasicLimitInformation.LimitFlags = 0;
             if let Ok(size) =
                 u32::try_from(core::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())

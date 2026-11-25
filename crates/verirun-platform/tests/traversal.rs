@@ -229,7 +229,6 @@ fn dropping_process_group_terminates_background_members() {
     let _ = fs::remove_dir_all(&root);
 }
 
-
 #[cfg(unix)]
 #[test]
 fn disarmed_process_group_drop_leaves_background_members() {
@@ -262,7 +261,6 @@ fn disarmed_process_group_drop_leaves_background_members() {
     );
     let _ = fs::remove_dir_all(&root);
 }
-
 
 #[cfg(windows)]
 #[test]
