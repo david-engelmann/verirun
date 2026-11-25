@@ -310,3 +310,55 @@ fn fault_json_parity_on_failure() {
     );
     fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn fault_cli_integer_out_of_range_exits_3() {
+    // INV-CAN-3 at the CLI level: a run file carrying an
+    // integer one past the safe bound is rejected at parse,
+    // and the exit is 3, never 2.
+    let dir = fresh_dir("int-range");
+    let cas = dir.join("cas");
+    let cas_arg = cas.to_str().expect("utf8 path").to_string();
+    let spec_path = write_spec(
+        &dir,
+        "{\"tasks\":[{\"task_id\":\"t\",\"executable\":\"sh\",\"args\":[\"-c\",\"true\"],\"env\":{},\"inputs\":[],\"outputs\":[],\"depends_on\":[],\"timeout_ms\":9007199254740992}]}",
+    );
+    let output = invoke(&[
+        "run",
+        spec_path.to_str().expect("utf8 path"),
+        "--cas",
+        &cas_arg,
+        "--work",
+        dir.join("work").to_str().expect("utf8 path"),
+    ]);
+    assert_eq!(
+        code(&output),
+        3,
+        "out of range integer: {}",
+        stderr(&output)
+    );
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn fault_duplicate_env_key_in_run_file() {
+    // INV-CAN-7 at the CLI level: an env object that repeats a
+    // key is rejected at parse, and the exit is 3.
+    let dir = fresh_dir("dup-env");
+    let cas = dir.join("cas");
+    let cas_arg = cas.to_str().expect("utf8 path").to_string();
+    let spec_path = write_spec(
+        &dir,
+        "{\"tasks\":[{\"task_id\":\"t\",\"executable\":\"sh\",\"args\":[\"-c\",\"true\"],\"env\":{\"A\":\"1\",\"A\":\"2\"},\"inputs\":[],\"outputs\":[],\"depends_on\":[]}]}",
+    );
+    let output = invoke(&[
+        "run",
+        spec_path.to_str().expect("utf8 path"),
+        "--cas",
+        &cas_arg,
+        "--work",
+        dir.join("work").to_str().expect("utf8 path"),
+    ]);
+    assert_eq!(code(&output), 3, "duplicate env key: {}", stderr(&output));
+    fs::remove_dir_all(&dir).ok();
+}
