@@ -486,7 +486,7 @@ impl Cas {
                 match reader.read(&mut buffer) {
                     Ok(read) => break read,
                     Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
-                    Err(err) => return Err(io_error(&temp_path, StoreStep::Write, err)),
+                    Err(err) => return Err(io_error(&temp_path, StoreStep::ReadSource, err)),
                 }
             };
             if read == 0 {

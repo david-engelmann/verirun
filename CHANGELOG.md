@@ -24,6 +24,8 @@ Changes from the perfection programme, after the audit programme closed.
 
 - Parser duplicate key check (perfection round P3, finding F16). An object past sixteen keys now checks each new key against a membership set instead of scanning the keys it already holds, so a hand crafted manifest with ten thousand keys parses in about three milliseconds where it once took 138 milliseconds. Objects at the sizes the system itself produces take the same scan they always did.
 
+- Streamed put error step (perfection round P5). A source that fails while being read into the store is now reported under a step that names the read, where it was once reported under the temp file write step. The step is a new public variant of the store step enum, a breaking change under the pre 1.0 versioning policy.
+
 - Sandbox freshness. A task's sandbox is cleared before the task executes, so an output collected for a run was always written by that run (audit finding F1, invariant INV-SBX-6).
 - Work root ownership. A run holds its work root under a lock file for its whole duration, and a second run against the same work root fails with the new RunError::WorkLocked error instead of sharing sandboxes (audit finding F1, invariant INV-RUN-8). The CLI maps the refusal to exit code 3.
 - Cache validation. A stored cache record is honoured only when its artifact paths are exactly the task's declared outputs, so a planted record can no longer be honoured or crash the run (audit finding F2, invariant INV-RUN-7).
