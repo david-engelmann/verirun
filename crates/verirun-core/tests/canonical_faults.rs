@@ -94,6 +94,7 @@ fn fault_encode_depth_limit_matches_parser() {
 
 #[test]
 fn duplicate_keys_rejected_below_at_and_above_the_set_threshold() {
+    use std::fmt::Write as _;
     // The duplicate check scans below sixteen keys and consults a
     // membership set above them (perfection round P3). The error
     // must be the same on both paths, kind and byte offset alike,
@@ -104,7 +105,7 @@ fn duplicate_keys_rejected_below_at_and_above_the_set_threshold() {
             if i > 0 {
                 text.push(',');
             }
-            text.push_str(&format!("\"k{i}\":0"));
+            write!(text, "\"k{i}\":0").expect("writing to a string");
         }
         text.push_str(",\"k0\":0}");
         let offset = text.rfind("\"k0\"").expect("the repeat is present");
