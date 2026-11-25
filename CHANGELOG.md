@@ -2,6 +2,10 @@
 
 Every notable change to verirun is recorded here. Versions follow the semantic versioning policy in `CONTRIBUTING.md`.
 
+## Unreleased
+
+- Process group cleanup: a task's process group is disarmed once its leader has been reaped, so a finished run can never signal a process group id the system has since handed to another group.
+
 ## 0.2.0
 
 Cross-platform runtime parity across Linux, macOS, and Windows, CLI ergonomics for pinning and external inputs, and every correctness, integrity, and durability hardening from the 50-round audit programme and the 14-round perfection programme.
