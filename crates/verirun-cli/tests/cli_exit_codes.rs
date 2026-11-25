@@ -331,7 +331,12 @@ fn fault_cli_integer_out_of_range_exits_3() {
         "--work",
         dir.join("work").to_str().expect("utf8 path"),
     ]);
-    assert_eq!(code(&output), 3, "out of range integer: {}", stderr(&output));
+    assert_eq!(
+        code(&output),
+        3,
+        "out of range integer: {}",
+        stderr(&output)
+    );
     fs::remove_dir_all(&dir).ok();
 }
 
@@ -354,6 +359,11 @@ fn fault_duplicate_env_key_in_run_file() {
         "--work",
         dir.join("work").to_str().expect("utf8 path"),
     ]);
-    assert_eq!(code(&output), 3, "duplicate env key: {}", stderr(&output));
+    assert_eq!(
+        code(&output),
+        3,
+        "duplicate env key: {}",
+        stderr(&output)
+    );
     fs::remove_dir_all(&dir).ok();
 }
