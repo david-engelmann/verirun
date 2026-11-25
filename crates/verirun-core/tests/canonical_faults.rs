@@ -91,3 +91,25 @@ fn fault_encode_depth_limit_matches_parser() {
     let err = to_vec(&nest(MAX_DEPTH + 1)).expect_err("one link more is rejected");
     assert_eq!(err.kind(), CanonicalErrorKind::DepthLimitExceeded);
 }
+
+#[test]
+fn duplicate_keys_rejected_below_at_and_above_the_set_threshold() {
+    // The duplicate check scans below sixteen keys and consults a
+    // membership set above them (perfection round P3). The error
+    // must be the same on both paths, kind and byte offset alike,
+    // with the repeat placed at key 3, key 16, and key 40.
+    for dup_index in [3_usize, 16, 40] {
+        let mut text = String::from("{");
+        for i in 0..dup_index {
+            if i > 0 {
+                text.push(',');
+            }
+            text.push_str(&format!("\"k{i}\":0"));
+        }
+        text.push_str(",\"k0\":0}");
+        let offset = text.rfind("\"k0\"").expect("the repeat is present");
+        let err = parse(text.as_bytes()).expect_err("the duplicate is rejected");
+        assert_eq!(err.kind(), ParseErrorKind::DuplicateKey);
+        assert_eq!(err.offset(), offset);
+    }
+}

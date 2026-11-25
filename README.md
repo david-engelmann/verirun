@@ -71,12 +71,12 @@ The Rust version is pinned in `rust-toolchain.toml`, and rustup selects it autom
 
 The benchmark suite is hand-rolled on the standard library timer and lives in the core and store crates. It reports rather than gates, so nothing in continuous integration depends on these numbers.
 
-Measured on 2026-11-16 on a small shared virtual machine with two cores, from full local runs of the two bench commands named below.
+Measured on 2026-11-24 on a hosted Linux runner, from full runs of the two bench commands named below.
 
-- Canonical encoding of a 193,835-byte document with 256 task-shaped entries, 200 iterations in 1.416 seconds, 26.1 MiB/s.
-- Hashing and storing distinct 4 MiB blobs, 20 iterations in 8.629 seconds, 9.3 MiB/s.
-- Storing 500 64 KiB blobs through the full crash-safe put protocol, 76.015 seconds, 6.6 puts per second. The put protocol syncs the file and its directories before an object counts as stored, and that durability work is most of the cost at this size.
-- Verified reads of a 4 MiB blob, 50 iterations in 1.534 seconds, 130.4 MiB/s.
+- Canonical encoding of a 193,835-byte document with 256 task-shaped entries, 200 iterations in 0.112 seconds, 331.4 MiB/s.
+- Hashing and storing distinct 4 MiB blobs, 20 iterations in 0.573 seconds, 139.6 MiB/s.
+- Storing 500 64 KiB blobs through the full crash-safe put protocol, 0.593 seconds, 843.2 puts per second. The put protocol syncs the file and its directories before an object counts as stored, and that durability work is most of the cost at this size.
+- Verified reads of a 4 MiB blob, 50 iterations in 0.138 seconds, 1446.1 MiB/s.
 
 The commands were `cargo bench -p verirun-core --bench canonical_bench` and `cargo bench -p verirun-store --bench cas_bench`.
 

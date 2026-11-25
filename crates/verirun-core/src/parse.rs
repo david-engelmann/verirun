@@ -449,6 +449,15 @@ impl Parser<'_> {
         self.pos += 1; // consume '{'
         self.skip_whitespace();
         let mut pairs: Vec<(String, Value)> = Vec::new();
+        // The duplicate check scans the pairs directly while the
+        // object is small, which covers every object the system
+        // itself produces, and switches to a membership set past
+        // sixteen keys so a hand crafted large object cannot make
+        // the check quadratic (finding F16, decided on measurement
+        // in perfection round P3). The set serves membership only
+        // and is never iterated, so its order cannot reach the
+        // output or an error.
+        let mut seen_keys: Option<std::collections::HashSet<String>> = None;
         if self.peek() == Some(b'}') {
             self.pos += 1;
             return Ok(Value::Object(pairs));
@@ -473,7 +482,15 @@ impl Parser<'_> {
                 ));
             }
             let key = self.parse_string()?;
-            if pairs.iter().any(|(existing, _)| existing == &key) {
+            let duplicate = if pairs.len() < 16 {
+                pairs.iter().any(|(existing, _)| existing == &key)
+            } else {
+                let seen = seen_keys.get_or_insert_with(|| {
+                    pairs.iter().map(|(existing, _)| existing.clone()).collect()
+                });
+                !seen.insert(key.clone())
+            };
+            if duplicate {
                 return Err(ParseError::new(
                     ParseErrorKind::DuplicateKey,
                     key_offset,
