@@ -579,6 +579,20 @@ pub enum VerifyError {
         /// `stderr` for a log blob.
         path: String,
     },
+    /// An artifact record's declared byte length differs from the
+    /// verified byte length of the blob it names.
+    ArtifactSizeMismatch {
+        /// The blob digest the artifact record names.
+        digest: Digest,
+        /// The byte length recorded in the manifest.
+        expected: u64,
+        /// The actual byte length of the verified blob.
+        actual: u64,
+        /// The task holding the inconsistent artifact record.
+        task_id: String,
+        /// The artifact path holding the inconsistent byte length.
+        path: String,
+    },
 }
 
 impl fmt::Display for VerifyError {
@@ -627,6 +641,16 @@ impl fmt::Display for VerifyError {
             } => write!(
                 f,
                 "blob mismatch for task {task_id:?} at {path:?}: expected {expected}, content hashes to {actual}"
+            ),
+            Self::ArtifactSizeMismatch {
+                digest,
+                expected,
+                actual,
+                task_id,
+                path,
+            } => write!(
+                f,
+                "artifact size mismatch for task {task_id:?} at {path:?} (blob {digest}): manifest records {expected} bytes, blob has {actual} bytes"
             ),
         }
     }

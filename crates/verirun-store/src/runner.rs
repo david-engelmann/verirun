@@ -449,14 +449,14 @@ impl<'a> Runner<'a> {
         for output in &declared {
             let candidate = outputs_dir.join(output.as_str());
             let (file, metadata) = open_output(outputs_dir, output)?;
-            let digest = self
+            let (digest, bytes) = self
                 .cas
-                .put_stream(&file)
+                .put_stream_sized(&file)
                 .map_err(|source| PrepFailure::Run(RunError::from(source)))?;
             artifacts.push(ArtifactRecord {
                 path: output.to_string(),
                 digest,
-                bytes: metadata.len(),
+                bytes,
                 executable: artifact_executable(&candidate, &metadata),
             });
         }
@@ -951,7 +951,12 @@ fn supervise(
     group: &verirun_platform::ProcessGroup,
     timeout_ms: Option<u64>,
 ) -> Supervision {
-    let deadline = timeout_ms.map(|ms| Instant::now() + Duration::from_millis(ms));
+    // Large schema-valid `timeout_ms` budgets (up to
+    // `MAX_SAFE_INTEGER`) can exceed the platform's maximum
+    // representable `Instant`; `checked_add` treats an
+    // unreachable far-future deadline as `None` instead of
+    // panicking the worker thread.
+    let deadline = timeout_ms.and_then(|ms| Instant::now().checked_add(Duration::from_millis(ms)));
     // The wait between exit checks backs off while the child
     // runs, from 2 milliseconds up to a 50 millisecond cap, so a
     // long task costs a handful of wakeups a second instead of

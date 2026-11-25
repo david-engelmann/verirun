@@ -1,13 +1,10 @@
 name: ci
 
 # Gate design for verirun.
-# The merge verdict is hosted green on the exact head plus the milestone
-# gate sign-off from Main Muse. See docs/ARCHITECTURE.md section 9 and
-# CONTRIBUTING.md once it lands in Milestone 4.
-# Milestone 0 ships design documents only, with no Cargo workspace yet.
-# The hygiene job runs on every head. The rust job detects the workspace
-# and activates in full from Milestone 1, when Cargo.toml first lands.
-# No rust step is skipped silently. The detect step prints its verdict.
+# Every pull request, merge group, and push to main runs repository
+# hygiene, the full Rust gate on Linux, macOS, and Windows, the
+# declared minimum supported Rust version build and test gate, and
+# cargo-audit over the committed Cargo.lock.
 
 on:
   push:
@@ -24,8 +21,6 @@ concurrency:
 
 env:
   # Deterministic seed for every simulation and property runner.
-  # CONTRIBUTING.md documents the failure reproduction workflow that
-  # replays a failing seed locally with the same value.
   SIM_SEED: "20261112"
   CARGO_TERM_COLOR: always
 
@@ -35,15 +30,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Required files, copy bar, and Milestone 0 inventory
+      - name: Required files and copy bar
         run: |
           python3 - <<'PY'
           import pathlib, sys
           root = pathlib.Path(".")
           required = [
+              "Cargo.toml",
+              "Cargo.lock",
+              "README.md",
+              "CONTRIBUTING.md",
+              "CHANGELOG.md",
+              "SECURITY.md",
               "DECISIONS.md",
               "docs/ARCHITECTURE.md",
               "docs/INVARIANTS.md",
+              "crates/verirun-core/README.md",
+              "crates/verirun-platform/README.md",
+              "crates/verirun-store/README.md",
+              "crates/verirun-cli/README.md",
               "rust-toolchain.toml",
               ".github/workflows/ci.yml",
           ]
@@ -63,13 +68,6 @@ jobs:
           if bad:
               print("em dash or en dash found in:", bad)
               sys.exit(1)
-          # Until a Cargo workspace exists, the tree must hold no Rust
-          # sources at all. Milestone gates enforce this for M0.
-          if not (root / "Cargo.toml").exists():
-              rs = [str(p) for p in root.rglob("*.rs") if ".git" not in p.parts]
-              if rs:
-                  print("Rust sources present before Milestone 1:", rs)
-                  sys.exit(1)
           print("hygiene ok")
           PY
       - name: Toolchain pin is present and singular
@@ -86,44 +84,78 @@ jobs:
       RUSTDOCFLAGS: "-D warnings"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Detect Cargo workspace
-        id: detect
-        run: |
-          if [ -f Cargo.toml ]; then
-            echo "has_cargo=true" >> "$GITHUB_OUTPUT"
-            echo "Cargo workspace present. Full rust gates apply."
-          else
-            echo "has_cargo=false" >> "$GITHUB_OUTPUT"
-            echo "No Cargo workspace yet (Milestone 0). Rust gates arm at Milestone 1."
-          fi
       - name: Print active seed
-        if: steps.detect.outputs.has_cargo == 'true'
         run: echo "SIM_SEED=$SIM_SEED PROPTEST_CASES=$PROPTEST_CASES"
       - name: Install the pinned toolchain
-        if: steps.detect.outputs.has_cargo == 'true'
         run: |
           rustup toolchain install
           rustup show active-toolchain
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-rust-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-rust-
       - name: Format
-        if: steps.detect.outputs.has_cargo == 'true'
         run: cargo fmt --all -- --check
       - name: Clippy
-        if: steps.detect.outputs.has_cargo == 'true'
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - name: Test
-        if: steps.detect.outputs.has_cargo == 'true'
-        run: cargo test --workspace --all-features --no-fail-fast
+        run: cargo test --workspace --all-features --locked --no-fail-fast
       - name: Doc
-        if: steps.detect.outputs.has_cargo == 'true'
-        run: cargo doc --workspace --all-features --no-deps
+        run: cargo doc --workspace --all-features --no-deps --locked
       - name: Run the examples
-        if: steps.detect.outputs.has_cargo == 'true'
         run: |
-          cargo run -p verirun-core --example canonical_and_digests
-          cargo run -p verirun-store --example store_roundtrip
+          cargo run --locked -p verirun-core --example canonical_and_digests
+          cargo run --locked -p verirun-store --example store_roundtrip
       - name: Bench compile and smoke run
-        if: steps.detect.outputs.has_cargo == 'true'
-        run: cargo bench --workspace -- --test
+        run: cargo bench --workspace --locked -- --test
+
+  macos:
+    name: macos
+    runs-on: macos-latest
+    env:
+      # Mirrors the cross-platform case-count policy of the windows
+      # job: 1,000 cases on pull requests matching the rust job, and
+      # 100 on pushes and merge groups while the rust job enforces
+      # the 10,000-case main volume.
+      PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '1000' || '100' }}
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install the pinned toolchain
+        run: |
+          rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
+          rustup show active-toolchain
+          rustup component add rustfmt clippy
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-macos-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-macos-
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Test
+        run: cargo test --workspace --all-features --locked --no-fail-fast
+      - name: Doc
+        run: cargo doc --workspace --all-features --no-deps --locked
+      - name: Run the examples
+        run: |
+          cargo run --locked -p verirun-core --example canonical_and_digests
+          cargo run --locked -p verirun-store --example store_roundtrip
+      - name: Bench compile and smoke run
+        run: cargo bench --workspace --locked -- --test
 
   msrv:
     name: msrv
@@ -140,12 +172,22 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install the declared rust-version
         run: |
-          rustup toolchain install 1.88.0
+          rustup toolchain install 1.88.0 --profile minimal
           rustup show active-toolchain
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-msrv-1.88.0-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-msrv-1.88.0-
       - name: Build at the declared rust-version
-        run: cargo build --workspace --all-features
+        run: cargo build --workspace --all-features --locked
       - name: Test at the declared rust-version
-        run: cargo test --workspace --all-features --no-fail-fast
+        run: cargo test --workspace --all-features --locked --no-fail-fast
 
   windows:
     name: windows
@@ -167,31 +209,36 @@ jobs:
           rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
           rustup show active-toolchain
           rustup component add rustfmt clippy
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-windows-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-windows-
       - name: Format
         shell: bash
         run: cargo fmt --all -- --check
-
       - name: Clippy
         shell: bash
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - name: Test
         shell: bash
-        run: cargo test --workspace --all-features --no-fail-fast
-
+        run: cargo test --workspace --all-features --locked --no-fail-fast
       - name: Doc
         shell: bash
-        run: cargo doc --workspace --all-features --no-deps
-
+        run: cargo doc --workspace --all-features --no-deps --locked
       - name: Run the examples
         shell: bash
         run: |
-          cargo run -p verirun-core --example canonical_and_digests
-          cargo run -p verirun-store --example store_roundtrip
-
+          cargo run --locked -p verirun-core --example canonical_and_digests
+          cargo run --locked -p verirun-store --example store_roundtrip
       - name: Bench compile and smoke run
         shell: bash
-        run: cargo bench --workspace -- --test
+        run: cargo bench --workspace --locked -- --test
 
   audit:
     name: audit
@@ -202,8 +249,15 @@ jobs:
         run: |
           rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
           rustup show active-toolchain
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin/cargo-audit
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+          key: ${{ runner.os }}-cargo-audit-${{ hashFiles('rust-toolchain.toml') }}
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        run: which cargo-audit || cargo install cargo-audit --locked
       - name: Audit the dependency set
         # Roadmap lane R7. A vulnerability in the locked
         # dependency set fails this job and therefore the gate.

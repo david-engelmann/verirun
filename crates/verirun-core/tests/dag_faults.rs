@@ -5,6 +5,8 @@
 //! section 7.1 makes the first error a pure function of the spec
 //! bytes.
 
+#![forbid(unsafe_code)]
+
 use verirun_core::dag::{ValidatedDag, validate_run_spec};
 use verirun_core::error::DagError;
 use verirun_core::parse::parse;
@@ -255,11 +257,14 @@ fn fault_schema_rejection_table() {
         run(&[r#"{"task_id":"a\\b","executable":"run","args":[],"env":{},"inputs":[],"outputs":[],"depends_on":[]}"#.to_string()]),
         // An empty executable.
         run(&[task("a").replace(r#""executable":"run""#, r#""executable":"""#)]),
-        // A declared fixed-default env key, with the default's own
-        // value: fixed means fixed, still rejected.
+        // A declared fixed-default or runner-managed env key:
+        // fixed means fixed, still rejected, and TMPDIR cannot be
+        // smuggled into exec_digest before the runner overwrites
+        // it at spawn.
         run(&[task("a").replace(r#""env":{}"#, r#""env":{"TZ":"UTC"}"#)]),
         run(&[task("a").replace(r#""env":{}"#, r#""env":{"LC_ALL":"C"}"#)]),
         run(&[task("a").replace(r#""env":{}"#, r#""env":{"SOURCE_DATE_EPOCH":"0"}"#)]),
+        run(&[task("a").replace(r#""env":{}"#, r#""env":{"TMPDIR":"/tmp/fake"}"#)]),
         // timeout_ms below 1.
         run(&[task_with("a", r#""timeout_ms":0"#)]),
         run(&[task_with("a", r#""timeout_ms":-5"#)]),
@@ -277,10 +282,11 @@ fn fault_schema_rejection_table() {
         );
     }
 
-    // Controls: timeout_ms of exactly 1 is accepted, and so is a
-    // plain task with no timeout. A task id with dots and dashes
-    // inside it is a single component and is accepted.
+    // Controls: timeout_ms of 1 and MAX_SAFE_INTEGER are accepted,
+    // and so is a plain task with no timeout. A task id with dots
+    // and dashes inside it is a single component and is accepted.
     assert!(validate(&run(&[task_with("a", r#""timeout_ms":1"#)])).is_ok());
+    assert!(validate(&run(&[task_with("a", r#""timeout_ms":9007199254740991"#)])).is_ok());
     assert!(validate(&run(&[task("a")])).is_ok());
     assert!(validate(&run(&[task("a.b-c_d")])).is_ok());
     assert!(validate(r#"{"tasks":[]}"#).is_ok());

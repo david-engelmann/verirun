@@ -1,5 +1,5 @@
 //! The verirun executable: a thin shell over the library in
-//! `lib.rs` (docs/ARCHITECTURE.md section 2.3).
+//! `lib.rs` (docs/ARCHITECTURE.md section 2.4).
 //!
 //! This module owns argument parsing, the seed line, output
 //! rendering, and the top level error to exit code mapping of
@@ -11,15 +11,74 @@
 //! default 2, so a usage error can never report as tampering
 //! (INV-CLI-1).
 
+#![forbid(unsafe_code)]
+
 use std::path::PathBuf;
 
 use clap::{Arg, ArgAction, Command};
 use verirun_cli::{CliError, error_json};
 use verirun_core::digest::Digest;
 use verirun_core::manifest::TaskDifference;
+use verirun_core::paths::NormalizedPath;
 
 fn main() {
     std::process::exit(real_main());
+}
+
+/// Builds one single-manifest subcommand (`verify`, `show`,
+/// `pin`, `unpin`).
+fn digest_subcommand(name: &'static str, about: &'static str, cas: Arg, json: Arg) -> Command {
+    Command::new(name)
+        .about(about)
+        .arg(
+            Arg::new("digest")
+                .value_name("MANIFEST_DIGEST")
+                .required(true),
+        )
+        .arg(cas)
+        .arg(json)
+}
+
+/// Builds the `run` subcommand definition.
+fn run_subcommand(cas: Arg, json: Arg) -> Command {
+    Command::new("run")
+        .about("Run a run file and print the manifest digest")
+        .arg(
+            Arg::new("run_file")
+                .value_name("RUN_FILE")
+                .required(true)
+                .value_parser(clap::value_parser!(PathBuf)),
+        )
+        .arg(cas)
+        .arg(
+            Arg::new("work")
+                .long("work")
+                .value_name("DIR")
+                .required(true)
+                .value_parser(clap::value_parser!(PathBuf))
+                .help("The directory holding task sandboxes"),
+        )
+        .arg(
+            Arg::new("jobs")
+                .long("jobs")
+                .value_name("N")
+                .value_parser(clap::value_parser!(u64))
+                .help("Worker pool size; 0 selects the available parallelism"),
+        )
+        .arg(
+            Arg::new("inputs")
+                .long("input")
+                .value_name("REL_PATH=HOST_FILE")
+                .action(ArgAction::Append)
+                .help("Bind a sandbox-relative input path to a host file"),
+        )
+        .arg(
+            Arg::new("pin")
+                .long("pin")
+                .action(ArgAction::SetTrue)
+                .help("Pin the produced manifest so garbage collection preserves it"),
+        )
+        .arg(json)
 }
 
 /// Builds the argument parser for the surface of section
@@ -48,55 +107,19 @@ fn build_cli() -> Command {
                 .value_parser(clap::value_parser!(u64))
                 .help("The active seed, printed to stderr on every run"),
         )
-        .subcommand(
-            Command::new("run")
-                .about("Run a run file and print the manifest digest")
-                .arg(
-                    Arg::new("run_file")
-                        .value_name("RUN_FILE")
-                        .required(true)
-                        .value_parser(clap::value_parser!(PathBuf)),
-                )
-                .arg(cas.clone())
-                .arg(
-                    Arg::new("work")
-                        .long("work")
-                        .value_name("DIR")
-                        .required(true)
-                        .value_parser(clap::value_parser!(PathBuf))
-                        .help("The directory holding task sandboxes"),
-                )
-                .arg(
-                    Arg::new("jobs")
-                        .long("jobs")
-                        .value_name("N")
-                        .value_parser(clap::value_parser!(u64))
-                        .help("Worker pool size; 0 selects the available parallelism"),
-                )
-                .arg(json.clone()),
-        )
-        .subcommand(
-            Command::new("verify")
-                .about("Verify a manifest and everything it names")
-                .arg(
-                    Arg::new("digest")
-                        .value_name("MANIFEST_DIGEST")
-                        .required(true),
-                )
-                .arg(cas.clone())
-                .arg(json.clone()),
-        )
-        .subcommand(
-            Command::new("show")
-                .about("Verify a manifest and print its task records")
-                .arg(
-                    Arg::new("digest")
-                        .value_name("MANIFEST_DIGEST")
-                        .required(true),
-                )
-                .arg(cas.clone())
-                .arg(json.clone()),
-        )
+        .subcommand(run_subcommand(cas.clone(), json.clone()))
+        .subcommand(digest_subcommand(
+            "verify",
+            "Verify a manifest and everything it names",
+            cas.clone(),
+            json.clone(),
+        ))
+        .subcommand(digest_subcommand(
+            "show",
+            "Verify a manifest and print its task records",
+            cas.clone(),
+            json.clone(),
+        ))
         .subcommand(
             Command::new("diff")
                 .about("Verify two manifests and compare their records")
@@ -105,6 +128,18 @@ fn build_cli() -> Command {
                 .arg(cas.clone())
                 .arg(json.clone()),
         )
+        .subcommand(digest_subcommand(
+            "pin",
+            "Verify a manifest and pin it against garbage collection",
+            cas.clone(),
+            json.clone(),
+        ))
+        .subcommand(digest_subcommand(
+            "unpin",
+            "Remove a manifest's garbage collection pin",
+            cas.clone(),
+            json.clone(),
+        ))
         .subcommand(
             Command::new("gc")
                 .about("Collect unreachable objects older than the grace threshold")
@@ -128,20 +163,23 @@ fn build_cli() -> Command {
 
 /// The active seed: the `--seed` flag, else the `SIM_SEED`
 /// environment variable, else 0 (section 12.1).
-fn resolve_seed(matches: &clap::ArgMatches) -> Result<u64, String> {
+fn resolve_seed(matches: &clap::ArgMatches) -> Result<u64, CliError> {
     if let Some(seed) = matches.get_one::<u64>("seed") {
         return Ok(*seed);
     }
     std::env::var("SIM_SEED").map_or(Ok(0), |text| {
-        text.parse::<u64>()
-            .map_err(|_| format!("the SIM_SEED value {text:?} is not an unsigned integer"))
+        text.parse::<u64>().map_err(|_| CliError::Argument {
+            detail: format!("the SIM_SEED value {text:?} is not an unsigned integer"),
+        })
     })
 }
 
 /// Parses a digest argument. A malformed digest is invalid
 /// input and exits 3, like every argument error.
-fn parse_digest(text: &str) -> Result<Digest, String> {
-    Digest::from_hex(text).map_err(|source| format!("invalid manifest digest {text:?}: {source}"))
+fn parse_digest(text: &str) -> Result<Digest, CliError> {
+    Digest::from_hex(text).map_err(|source| CliError::Argument {
+        detail: format!("invalid manifest digest {text:?}: {source}"),
+    })
 }
 
 /// Renders a failure in both forms (INV-CLI-2) and returns
@@ -167,27 +205,36 @@ fn real_main() -> i32 {
                 print!("{err}");
                 return 0;
             }
+            let wants_json = std::env::args_os()
+                .skip(1)
+                .take_while(|arg| arg != "--")
+                .any(|arg| arg == "--json");
+            if wants_json {
+                let cli_err = CliError::Argument {
+                    detail: err.to_string().trim().to_owned(),
+                };
+                return fail(&cli_err, true);
+            }
             eprint!("{err}");
             return 3;
         }
     };
-    let seed = match resolve_seed(&matches) {
-        Ok(seed) => seed,
-        Err(message) => {
-            eprintln!("error: {message}");
-            return 3;
-        }
-    };
-    eprintln!("seed: {seed}");
     let Some((name, sub)) = matches.subcommand() else {
         return 3;
     };
     let json = sub.get_flag("json");
+    let seed = match resolve_seed(&matches) {
+        Ok(seed) => seed,
+        Err(error) => return fail(&error, json),
+    };
+    eprintln!("seed: {seed}");
     match name {
         "run" => run_command(sub, json),
         "verify" => verify_command(sub, json),
         "show" => show_command(sub, json),
         "diff" => diff_command(sub, json),
+        "pin" => pin_command(sub, json),
+        "unpin" => unpin_command(sub, json),
         "gc" => gc_command(sub, json),
         _ => 3,
     }
@@ -205,7 +252,17 @@ fn run_command(sub: &clap::ArgMatches, json: bool) -> i32 {
     };
     let jobs = sub.get_one::<u64>("jobs").copied().unwrap_or(0);
     let jobs = usize::try_from(jobs).unwrap_or(usize::MAX);
-    match verirun_cli::cmd_run::run(spec, cas, work, jobs) {
+    let pin = sub.get_flag("pin");
+    let mut bindings: Vec<(NormalizedPath, PathBuf)> = Vec::new();
+    if let Some(raw_inputs) = sub.get_many::<String>("inputs") {
+        for raw in raw_inputs {
+            match verirun_cli::cmd_run::parse_input_binding(raw) {
+                Ok(pair) => bindings.push(pair),
+                Err(error) => return fail(&error, json),
+            }
+        }
+    }
+    match verirun_cli::cmd_run::run_with_options(spec, cas, work, &bindings, jobs, pin) {
         Ok(outcome) => {
             for record in &outcome.manifest.tasks {
                 if matches!(
@@ -227,7 +284,7 @@ fn run_command(sub: &clap::ArgMatches, json: bool) -> i32 {
                 }
             }
             if json {
-                println!("{}", run_json(&outcome));
+                println!("{}", run_json(&outcome, pin));
             } else {
                 println!("{}", outcome.manifest_digest.to_hex());
             }
@@ -238,9 +295,10 @@ fn run_command(sub: &clap::ArgMatches, json: bool) -> i32 {
 }
 
 /// The `--json` form of a run result: the manifest digest,
-/// the exit code, every task's status, and the failure
-/// details, the same information the text form carries.
-fn run_json(outcome: &verirun_store::scheduler::RunOutcome) -> serde_json::Value {
+/// the exit code, whether the manifest was pinned, every
+/// task's status, and the failure details, the same
+/// information the text form carries.
+fn run_json(outcome: &verirun_store::scheduler::RunOutcome, pinned: bool) -> serde_json::Value {
     let tasks: Vec<serde_json::Value> = outcome
         .manifest
         .tasks
@@ -261,6 +319,7 @@ fn run_json(outcome: &verirun_store::scheduler::RunOutcome) -> serde_json::Value
     serde_json::json!({
         "manifest": outcome.manifest_digest.to_hex(),
         "exit_code": outcome.exit_code,
+        "pinned": pinned,
         "tasks": tasks,
         "failures": failures,
     })
@@ -275,10 +334,7 @@ fn verify_command(sub: &clap::ArgMatches, json: bool) -> i32 {
     };
     let digest = match parse_digest(text) {
         Ok(digest) => digest,
-        Err(message) => {
-            eprintln!("error: {message}");
-            return 3;
-        }
+        Err(error) => return fail(&error, json),
     };
     match verirun_cli::cmd_verify::verify(cas, &digest) {
         Ok(manifest) => {
@@ -309,10 +365,7 @@ fn show_command(sub: &clap::ArgMatches, json: bool) -> i32 {
     };
     let digest = match parse_digest(text) {
         Ok(digest) => digest,
-        Err(message) => {
-            eprintln!("error: {message}");
-            return 3;
-        }
+        Err(error) => return fail(&error, json),
     };
     match verirun_cli::cmd_show::show(cas, &digest) {
         Ok(manifest) => {
@@ -397,17 +450,11 @@ fn diff_command(sub: &clap::ArgMatches, json: bool) -> i32 {
     };
     let first = match parse_digest(first_text) {
         Ok(digest) => digest,
-        Err(message) => {
-            eprintln!("error: {message}");
-            return 3;
-        }
+        Err(error) => return fail(&error, json),
     };
     let second = match parse_digest(second_text) {
         Ok(digest) => digest,
-        Err(message) => {
-            eprintln!("error: {message}");
-            return 3;
-        }
+        Err(error) => return fail(&error, json),
     };
     match verirun_cli::cmd_diff::diff(cas, &first, &second) {
         Ok(outcome) => {
@@ -490,6 +537,67 @@ fn diff_json(outcome: &verirun_cli::cmd_diff::DiffOutcome) -> serde_json::Value 
         "equivalent": outcome.differences.is_empty(),
         "differences": differences,
     })
+}
+
+fn pin_command(sub: &clap::ArgMatches, json: bool) -> i32 {
+    let Some(text) = sub.get_one::<String>("digest") else {
+        return 3;
+    };
+    let Some(cas) = sub.get_one::<PathBuf>("cas") else {
+        return 3;
+    };
+    let digest = match parse_digest(text) {
+        Ok(digest) => digest,
+        Err(error) => return fail(&error, json),
+    };
+    match verirun_cli::cmd_pin::pin(cas, &digest) {
+        Ok(manifest) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "manifest": digest.to_hex(),
+                        "merkle_root": manifest.merkle_root.to_hex(),
+                        "pinned": true,
+                    })
+                );
+            } else {
+                println!("pinned {}", digest.to_hex());
+            }
+            0
+        }
+        Err(error) => fail(&error, json),
+    }
+}
+
+fn unpin_command(sub: &clap::ArgMatches, json: bool) -> i32 {
+    let Some(text) = sub.get_one::<String>("digest") else {
+        return 3;
+    };
+    let Some(cas) = sub.get_one::<PathBuf>("cas") else {
+        return 3;
+    };
+    let digest = match parse_digest(text) {
+        Ok(digest) => digest,
+        Err(error) => return fail(&error, json),
+    };
+    match verirun_cli::cmd_unpin::unpin(cas, &digest) {
+        Ok(()) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "manifest": digest.to_hex(),
+                        "pinned": false,
+                    })
+                );
+            } else {
+                println!("unpinned {}", digest.to_hex());
+            }
+            0
+        }
+        Err(error) => fail(&error, json),
+    }
 }
 
 fn gc_command(sub: &clap::ArgMatches, json: bool) -> i32 {

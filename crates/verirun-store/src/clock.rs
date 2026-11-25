@@ -1,7 +1,8 @@
 //! The wall clock (docs/ARCHITECTURE.md sections 10 and 14).
 //!
 //! This module is the single place adapter code reads
-//! wall-clock time. It exists for garbage collection alone:
+//! wall-clock time, supplying garbage collection ages and
+//! per-process temporary file nonces:
 //! sweep planning compares object and temporary file ages
 //! against a grace threshold, and ages come from modification
 //! times measured against one clock read. Deterministic code

@@ -8,15 +8,15 @@ Run the same gates the hosted workflow runs, in the same order, from the workspa
 
 ```sh
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-PROPTEST_CASES=1000 cargo test --workspace --all-features --no-fail-fast
-RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
-cargo bench --workspace -- --test
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+PROPTEST_CASES=1000 cargo test --workspace --all-features --locked --no-fail-fast
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+cargo bench --workspace --locked -- --test
 ```
 
 Property test volume comes from the environment. Pull requests run one thousand cases and the main branch runs ten thousand, and no test may hardcode a smaller count of its own.
 
-The core crate is standard library only, and that is a hard rule rather than a preference. External crates belong in the I/O adapters, the command line crate, benchmarks, and dev-dependencies, and each one needs a reason a reader can find. Deterministic code never iterates a hash map, never reads the wall clock, and never draws operating system randomness. Every production target and every test forbids unsafe code.
+The core crate is standard library only, and that is a hard rule rather than a preference. External crates belong in the OS boundary crate, the I/O adapters, the command line crate, benchmarks, and dev-dependencies, and each one needs a reason a reader can find. Deterministic code never iterates a hash map, never reads the wall clock, and never draws operating system randomness. `verirun-platform` is the sole crate isolating operating system FFI unsafe blocks behind a safe API with `unsafe_op_in_unsafe_fn` denied, and every other crate and every test target forbids unsafe code.
 
 ## Tests that can fail
 

@@ -1,6 +1,7 @@
 //! Handle relative traversal: the checked object is the
 //! opened object (perfection programme workstream W3, audit
-//! finding F11).
+//! finding F11), plus `rename_replace` and `ProcessGroup` drop
+//! cleanup parity.
 //!
 //! The race case at the bottom is the slice's reason to
 //! exist. A swapper thread flips one path component between
@@ -10,13 +11,15 @@
 //! components by path and opens by path afterwards loses
 //! this race whenever the swap lands in its window.
 
+#![forbid(unsafe_code)]
+
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use verirun_platform::{DirHandle, TraversalError};
+use verirun_platform::{DirHandle, ProcessGroup, TraversalError, rename_replace};
 
 /// A fresh empty directory for one test.
 fn fresh_root(label: &str) -> PathBuf {
@@ -111,6 +114,7 @@ fn nested_file_reads_back_through_handles() {
     fs::write(root.join("a/b/out.txt"), b"nested bytes").expect("file writes");
     let bytes = read_through(&root, &["a", "b", "out.txt"]).expect("traversal reads");
     assert_eq!(bytes, b"nested bytes");
+    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -121,6 +125,7 @@ fn missing_component_is_not_found() {
     fs::create_dir_all(root.join("a")).expect("dir creates");
     let missing_file = read_through(&root, &["a", "nope.txt"]);
     assert!(matches!(missing_file, Err(TraversalError::NotFound)));
+    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -129,6 +134,7 @@ fn directory_as_the_final_component_is_not_a_regular_file() {
     fs::create_dir_all(root.join("a/dir")).expect("dirs create");
     let result = read_through(&root, &["a", "dir"]);
     assert!(matches!(result, Err(TraversalError::NotRegularFile)));
+    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -142,6 +148,85 @@ fn linked_component_is_rejected() {
         matches!(result, Err(TraversalError::Link)),
         "a linked component is a link error, got {result:?}"
     );
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn rename_replace_overwrites_writable_destination() {
+    let root = fresh_root("rename-replace");
+    let from = root.join("src.tmp");
+    let to = root.join("dst.bin");
+    fs::write(&from, b"new-payload").expect("write src");
+    fs::write(&to, b"old-payload").expect("write dst");
+    rename_replace(&from, &to).expect("rename_replace succeeds");
+    assert!(!from.exists(), "source moved");
+    assert_eq!(fs::read(&to).expect("read dst"), b"new-payload");
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[cfg(unix)]
+#[test]
+fn dropping_process_group_terminates_background_members() {
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    let root = fresh_root("pgroup-drop");
+    let marker = root.join("late.txt");
+    let script = format!(
+        "(sleep 1; printf leaked > {}) >/dev/null 2>&1 & exit 0",
+        marker.display()
+    );
+    let mut cmd = Command::new("/bin/sh");
+    cmd.process_group(0)
+        .args(["-c", &script])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let mut child = cmd.spawn().expect("spawn leader");
+    let mut group = ProcessGroup::new();
+    group.attach(&child).expect("attach leader");
+    let status = child.wait().expect("leader exits");
+    assert!(status.success());
+    // Drop the group immediately after the leader exits, before
+    // the background member wakes from its sleep.
+    drop(group);
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+    assert!(
+        !marker.exists(),
+        "background group member must be terminated when ProcessGroup drops"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[cfg(windows)]
+#[test]
+fn dropping_process_group_terminates_background_members() {
+    use std::process::{Command, Stdio};
+
+    let root = fresh_root("pgroup-drop");
+    let marker = root.join("late.txt");
+    let ps_cmd = format!(
+        "Start-Process -WindowStyle Hidden powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 1; Set-Content -LiteralPath ''{}'' -Value leaked'",
+        marker.display()
+    );
+    let mut child = Command::new("powershell.exe")
+        .args(["-NoProfile", "-Command", &ps_cmd])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn leader");
+    let mut group = ProcessGroup::new();
+    group.attach(&child).expect("attach leader to job");
+    let status = child.wait().expect("leader exits");
+    assert!(status.success());
+    drop(group);
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    assert!(
+        !marker.exists(),
+        "background job member must be terminated when ProcessGroup drops"
+    );
+    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]
@@ -192,4 +277,5 @@ fn traversal_never_collects_the_decoy_during_a_swap() {
     stop.store(true, Ordering::Relaxed);
     swapper.join().expect("swapper joins");
     assert!(successes > 0, "the good path was exercised");
+    let _ = fs::remove_dir_all(&root);
 }

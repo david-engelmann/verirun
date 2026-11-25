@@ -1,6 +1,6 @@
 # verirun Invariants and Traceability Matrix
 
-Status: current through Milestone 4 and roadmap lanes R3 and R5. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and exactly the enforcement that proves it. The matrix in section 12 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
+Status. Current through version 0.2.0 across Milestones 1 to 4, roadmap lanes R1 to R7, the 50-round audit programme, and the 14-round perfection programme. This document is the formal invariant register for verirun, required by DECISIONS.md Q7. Every invariant has a stable id, a precise statement, its adversarial edge cases, and the enforcement that proves it. The matrix in section 13 maps each invariant 1-to-1 to its property tests, fault oracles, or benchmarks. An invariant with no row in the matrix does not exist, and a test with no invariant is decoration. When a milestone adds behaviour, it adds or amends invariants here in the same pull request.
 
 ## How enforcement works
 
@@ -10,7 +10,7 @@ Status: current through Milestone 4 and roadmap lanes R3 and R5. This document i
 - Benchmark: a hand-rolled benchmark harness built on `std::time::Instant` that must compile and run under `cargo bench --workspace -- --test` in CI. Benchmarks prove the streaming and throughput shape of an implementation. CI never gates on wall-clock numbers.
 - Every seeded runner prints its active seed (`--seed`, else `SIM_SEED`, else 0) on every run, and a failure reproduces from that seed alone.
 
-Test locations: core tests live in `crates/verirun-core/tests/`, store tests in `crates/verirun-store/tests/`, CLI tests in `crates/verirun-cli/tests/`. Benchmarks live in the owning crate's `benches/` directory.
+Test locations. Core tests live in `crates/verirun-core/tests/`, platform tests in `crates/verirun-platform/tests/`, store tests in `crates/verirun-store/tests/`, and CLI tests in `crates/verirun-cli/tests/`. Benchmarks live in the owning crate's `benches/` directory.
 
 ## 1. Canonical encoding invariants (CAN)
 
@@ -121,8 +121,8 @@ For a spec with several violations, validation always reports the same first err
 Edge case: a spec that is simultaneously cyclic and has a duplicate id reports the duplicate, in every process and at every seed.
 
 ### INV-DAG-6. Schema strictness
-Unknown task fields, a missing required field, a wrong-typed field, an empty `task_id` or `executable`, a `task_id` that is not a single safe path component (it contains a slash or a backslash, or it is exactly "." or ".."), a declared fixed-default env key (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`), and `timeout_ms` below 1 are each rejected with exit code 3 before execution.
-Edge case: `timeout_ms` of exactly 1 (accepted) and 0 (rejected), an env object declaring `TZ` with the same value as the default (still rejected: fixed means fixed). A task id of `../escape` is rejected (it would name a directory outside the tasks folder); an id with interior dots such as `a.b-c` is accepted (it is a single component).
+Unknown task fields, a missing required field, a wrong-typed field, an empty `task_id` or `executable`, a `task_id` that is not a single safe path component (it contains a slash or a backslash, or it is "." or ".."), a declared runner-managed env key (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`, `TMPDIR`), and `timeout_ms` below 1 are each rejected with exit code 3 before execution.
+Edge cases. `timeout_ms` of 1 and `MAX_SAFE_INTEGER` (`9007199254740991`) are accepted while 0 is rejected, and an env object declaring `TZ` or `TMPDIR` is rejected so no declared `TMPDIR` can enter `exec_digest` and be overwritten at spawn. A task id of `../escape` is rejected while an id with interior dots such as `a.b-c` is accepted.
 
 ## 5. Execution invariants (RUN)
 
@@ -139,8 +139,8 @@ Stdout and stderr are drained concurrently as raw bytes into separate blobs. Any
 Edge cases: 1 MiB on each stream in alternating writes, all output on stderr with stdout empty and the reverse, a child that writes and then sleeps (drains must not wait for exit to make progress, proven by the timeout case below).
 
 ### INV-RUN-4. Timeout enforcement
-A task exceeding its `timeout_ms` is killed, reaped, and recorded with status `timed_out`. Its drain threads finish and are joined. The run completes, dependents are skipped, and the CLI exits with code 1. No child or drain thread survives the run.
-Edge cases: a task that floods both pipes and then sleeps past its deadline (the kill must not hang the drains), a task that exits just before the deadline (recorded by its real exit), `timeout_ms` absent (no deadline).
+A task exceeding its `timeout_ms` is killed, reaped, and recorded with status `timed_out`. Deadlines are computed with `Instant::checked_add` so large schema-valid `timeout_ms` budgets up to `MAX_SAFE_INTEGER` never overflow or panic worker threads. Drain threads finish and are joined, surviving group members are terminated on timeout and when `ProcessGroup` drops on both Unix and Windows, dependents are skipped, and the CLI exits with code 1. No child or drain thread survives the run.
+Edge cases. A task that floods both pipes and then sleeps past its deadline, a task that exits just before the deadline, `timeout_ms` absent, `timeout_ms` at `9007199254740991`, and a background group member spawned by a child that exits zero.
 
 ### INV-RUN-5. Worker-count independence
 The same graph and inputs executed with 1 worker and with N workers produce byte-identical manifests, at a fixed cache disposition (INV-MAN-1). Scheduling affects wall-clock time only.
@@ -151,8 +151,8 @@ When a task fails or times out, exactly its transitive dependents are recorded `
 Edge cases: a failure at the root of a chain, a failure in one branch of a diamond (the other branch and the join's other inputs still resolve, the join itself is skipped), a graph where everything fails, a run whose manifest holds only skipped records apart from one failed root, verified clean after the run.
 
 ### INV-RUN-7. Cache soundness
-A cached task is reused only when its execution digest matches, its recorded artifact paths are exactly the task's declared outputs, and every recorded output and log blob still exists and re-hashes correctly at materialization. A cache entry pointing at missing or corrupted blobs is ignored and the task re-executes. Cache state can never change a manifest's meaning: a run served fully from cache and the same run executed cold produce identical manifests apart from the `cached` status markers defined in the record semantics, and identical artifact and log digests.
-Edge case: delete one output blob of a cached task, re-run, and observe re-execution of exactly that task. A cache record whose blobs all verify but whose artifact paths differ from the declared outputs is likewise ignored and the task re-executes, because nothing in the record's own fields ties its paths to the task it claims to describe.
+A cached task is reused only when its execution digest matches, its recorded artifact paths are the task's declared outputs, and every recorded output and log blob still exists, re-hashes correctly, and matches the byte length recorded in `ArtifactRecord.bytes`. A cache entry pointing at missing, corrupted, wrong-path, or wrong-length blobs is ignored and the task re-executes. Cache state can never change a manifest's meaning because a run served fully from cache and the same run executed cold produce identical manifests apart from the `cached` status markers defined in the record semantics, and identical artifact and log digests.
+Edge cases. Delete one output blob of a cached task, re-run, and observe re-execution of that task. A cache record whose blobs all verify while naming wrong artifact paths or wrong `ArtifactRecord.bytes` is likewise ignored and the task re-executes.
 
 ### INV-RUN-8. One run per work root
 A run holds its work root exclusively from admission to completion through a create_new lock file named `run.lock` in the work root. A second run against the same work root fails with `RunError::WorkLocked` before any task executes, and the CLI exits with code 3. The lock file is removed when the run ends, however it ends, so a later run over the same work root is admitted.
@@ -202,9 +202,9 @@ Edge cases: a flip in the first byte, the last byte, and a middle byte of blobs 
 Flipping any single byte in the manifest blob itself causes verification to fail with exit code 2, either at the manifest re-hash step or at the canonical re-encode step. There is no byte position in a manifest whose change goes unnoticed.
 Edge case: exhaustive single-byte flips across a small manifest, every position, in the fault suite.
 
-### INV-MAN-5. Pointer swap detection
-Swapping two digest pointers inside a manifest (for example exchanging the stdout digests of two tasks, or the artifact digests of two paths) causes verification to fail with exit code 2, at the Merkle root recomputation or at a blob re-hash, naming the inconsistent record.
-Edge case: swapping digests of two blobs with identical lengths, so length checks alone cannot catch it.
+### INV-MAN-5. Pointer swap and metadata tamper detection
+Swapping two digest pointers inside a manifest (such as exchanging the stdout digests of two tasks or the artifact digests of two paths) or forging `ArtifactRecord.bytes` while recomputing the Merkle root causes verification to fail with exit code 2, at the Merkle root recomputation or at the blob byte-length check (`VerifyError::ArtifactSizeMismatch`), naming the inconsistent record.
+Edge cases. Swapping digests of two blobs with identical lengths so length checks alone cannot catch it, and mutating `ArtifactRecord.bytes` with a recomputed Merkle root so root checks alone cannot catch it.
 
 ### INV-MAN-6. Merkle root correctness
 The stored `merkle_root` equals the root recomputed from the record fields under the construction of ARCHITECTURE.md section 9.2, including the odd-leaf promotion rule and the empty manifest rule. A manifest whose root field alone is edited fails verification with both roots reported.
@@ -213,8 +213,8 @@ Edge cases: manifests with 0, 1, 2, 3, and 5 tasks (promotion at one and two lev
 ## 8. Garbage collection invariants (GC)
 
 ### INV-GC-1. Pinned reachability is preserved
-`verirun gc` never deletes a blob reachable from a pinned manifest: not the manifest blob, not any artifact or log blob it names, not the by-exec entries its records use.
-Edge case: a store where two manifests share most blobs and only one is pinned. The shared blobs survive. The unshared unpinned blobs past the grace threshold do not.
+`verirun gc` verifies the blob hash, canonical encoding, and Merkle root of every pinned manifest before planning a sweep, aborting with exit code 2 if any pinned manifest is missing or invalid, and never deletes a blob reachable from a pinned manifest (including the manifest blob, its artifact and log blobs, and the `by-exec` record blobs its records use). `verirun pin` verifies a manifest before creating its pin, while `verirun unpin` removes a pin unconditionally.
+Edge cases. A store where two manifests share most blobs and only one is pinned keeps the shared blobs and sweeps the unshared unpinned blobs past the grace threshold. A pinned manifest with a corrupted Merkle root aborts `gc` before any object is deleted.
 
 ### INV-GC-2. Grace protects in-flight work
 An unreachable blob or temporary file younger than the grace threshold is never swept. Only age past the threshold makes an unreachable object a candidate.
@@ -243,8 +243,8 @@ Every CLI outcome maps to exactly one documented code: 0 success or verified, 1 
 Edge cases: a usage error (exits 3), a tampered store under `verify` (exits 2), a timed out task under `run` (exits 1), a cyclic graph under `run` (exits 3).
 
 ### INV-CLI-2. JSON output parity
-For every command, `--json` output carries the same information content as the text output, including digests, statuses, and error context. The JSON form is never the only place a failure is explained.
-Edge case: a verification failure rendered both ways names the same expected and actual digests in both.
+For every command, `--json` output carries the same information content as the text output, including digests, statuses, and error context. Malformed digest arguments, malformed `--input` bindings, and invalid `SIM_SEED` values likewise emit structured `error_json` on stdout when `--json` is passed. The JSON form is never the only place a failure is explained.
+Edge cases. A verification failure rendered both ways names the same expected and actual digests in both, and malformed digest or `SIM_SEED` invocations under `--json` emit valid JSON on stdout alongside the stderr message.
 
 ### INV-CLI-3. Seed reporting and reproduction
 Every CLI run prints its active seed. Seeded property and simulation runners produce byte-identical traces in separate processes at the same seed, and different traces at a different seed for generators with enough entropy to differ.
@@ -279,8 +279,8 @@ Edge case: a graph whose last task is invalid, run against a fresh store. The st
 ## 11. Platform invariants (PLAT)
 
 ### INV-PLAT-1. Cross platform manifest identity
-The same run spec, executed on Linux and on Windows, produces the same manifest digest. The identity holds for a spec whose named tools behave byte identically on both platforms, and the proven environment is Linux and Windows with the Git Bash shell, as the identity suite runs in CI. The environment digest excludes host specific values, artifact records frame declared paths rather than host paths, and the platform seam keeps execution semantics equal across the two, so nothing host shaped reaches the manifest.
-Edge case: the tutorial spec, whose two tasks print and count bytes through a shell, produces the identical digest under the Linux shell and under the Windows Git Bash shell.
+The same run spec, executed on Linux, macOS, and Windows, produces the same manifest digest whenever its named tools write identical bytes. The environment digest excludes host specific values, artifact records frame declared paths rather than host paths, and the `verirun-platform` seam keeps execution semantics equal across all three operating systems, so nothing host shaped reaches the manifest.
+Edge cases. A portable two-task graph (`printf` and `tr`) produces one identical manifest digest across Linux, macOS, and Windows without platform conditionals, and the tutorial spec produces identical execution digests everywhere and identical manifest digests on Linux and Windows Git Bash.
 
 ## 12. Adversarial case catalogue
 
@@ -316,7 +316,7 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-CAS-1 | F | `cas_faults::fault_crash_at_each_put_step` in `crates/verirun-store/tests/`, plus the recovery half `crash_recovery::fault_crash_recovery_store_stays_consistent` and `crash_recovery::fault_crash_recovery_pinned_manifest_survives` in `crates/verirun-store/tests/` | M1, M4 |
 | INV-CAS-2 | F | `cas_faults::fault_put_call_order_recorded` | M1 |
 | INV-CAS-3 | F | `cas_faults::fault_stored_object_write_attempt` | M1 |
-| INV-CAS-4 | P | `cas_prop::prop_put_get_identity` | M1 |
+| INV-CAS-4 | P, F | `cas_prop::prop_put_get_identity`, `cas_faults::put_stream_sized_returns_exact_byte_count` in `crates/verirun-store/tests/` | M1, 0.2.0 |
 | INV-CAS-5 | F, P | `cas_concurrent::stress_parallel_identical_and_distinct_puts` | M1 |
 | INV-CAS-6 | F | `cas_faults::fault_cross_device_tmp_refused` | M1 |
 | INV-CAS-7 | F | `cas_faults::fault_source_mutation_after_put` | M1 |
@@ -331,10 +331,10 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-RUN-1 | F | `runner_env::fault_sentinel_variable_absent` in `crates/verirun-store/tests/` | M2 |
 | INV-RUN-2 | F | `runner_env::fault_fixed_defaults_under_hostile_host_env` | M2 |
 | INV-RUN-3 | F | `runner_pipes::stress_both_pipes_past_capacity` | M2, M4 |
-| INV-RUN-4 | F | `runner_timeout::fault_timeout_kills_and_reaps`, `runner_timeout::fault_timeout_under_pipe_flood` | M2, M4 |
+| INV-RUN-4 | F | `runner_timeout::fault_timeout_kills_and_reaps`, `runner_timeout::fault_timeout_under_pipe_flood`, `runner_timeout::fault_max_safe_integer_timeout_does_not_overflow` in `crates/verirun-store/tests/`, `traversal::dropping_process_group_terminates_background_members` in `crates/verirun-platform/tests/` | M2, M4, 0.2.0 |
 | INV-RUN-5 | P | `scheduler_prop::prop_worker_count_independence` | M2 |
 | INV-RUN-6 | F | `scheduler_faults::fault_failure_propagation_sets`, `manifest_faults::fault_skipped_records_verify_clean` | M2 |
-| INV-RUN-7 | F | `scheduler_faults::fault_cache_missing_blob_reexecutes`, `scheduler_faults::fault_cache_record_with_wrong_artifact_paths_reexecutes` | M2, Audit R2 |
+| INV-RUN-7 | F | `scheduler_faults::fault_cache_missing_blob_reexecutes`, `scheduler_faults::fault_cache_record_with_wrong_artifact_paths_reexecutes`, `scheduler_faults::fault_cache_record_with_wrong_artifact_bytes_reexecutes` in `crates/verirun-store/tests/`, `cli_pin_and_inputs::run_with_inputs_and_pin_flag` in `crates/verirun-cli/tests/` | M2, Audit R2, 0.2.0 |
 | INV-RUN-8 | F | `scheduler_faults::fault_work_root_lock_blocks_second_run` | Audit R2 |
 | INV-SBX-1 | F | `paths_faults::fault_parent_traversal_table` in `crates/verirun-core/tests/` | M2 |
 | INV-SBX-2 | F | `paths_faults::fault_absolute_path_table` | M2 |
@@ -346,21 +346,21 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-MAN-2 | F | `manifest_faults::fault_verify_from_relocated_store` in `crates/verirun-cli/tests/` | M3 |
 | INV-MAN-3 | F | `tamper_suite::fault_bitflip_leaf_blobs` in `crates/verirun-cli/tests/` | M4 |
 | INV-MAN-4 | F | `tamper_suite::fault_bitflip_manifest_exhaustive_small` | M4 |
-| INV-MAN-5 | F | `tamper_suite::fault_digest_pointer_swaps` | M4 |
+| INV-MAN-5 | F | `tamper_suite::fault_digest_pointer_swaps`, `tamper_suite::fault_artifact_size_tampered_with_recomputed_root` in `crates/verirun-cli/tests/` | M4, 0.2.0 |
 | INV-MAN-6 | V, F | `manifest_vectors::vec_merkle_shapes_0_1_2_3_5`, `tamper_suite::fault_root_field_edited` | M2, M4 |
-| INV-GC-1 | F | `gc_faults::fault_gc_preserves_pinned_reachability` in `crates/verirun-store/tests/` | M3 |
+| INV-GC-1 | F | `gc_faults::fault_gc_preserves_pinned_reachability`, `gc_faults::fault_gc_corrupt_pinned_manifest_root_aborts` in `crates/verirun-store/tests/`, `cli_pin_and_inputs::pin_and_unpin_govern_garbage_collection` in `crates/verirun-cli/tests/` | M3, 0.2.0 |
 | INV-GC-2 | F | `gc_faults::fault_gc_grace_boundary` | M3 |
 | INV-GC-3 | F | `gc_faults::fault_gc_reclaims_stale_tmp_only` | M3 |
 | INV-GC-4 | F | `gc_faults::fault_gc_dry_run_deletes_nothing` | M3 |
 | INV-GC-5 | F | `gc_faults::fault_gc_interrupted_sweep_rerun_completes` | R3 |
 | INV-GC-6 | F | `gc_faults::fault_gc_breaks_a_stale_lock_and_sweeps`, `gc_faults::fault_gc_fresh_lock_refuses_and_names_the_remedy` | Audit R16 |
 | INV-CLI-1 | F | `cli_exit_codes::fault_exit_code_table` in `crates/verirun-cli/tests/` | M3 |
-| INV-CLI-2 | F | `cli_exit_codes::fault_json_parity_on_failure` | M3 |
+| INV-CLI-2 | F | `cli_exit_codes::fault_json_parity_on_failure`, `cli_exit_codes::fault_json_parity_on_argument_and_seed_errors` in `crates/verirun-cli/tests/` | M3, 0.2.0 |
 | INV-CLI-3 | P | `cli_seed::prop_seed_trace_reproducibility` | M3 |
 | INV-CLI-4 | F | `cli_diff::fault_diff_semantics_table` | M3 |
 | INV-CLI-5 | F | `cli_show::fault_show_verifies_before_display` | R5 |
 | INV-LAT-1 | B | `canonical_bench::bench_encode_throughput`, `cas_bench::bench_hash_throughput` in the owning crates' `benches/` | M4 |
 | INV-LAT-2 | F | `runner_pipes::stress_unbounded_output_under_deadline`, `runner_pipes::stress_never_closes_pipes_at_full_size` | M4, R3 |
 | INV-LAT-3 | F, B | `manifest_faults::fault_verify_single_pass_counting_reader`, benchmark `cas_bench::bench_verify_throughput` | M4 |
-| INV-LAT-4 | F | `dag_faults::fault_invalid_run_leaves_store_untouched` (in crates/verirun-cli/tests/) | M2 |
-| INV-PLAT-1 | F | `platform_identity::tutorial_spec_manifest_digest_is_platform_identical` in `crates/verirun-store/tests/` | Perfection W5 |
+| INV-LAT-4 | F | `dag_faults::fault_invalid_run_leaves_store_untouched`, `cli_pin_and_inputs::invalid_input_bindings_leave_store_and_work_untouched` in `crates/verirun-cli/tests/` | M2, 0.2.0 |
+| INV-PLAT-1 | F | `platform_identity::tutorial_spec_manifest_digest_is_platform_identical`, `platform_identity::portable_spec_manifest_digest_is_identical_across_all_platforms` in `crates/verirun-store/tests/` | Perfection W5, 0.2.0 |

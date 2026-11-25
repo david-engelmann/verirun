@@ -25,7 +25,7 @@ use verirun_core::cas::{
     temp_file_name_stream,
 };
 use verirun_core::digest::{Digest, DomainTag, begin, hash_bytes};
-use verirun_platform::rename_durable;
+use verirun_platform::rename_replace;
 
 use crate::error::{StoreError, StoreStep};
 use crate::sha256::Sha256Factory;
@@ -49,7 +49,7 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 static PROCESS_NONCE: OnceLock<u64> = OnceLock::new();
 
 /// This process's temp name nonce, minted on first use.
-fn process_nonce() -> u64 {
+pub(crate) fn process_nonce() -> u64 {
     *PROCESS_NONCE.get_or_init(|| {
         let elapsed = crate::clock::now()
             .duration_since(UNIX_EPOCH)
@@ -466,9 +466,38 @@ impl Cas {
     /// Returns the [`StoreError`] of [`Cas::put_stream`].
     pub fn put_stream_observed(
         &self,
-        mut reader: impl Read,
+        reader: impl Read,
         observer: &mut dyn PutObserver,
     ) -> Result<Digest, StoreError> {
+        self.put_stream_sized_observed(reader, observer)
+            .map(|(digest, _)| digest)
+    }
+
+    /// Streams a reader into the store and returns both the stored
+    /// digest and the exact number of bytes hashed.
+    ///
+    /// Used by output collection so [`verirun_core::manifest::ArtifactRecord`]
+    /// commits to the exact byte count hashed into the store rather
+    /// than a separate metadata query.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StoreError`] when the reader fails or any protocol
+    /// step fails.
+    pub fn put_stream_sized(&self, reader: impl Read) -> Result<(Digest, u64), StoreError> {
+        self.put_stream_sized_observed(reader, &mut NoopObserver)
+    }
+
+    /// [`Cas::put_stream_sized`] with a [`PutObserver`] attached.
+    ///
+    /// # Errors
+    ///
+    /// Returns the [`StoreError`] of [`Cas::put_stream_sized`].
+    pub fn put_stream_sized_observed(
+        &self,
+        mut reader: impl Read,
+        observer: &mut dyn PutObserver,
+    ) -> Result<(Digest, u64), StoreError> {
         let temp_path = self.fresh_temp_path(&temp_file_name_stream(
             std::process::id(),
             WORKER_ID,
@@ -479,6 +508,7 @@ impl Cas {
             .map_err(|err| io_error(&temp_path, StoreStep::CreateTemp, err))?;
         let mut hasher = begin(&self.factory, DomainTag::Blob);
         let mut buffer = vec![0_u8; STREAM_BUFFER_BYTES];
+        let mut total: u64 = 0;
         loop {
             // An interrupted read is a normal event on a busy
             // host, not a failure of the stream (F6): retry it.
@@ -495,11 +525,13 @@ impl Cas {
             hasher.update(&buffer[..read]);
             file.write_all(&buffer[..read])
                 .map_err(|err| io_error(&temp_path, StoreStep::Write, err))?;
+            total += read as u64;
             observer.on_chunk(read);
         }
         observer.on_phase(PutPhase::Writing);
         let digest = hasher.finalize();
-        self.finish_put(file, &temp_path, &digest, observer)
+        let stored = self.finish_put(file, &temp_path, &digest, observer)?;
+        Ok((stored, total))
     }
 
     /// Steps 2 to 4 of the put protocol, shared by every put shape:
@@ -551,7 +583,7 @@ impl Cas {
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => false,
             Err(err) => return Err(io_error(&shard_dir, StoreStep::CreateShard, err)),
         };
-        match rename_durable(temp_path, &destination) {
+        match rename_replace(temp_path, &destination) {
             Ok(()) => {}
             Err(_err) if destination.is_file() => {
                 // A concurrent put of the same digest landed the

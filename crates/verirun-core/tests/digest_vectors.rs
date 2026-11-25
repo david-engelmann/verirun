@@ -1,6 +1,8 @@
 //! Framing vectors, checked against a recording hasher that captures
 //! the exact bytes core feeds the hash function.
 
+#![forbid(unsafe_code)]
+
 use std::sync::{Arc, Mutex};
 
 use verirun_core::digest::{
@@ -224,7 +226,7 @@ fn digest_hex_length_counts_characters() {
 
     // Sixty-four characters of which one is multibyte, so the
     // byte count is 65: the length is right in characters and
-    // the failure is the character itself, not the length.
+    // the failure names the actual character and its position.
     let wide = format!("{}é", "a".repeat(63));
     assert_eq!(wide.chars().count(), 64);
     assert_eq!(wide.len(), 65);
@@ -232,5 +234,21 @@ fn digest_hex_length_counts_characters() {
     assert_eq!(
         err.kind(),
         verirun_core::error::DigestErrorKind::InvalidCharacter
+    );
+    assert!(
+        err.detail().contains("character 'é' at position 63"),
+        "multibyte char and position reported accurately: {err}"
+    );
+
+    let leading_emoji = format!("🦀{}", "a".repeat(63));
+    assert_eq!(leading_emoji.chars().count(), 64);
+    let err = Digest::from_hex(&leading_emoji).expect_err("emoji rejected");
+    assert_eq!(
+        err.kind(),
+        verirun_core::error::DigestErrorKind::InvalidCharacter
+    );
+    assert!(
+        err.detail().contains("character '🦀' at position 0"),
+        "4-byte UTF-8 char and position reported accurately: {err}"
     );
 }

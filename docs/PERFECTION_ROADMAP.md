@@ -52,4 +52,8 @@ The docs rounds P7 and P14 close each cycle. They include the tutorial and the a
 
 ## Closure criteria
 
-The programme closes when all of the following stand on main. Slices W1 to W7 landed with their gate evidence recorded in the register. Rounds P1 to P14 landed. F9 and F16 landed or re-justified on the record with measurements. F11 landed in W3. The register carries a closing summary in the audit register's form. Final main CI is green on both the Linux and the Windows jobs. At closure, D2 returns to David with the perfection evidence in hand, and the freeze question is asked again on a perfected repo.
+The programme closes when all of the following stand on main. Slices W1 to W7 landed with their gate evidence recorded in the register. Rounds P1 to P14 landed. F9 and F16 landed or re-justified on the record with measurements. F11 landed in W3. The register carries a closing summary in the audit register's form. Final main CI is green across the Linux, macOS, and Windows jobs. At closure, D2 returns to David with the perfection evidence in hand, and the freeze question is asked again on a perfected repo.
+
+## Programme closure status
+
+Closed for the `0.2.0` release. Slices W1 to W7, perfection rounds P1 to P14, owner decision PF-6 (`rename_replace`), CLI `pin`, `unpin`, `run --pin`, and `run --input`, artifact byte-length verification, and full Linux, macOS, and Windows CI parity have all landed with their evidence recorded in `docs/PERFECTION_REGISTER.md`.

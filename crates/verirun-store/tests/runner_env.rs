@@ -8,6 +8,8 @@
 //! marker variable; the inner invocation runs the real assertion
 //! against a task that dumps its environment.
 
+#![forbid(unsafe_code)]
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};

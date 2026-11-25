@@ -2,6 +2,8 @@
 //! inside the verirun number domain, the number domain boundaries, the
 //! UTF-16 discriminating pair, and the string escaping table.
 
+#![forbid(unsafe_code)]
+
 use verirun_core::canonical::{format_number, to_vec};
 use verirun_core::error::{CanonicalErrorKind, ParseErrorKind};
 use verirun_core::parse::parse;

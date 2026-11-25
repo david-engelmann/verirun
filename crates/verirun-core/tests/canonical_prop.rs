@@ -1,5 +1,7 @@
 //! Property tests for the canonical encoder and parser.
 
+#![forbid(unsafe_code)]
+
 use proptest::prelude::*;
 use verirun_core::canonical::{format_number, to_vec};
 use verirun_core::parse::parse;

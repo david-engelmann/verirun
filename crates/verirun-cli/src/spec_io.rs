@@ -1,4 +1,4 @@
-//! Run file loading (docs/ARCHITECTURE.md section 2.3).
+//! Run file loading (docs/ARCHITECTURE.md section 2.4).
 //!
 //! A transport concern only: the file is read as bytes and the
 //! bytes go to core parsing and validation, so the strict

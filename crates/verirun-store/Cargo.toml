@@ -1,19 +1,19 @@
 [package]
 name = "verirun-store"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-readme.workspace = true
+readme = "README.md"
 documentation = "https://docs.rs/verirun-store"
-description = "I/O adapters for verirun. SHA-256 behind the core HasherFactory seam, and the crash-safe filesystem content-addressed store."
+description = "Storage and execution adapters for verirun providing the crash-safe content-addressed store, hermetic task runner, parallel DAG scheduler, and garbage collector."
 keywords = ["content-addressed", "storage", "sha256", "atomic"]
 categories = ["filesystem"]
 
 [dependencies]
-verirun-core = { version = "0.1.0", path = "../verirun-core" }
-verirun-platform = { version = "0.1.0", path = "../verirun-platform" }
+verirun-core = { version = "0.2.0", path = "../verirun-core" }
+verirun-platform = { version = "0.2.0", path = "../verirun-platform" }
 sha2.workspace = true
 
 [lints]

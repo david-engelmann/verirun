@@ -48,9 +48,10 @@ pub struct TaskSpec {
     /// Command arguments, in declared order. Order is part of the
     /// execution digest.
     pub args: Vec<String>,
-    /// Declared environment pairs. The fixed default keys of
-    /// section 8.1 (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`) must not
-    /// appear here; validation rejects a spec that declares one.
+    /// Declared environment pairs. The runner-managed keys of
+    /// section 8.1 (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`, `TMPDIR`)
+    /// must not appear here; validation rejects a spec that
+    /// declares one.
     pub env: BTreeMap<String, String>,
     /// Sandbox relative paths of files to materialize from the
     /// store before execution, as declared.
@@ -326,8 +327,10 @@ const TASK_FIELDS: [&str; 8] = [
 ];
 
 /// The environment keys the runner sets unconditionally
-/// (section 8.1). A spec must not declare them.
-const FIXED_ENV_KEYS: [&str; 3] = ["LC_ALL", "SOURCE_DATE_EPOCH", "TZ"];
+/// (section 8.1): the three fixed defaults plus `TMPDIR`. A spec
+/// must not declare them, so no declared value can enter the
+/// execution digest and then be overwritten at spawn.
+const FIXED_ENV_KEYS: [&str; 4] = ["LC_ALL", "SOURCE_DATE_EPOCH", "TMPDIR", "TZ"];
 
 const fn as_object(value: &Value) -> Option<&Vec<(String, Value)>> {
     match value {
@@ -471,7 +474,7 @@ fn parse_task(item: &Value) -> Result<TaskSpec, DagError> {
     let timeout_ms = match field(pairs, "timeout_ms") {
         None => None,
         Some(Value::Number(value)) => {
-            if *value < 1.0 || *value > 9_007_199_254_740_991.0 || value.fract() != 0.0 {
+            if *value < 1.0 || *value > crate::canonical::MAX_SAFE_INTEGER || value.fract() != 0.0 {
                 return Err(schema(
                     named,
                     "\"timeout_ms\" must be an integer of at least 1",

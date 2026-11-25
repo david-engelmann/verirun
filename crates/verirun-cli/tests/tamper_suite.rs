@@ -323,3 +323,61 @@ fn fault_root_field_edited() {
     assert_eq!(output.status.code(), Some(2));
     remove_tree(&root);
 }
+
+#[test]
+fn fault_artifact_size_tampered_with_recomputed_root() {
+    // An attacker edits `ArtifactRecord.bytes`, recomputes the
+    // Merkle root so check 3 passes, and stores the forged
+    // manifest as a valid canonical blob so checks 1 and 2 pass.
+    // Check 4 must compare the verified blob length against
+    // `ArtifactRecord.bytes` and fail with exit code 2.
+    let root = fresh_root("size-tamper");
+    let (cas, outcome) = run_spec(&root, LEAF_SPEC);
+    let mut forged_tasks = outcome.manifest.tasks;
+    let genuine_digest = forged_tasks[0].artifacts[0].digest;
+    let genuine_bytes = forged_tasks[0].artifacts[0].bytes;
+    assert_eq!(genuine_bytes, 21, "leaf-artifact-content is 21 bytes");
+    forged_tasks[0].artifacts[0].bytes = 9999;
+    let forged = Manifest::build(cas.factory(), forged_tasks);
+    let forged_digest = cas
+        .put_bytes(&forged.canonical_bytes().expect("forged manifest encodes"))
+        .expect("forged manifest stores");
+
+    let error = verify_manifest(&cas, &forged_digest)
+        .expect_err("a manifest with tampered artifact byte length must fail verification");
+    assert!(
+        matches!(
+            error,
+            VerifyError::ArtifactSizeMismatch {
+                digest,
+                expected: 9999,
+                actual: 21,
+                ref task_id,
+                ref path,
+            } if digest == genuine_digest && task_id == "leaf" && path == "a.txt"
+        ),
+        "expected ArtifactSizeMismatch, got {error:?}"
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_verirun"))
+        .args([
+            "verify",
+            &forged_digest.to_hex(),
+            "--cas",
+            root.join("cas").to_str().expect("UTF-8 path"),
+            "--json",
+        ])
+        .env_remove("SIM_SEED")
+        .output()
+        .expect("the binary runs");
+    assert_eq!(output.status.code(), Some(2));
+    let parsed: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).expect("JSON parses");
+    assert_eq!(parsed["kind"], "artifact_size_mismatch");
+    assert_eq!(parsed["digest"], genuine_digest.to_hex());
+    assert_eq!(parsed["expected"], 9999);
+    assert_eq!(parsed["actual"], 21);
+    assert_eq!(parsed["task_id"], "leaf");
+    assert_eq!(parsed["path"], "a.txt");
+    remove_tree(&root);
+}

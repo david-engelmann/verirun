@@ -1,6 +1,8 @@
 //! CAS property: put and get are inverse, and a repeated put of the
 //! same bytes leaves exactly one object (INV-CAS-4).
 
+#![forbid(unsafe_code)]
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -77,8 +79,6 @@ fn framed_digest(bytes: &[u8]) -> verirun_core::digest::Digest {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig::with_cases(64))]
-
     #[test]
     fn prop_put_get_identity(bytes in prop::collection::vec(any::<u8>(), 0..4096)) {
         let store = TempCas::new("prop");

@@ -1,6 +1,8 @@
 //! Concurrent writer stress: identical and distinct puts racing on
 //! one store must all hold (INV-CAS-5).
 
+#![forbid(unsafe_code)]
+
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Barrier};
 

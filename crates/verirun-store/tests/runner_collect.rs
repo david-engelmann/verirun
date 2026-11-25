@@ -8,6 +8,8 @@
 //! bit, and nothing else. A corrupted input blob aborts the run
 //! before the consuming task spawns.
 
+#![forbid(unsafe_code)]
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};

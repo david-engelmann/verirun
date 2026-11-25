@@ -5,8 +5,8 @@
 //! relative creates through the native `NtCreateFile`, with
 //! each component opened relative to its parent's handle and
 //! reparse points rejected from the opened handle's own
-//! attributes. It also holds the write through rename the
-//! store's put protocol uses.
+//! attributes. It also holds [`rename_replace`], the atomic
+//! write-through rename the store's put and cache protocols use.
 
 use std::ffi::c_void;
 use std::fs::File;
@@ -435,25 +435,24 @@ fn map_nt_status(status: i32) -> TraversalError {
     }
 }
 
-/// Renames `from` to `to` with the write through flag set.
+/// Atomically renames `from` to `to`, replacing an existing
+/// writable destination with write-through metadata ordering.
 ///
-/// The standard library rename passes no write through
-/// flag, so the rename itself would carry no ordering
-/// against a crash. The flag makes the platform flush the
-/// rename's own metadata before the call returns, which is
-/// the strongest ordering Windows offers for a directory
-/// entry, there being no directory sync. One behavior of
-/// the standard library rename is deliberately not carried
-/// over. Its Windows form retries a refused rename through
-/// a second call that ignores the read only attribute,
-/// where this rename refuses, and the store's put completes
-/// through its discard path instead, which the identical
-/// bytes by digest make equivalent.
+/// On Windows this calls `MoveFileExW` with
+/// `MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH` so the
+/// platform flushes the rename's metadata before returning, the
+/// strongest ordering Windows offers in the absence of directory
+/// sync. Unlike `std::fs::rename`, a read-only destination is not
+/// retried by clearing attributes; the store's put protocol
+/// completes concurrent identical-digest races through its discard
+/// path instead. On Unix the counterpart performs an atomic
+/// `rename`, with durability completed by the caller's directory
+/// `sync_all`.
 ///
 /// # Errors
 ///
 /// Returns the rename failure from the operating system.
-pub fn rename_durable(from: &Path, to: &Path) -> io::Result<()> {
+pub fn rename_replace(from: &Path, to: &Path) -> io::Result<()> {
     let from_wide: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
     let to_wide: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
     // SAFETY: both paths are valid nul terminated UTF-16

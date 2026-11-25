@@ -20,7 +20,7 @@
 //!   against the grace threshold, sweep under the lock, with a dry
 //!   run that deletes nothing (section 10).
 //! - [`clock`]: the single wall clock read in the workspace, used
-//!   only for garbage collection ages.
+//!   for garbage collection ages and per-process temporary file nonces.
 //! - [`error`]: the store and run error types, carrying the CAS path
 //!   and the protocol step in progress on every failure.
 

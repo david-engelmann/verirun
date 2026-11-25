@@ -1,6 +1,6 @@
 # verirun Architecture
 
-Status: Milestone 0 design. This document is the normative design for verirun. No Rust code exists yet. Milestones 1 to 4 implement exactly what is specified here, in stages. Where implementation experience forces a design change, the change lands in this document in the same pull request as the code, with the reason recorded.
+Status. Normative design for verirun, current through version 0.2.0 across Milestones 1 to 4, roadmap lanes R1 to R7, the 50-round audit programme, and the 14-round perfection programme. Where implementation experience forces a design change, the change lands in this document in the same pull request as the code, with the reason recorded.
 
 Normative words: MUST and MUST NOT state rules an implementation has to follow to claim conformance. SHOULD states a strong default that needs a recorded reason to deviate from.
 
@@ -17,13 +17,13 @@ Four properties carry the design, and every mechanism in this document exists to
 
 ## 2. Crate and module boundaries
 
-The workspace holds three crates. Dependency direction is one way only. Lower crates never depend on higher crates.
+The workspace holds four crates. Dependency direction is one way only. Lower crates never depend on higher crates.
 
 ### 2.1 verirun-core
 
 The deterministic core. Strictly std-only per DECISIONS.md Q5. No external crates in its dependency tree, in normal or build dependencies. Dev-dependencies for tests and oracles are the only exception, and they never ship in the library.
 
-Rules that bind this crate:
+Rules that bind this crate
 
 - `#![forbid(unsafe_code)]` at the crate root.
 - No filesystem, process, network, clock, or thread-randomness access. The crate is pure computation over bytes and values handed to it.
@@ -31,13 +31,13 @@ Rules that bind this crate:
 - SHA-256 is not implemented here and not imported here. The crate defines the digest framing and a `StreamingHasher` trait. Adapter crates supply the concrete hasher. See section 5.4 for the reasoning.
 - ECMAScript number formatting is implemented here on top of the standard library shortest round-trip digits. See section 4.3.
 
-Modules:
+Modules
 
 | Module | Contents |
 | --- | --- |
 | `value` | The `Value` and `Number` data model. Section 3.1. |
 | `parse` | Strict JSON parser over byte slices. Byte offsets on every error. Depth limit. Duplicate key rejection. Section 4.5. |
-| `canonical` | RFC 8785 canonical encoder. Writes into any `core::fmt::Write` or byte sink without building an intermediate document string. Section 4. |
+| `canonical` | RFC 8785 canonical encoder. Writes into any `ByteSink` without building an intermediate document string. Section 4. |
 | `digest` | `Digest` type, hex codec, domain tags, tuple framing, the `StreamingHasher` trait, execution tuple encoding. Section 5. |
 | `cas` | Content-addressed store contracts. Path derivation, temporary file naming as pure functions, the put state machine types, reachability planning for garbage collection. No I/O. Section 6. |
 | `dag` | `TaskSpec`, graph validation (Kahn), ready-set scheduling order, output collision checks. Section 7. |
@@ -45,53 +45,70 @@ Modules:
 | `manifest` | `Manifest`, `TaskRecord`, `ArtifactRecord`, Merkle tree construction and verification planning. Section 9. |
 | `error` | All core error types with diagnostic context fields. Section 11. |
 
-### 2.2 verirun-store
+### 2.2 verirun-platform
 
-The I/O adapter crate. Depends on `verirun-core` and on `sha2` for the concrete SHA-256 implementation. Still `#![forbid(unsafe_code)]`.
+The operating system boundary crate. Depends on `libc` on Unix and `windows-sys` on Windows, and on nothing inside the workspace. Isolates the workspace's sole OS FFI `unsafe` blocks behind safe primitives with `#![deny(unsafe_op_in_unsafe_fn)]` enforced at the crate root.
 
-Modules:
-
-| Module | Contents |
-| --- | --- |
-| `sha256` | `Sha256Hasher`, the `StreamingHasher` implementation backed by the `sha2` crate. The only module in the workspace that names a hash implementation. |
-| `cas_fs` | The filesystem content-addressed store. The 4-step atomic put protocol, streaming reads, verify-on-read, pin files, the by-exec cache index. Section 6. |
-| `runner` | Hermetic subprocess execution. Environment construction, spawn, concurrent pipe drains, timeout enforcement, output collection. Sections 7 and 8. |
-| `scheduler` | Worker pool over the validated DAG. Lexicographic ready order, failure propagation, outcome collection into an ordered map. Section 7.3. |
-| `gc` | Garbage collection execution. Mark from pins, sweep with grace rules, dry run reporting. Section 10. |
-| `clock` | The single place adapter code reads wall-clock time, used only for garbage collection grace decisions and stale temporary file detection. Core crates never import it. Lands with garbage collection in Milestone 3. |
-
-### 2.3 verirun-cli
-
-The binary crate. Produces the `verirun` executable. Depends on `verirun-core` and `verirun-store`, plus `clap` for argument parsing and `serde_json` for run file reading convenience and `--json` output rendering at the process boundary.
-
-Modules:
+Modules
 
 | Module | Contents |
 | --- | --- |
-| `main` | Entry point, top level error to exit code mapping. Section 12. |
-| `cmd_run` | `verirun run` implementation. |
+| `lib` | Public re-exports of `ProcessGroup`, `DirHandle`, `rename_replace`, and the shared `TraversalError` enum. |
+| `unix` | Unix process group (`libc::kill` with `SIGKILL` on `-pid` at timeout and on `Drop`), `openat` no-follow `DirHandle` mapping `ELOOP`, FreeBSD `EMLINK`, and NetBSD `EFTYPE` to `TraversalError::Link`, and atomic `rename_replace`. |
+| `windows` | Windows job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, handle-relative `NtCreateFile` `DirHandle` with reparse point rejection, and `MoveFileExW` `rename_replace` with `MOVEFILE_REPLACE_EXISTING` and `MOVEFILE_WRITE_THROUGH`. |
+
+### 2.3 verirun-store
+
+The I/O adapter crate. Depends on `verirun-core`, `verirun-platform`, and `sha2` for the concrete SHA-256 implementation. Enforces `#![forbid(unsafe_code)]`.
+
+Modules
+
+| Module | Contents |
+| --- | --- |
+| `sha256` | `Sha256Hasher` and `Sha256Factory`, the `StreamingHasher` implementation backed by `sha2`. The only module in the workspace that names a hash implementation. |
+| `cas_fs` | The filesystem content-addressed store. The 4-step atomic put protocol, sized streaming puts, streaming verified reads, pin files, and `by-exec` cache paths. Section 6. |
+| `runner` | Hermetic subprocess execution. Environment construction, spawn, concurrent pipe drains, timeout enforcement, and handle-relative output collection. Sections 7 and 8. |
+| `scheduler` | Worker pool over the validated DAG. Lexicographic ready order, failure propagation, validated `by-exec` cache lookup and publication, work-root locking, and manifest construction. Section 7.3. |
+| `gc` | Garbage collection execution. Pinned manifest verification, mark from pins, sweep with grace and lock staleness rules, and dry run reporting. Section 10. |
+| `clock` | The single place adapter code reads wall-clock time, used only for garbage collection ages and per-process temporary file nonces. Core crates never import it. |
+| `error` | `StoreError`, `StoreStep`, `RunError`, and `GcError` with path and step context. |
+
+### 2.4 verirun-cli
+
+The binary and pipeline crate. Produces the `verirun` executable. Depends on `verirun-core` and `verirun-store`, plus `clap` for argument parsing and `serde_json` for `--json` output rendering at the process boundary. Enforces `#![forbid(unsafe_code)]` on both `lib` and `main`.
+
+Modules
+
+| Module | Contents |
+| --- | --- |
+| `lib` | `CliError`, `error_json`, `run_spec_bytes`, and `verify_manifest` / `verify_manifest_observed`. |
+| `main` | Entry point, argument parsing, seed reporting, JSON rendering, and total error to exit code mapping. Section 12. |
+| `cmd_run` | `verirun run` implementation including `--input` staging and `--pin`. |
 | `cmd_verify` | `verirun verify` implementation. |
+| `cmd_show` | `verirun show` implementation (verifies before rendering). |
 | `cmd_diff` | `verirun diff` implementation. |
+| `cmd_pin` | `verirun pin` implementation (verifies before writing pin). |
+| `cmd_unpin` | `verirun unpin` implementation. |
 | `cmd_gc` | `verirun gc` implementation. |
-| `spec_io` | Run file loading. Parses JSON, hands the value to core validation, renders validation errors with file context. |
+| `spec_io` | Run file loading. Reads bytes and hands them to core `parse` and `validate_run_spec`. |
 
-Boundary rules for the CLI:
+Boundary rules for the CLI
 
 - The CLI never canonicalizes, hashes, or validates on its own. It calls core for every decision and store for every side effect.
-- Run file parsing in the CLI is a transport concern only. The parsed value is re-checked by core, including duplicate key rejection at the byte level, so a lenient transport parser cannot weaken validation. To keep that guarantee, the CLI reads the run file as bytes and passes the bytes to core `parse` first. `serde_json` is used only for `--json` output, where key order is presentational and never hashed.
+- Run file parsing in the CLI is a transport concern only. The CLI reads the run file as bytes and passes the bytes to core `parse` first. `serde_json` is used only for `--json` output, where key order is presentational and never hashed.
 - Argument parsing errors exit with code 3, not the clap default of 2. Code 2 is reserved for integrity failures. Section 12.2.
 
-### 2.4 Dependency allowance summary
+### 2.5 Dependency allowance summary
 
 | Crate | Allowed external crates |
 | --- | --- |
-| verirun-core | None. Dev-dependencies only: `proptest`, plus test oracles. |
-| verirun-store | `sha2`. Dev-dependencies: `proptest`. |
-| verirun-cli | `clap`, `serde_json`. |
+| `verirun-core` | None. Dev-dependencies only (`proptest`). |
+| `verirun-platform` | `libc` on Unix and `windows-sys` on Windows. |
+| `verirun-store` | `sha2`. Dev-dependencies (`proptest`). |
+| `verirun-cli` | `clap`, `serde_json`. Dev-dependencies (`proptest`). |
 | Benchmarks | None. Hand-rolled harnesses on `std::time::Instant`, in the owning crate's `benches/` directory. |
-| Any crate | `crc32fast` is allowed by DECISIONS.md Q5 but has no planned use. It stays out until a concrete need lands with a design note. |
 
-Every crate root carries `//!` architectural documentation. Lint configuration lives in each `Cargo.toml` under `[lints.clippy]` with `all`, `pedantic`, and `nursery` at deny level, plus `todo` and `unimplemented` denied, and `allow_attributes_without_reason` denied. Any local allow carries a `reason` string.
+Every crate root carries `//!` architectural documentation. Workspace lint configuration lives in the root `Cargo.toml` under `[workspace.lints]` with `missing_docs`, `clippy::all`, `clippy::pedantic`, `clippy::nursery`, `clippy::todo`, `clippy::unimplemented`, and `clippy::allow_attributes_without_reason` all at deny level. Any local allow carries a `reason` string.
 
 ## 3. Core data model
 
@@ -117,7 +134,7 @@ A run file is a JSON object with one field, `tasks`, an array of task objects. E
 | `task_id` | string | Non-empty, and a single safe path component: no slash, no backslash, and not "." or "..". The id names the task's sandbox directory under the run's tasks folder, so anything else would escape the layout. Unique across the run. Byte order defines sort order everywhere. |
 | `executable` | string | Non-empty. Recorded verbatim in the execution digest. Section 8.2 covers resolution. |
 | `args` | array of strings | Ordered. May be empty. Order is part of the execution digest. |
-| `env` | object of string to string | Declared environment pairs. May be empty. The fixed default keys of section 8.1 MUST NOT appear here. |
+| `env` | object of string to string | Declared environment pairs. May be empty. The fixed default keys and `TMPDIR` of section 8.1 MUST NOT appear here. |
 | `inputs` | array of strings | Sandbox relative paths of files to materialize from the store before execution. May be empty. |
 | `outputs` | array of strings | Sandbox relative paths the task promises to produce. May be empty. Unique across the whole run. |
 | `depends_on` | array of strings | Task ids that must succeed first. May be empty. |
@@ -372,7 +389,7 @@ The same protocol runs on Windows, with each step mapped to the platform's own p
 | --- | --- | --- | --- |
 | Streamed write | Create new file write | Create new file write | None |
 | File sync | fsync through sync_all | FlushFileBuffers through sync_all | None |
-| Rename | rename | MoveFileEx with the write-through flag | None in atomicity |
+| Rename (`rename_replace`) | `rename` (with durability completed by the caller's parent-directory `sync_all`) | `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` and `MOVEFILE_WRITE_THROUGH` | None in atomicity |
 | Directory sync | fsync on the directory | No equivalent exists | The newest entry can be lost in a crash even though the object bytes were flushed and the rename was written through. The loss reads as a missing object, never as corrupt data, because every read rehashes what it returns |
 | Read-only replace | The rename replaces the object | Replacement of a read-only object is refused, and the put completes through its discard path | None in outcome |
 | Stored file removal | unlink | The read-only attribute is cleared, then the file is deleted | None in outcome |
@@ -425,7 +442,7 @@ The validator computes indegrees over `BTreeMap` structures and processes a lexi
 
 ### 7.4 Cache
 
-Before executing a ready task, the scheduler looks up its execution digest in `by-exec/`. A hit is honored only when the record it names parses, names the looked-up execution digest, is stored as the canonical encoding of its own fields, names exactly the task's declared outputs as its artifact paths, and every blob the record names still exists and re-hashes correctly; the scheduler then reuses the recorded artifacts and marks the task Cached, with the original stdout and stderr digests carried into the new record. Any other hit is ignored and the task executes. Cache state can therefore only ever cost time, never correctness. After a task succeeds, the canonical bytes of its record are stored as a blob, and a mapping from its execution digest to that blob's digest is written with the same atomic discipline as section 6.2, into the `by-exec/` tree. As with manifests (section 6.1), a record digest in the index means the blob digest of the record's canonical bytes; the framing digest of section 5.2 is what the Merkle tree uses, and verification recomputes it from the record's fields.
+Before executing a ready task, the scheduler looks up its execution digest in `by-exec/`. A hit is honored only when the record it names parses, names the looked-up execution digest, is stored as the canonical encoding of its own fields, names exactly the task's declared outputs as its artifact paths, and every blob the record names still exists, re-hashes correctly, and matches the byte length recorded in `ArtifactRecord.bytes`. When all checks pass, the scheduler reuses the recorded artifacts and marks the task `Cached`, with the original stdout and stderr digests carried into the new record. Any other hit is ignored and the task executes. Cache state can therefore only ever cost time, never correctness. After a task succeeds, the canonical bytes of its record are stored as a blob, and a mapping from its execution digest to that blob's digest is written into `by-exec/` through a `create_new` temporary file carrying the per-process nonce, synced, moved into place with `rename_replace`, and followed by parent directory syncs. As with manifests (section 6.1), a record digest in the index means the blob digest of the record's canonical bytes, while the framing digest of section 5.2 is what the Merkle tree uses and verification recomputes it from the record's fields.
 
 ## 8. Hermetic execution
 
@@ -436,7 +453,7 @@ The runner is hermetic by design on both platforms it runs on, and the boundary 
 The child process environment is built from nothing, via `env_clear()`, then populated with exactly:
 
 - The task's declared `env` pairs.
-- Fixed defaults: `TZ=UTC`, `LC_ALL=C`, `SOURCE_DATE_EPOCH=0`. A spec that tries to declare any of these keys is rejected during validation. Fixed means fixed.
+- Fixed defaults `TZ=UTC`, `LC_ALL=C`, and `SOURCE_DATE_EPOCH=0`. A spec that tries to declare any of these keys, or `TMPDIR`, is rejected during validation so no declared value can enter `exec_digest` and be silently overwritten at spawn.
 - `TMPDIR`, set by the runner to the task's private temporary directory inside its sandbox. This value is host-specific, so it is excluded from the environment digest (section 5.3) and from the manifest.
 
 There is no `PATH` inheritance. See section 8.2. The effective environment is sorted by key before spawn for stable diagnostics, though spawn order itself is not observable by well-behaved children.
@@ -452,7 +469,7 @@ The spec's `executable` string is recorded verbatim in the execution digest. Res
 - The child runs with its working directory set to its sandbox, stdin from null, and stdout and stderr piped.
 - Two drains start before the runner waits on the child. Each pipe is read by a small reader thread that forwards chunks over a channel to a drain thread, which streams them through the store's streamed put (section 6.2); reads are 64 KiB. The channel seam is what lets the timeout path cut a stream at the grace bound without losing the bytes already delivered. Raw bytes are preserved exactly, including NUL bytes and invalid UTF-8. Nothing is decoded, trimmed, or line buffered anywhere on this path.
 - Concurrent draining is a correctness rule, not a performance choice. An OS pipe buffer holds a finite amount, typically 64 KiB. A child that fills the stderr buffer while the runner waits for stdout to close blocks forever. The classic deadlock is designed out by construction here, and the stress tests write far past the pipe capacity on both streams at once.
-- Timeout: when `timeout_ms` is present, a supervisor deadline applies from spawn. The child is attached at spawn to its platform's tree mechanism, a process group it leads on Unix and a job object on Windows, both held behind the `verirun-platform` seam. On expiry the runner terminates the whole tree, not only the child (on Unix the shell's builtin `kill` sends the signal to the group, the mechanism the runner has used since its first build; on Windows the seam terminates the job object), reaps the child with `wait`, and lets the drain threads run to end of stream on the now closed pipes, then collects them. A grandchild that escaped the tree, by creating its own session on Unix, can still hold a pipe open past the kill; under a job object that escape does not exist, because a job member cannot leave the job. For the escape that does exist, collection waits a bounded grace past the deadline and then cuts the stream, finalizing its store object from the bytes delivered by then, which are an exact prefix of the full stream. The task record shows TimedOut, the run continues with failure propagation, and the final exit code is 1. No path leaves the child running, and after a timeout no path leaves a drain blocked past the grace bound.
+- Timeout and group lifetime. When `timeout_ms` is present, a supervisor deadline computed via `Instant::checked_add` applies from spawn (budgets that exceed the host platform's maximum representable `Instant` are treated as unreachable deadlines rather than panicking). The child is attached at spawn to its platform's tree mechanism, a process group it leads on Unix and a job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` on Windows, both held behind the `verirun-platform` seam. On expiry the runner terminates the whole tree (on Unix `ProcessGroup::terminate` calls `libc::kill` directly with `SIGKILL` on `-pid`, and on Windows it terminates the job object), reaps the child with `wait`, and lets the drain threads run to end of stream on the now closed pipes. Dropping `ProcessGroup` at the end of execution likewise terminates any surviving background members on both platforms. A grandchild that escaped the tree by creating its own session on Unix can still hold a pipe open past the kill, whereas under a job object a member cannot leave the job. For the escape that exists on Unix, collection waits a bounded grace past the deadline and then cuts the stream, finalizing its store object from the bytes delivered by then, which are an exact prefix of the full stream. The task record shows `TimedOut`, the run continues with failure propagation, and the final exit code is 1.
 - Exit status: a child exit code is recorded as `exit_code`. Death by signal records exit code as absent and status as Failed, with the signal number in the CLI diagnostic output. Nonzero exit means Failed.
 
 ### 8.4 Sandbox and path rules
@@ -465,7 +482,7 @@ Each task gets a sandbox directory, `<work>/tasks/<task_id>/`, with subdirectori
 4. At collection time, the runner opens the declared output path component by component from the sandbox root, each component relative to a held handle for its parent directory, never by a path assembled from checked components. Any component that is a symbolic link fails the task, whether it is the final component or an intermediate directory, and whatever it points at, including a target inside the sandbox. Checking only the final path would let a symlinked intermediate directory carry the joined path outside the sandbox undetected, so the traversal is the rule, not a hardening extra. Because every step opens the object it checks, a component swapped between a check and an open cannot redirect the collection to a different object. A missing output marks the task Failed. A non-regular final component (directory, device, fifo) is rejected as an output.
 5. Input materialization walks the components of the destination path inside the sandbox input area, checking each prefix with `symlink_metadata` before writing any bytes, and rejects any symlink component the same way. The runner never follows a symlink out of the sandbox when collecting outputs or materializing inputs. Collection opens no component through a link, and materialization rejects every link component itself before any open through it.
 
-Undeclared files a task writes are ignored. They stay in the sandbox, are never collected, and the sandbox is scratch space the caller owns. The sandbox is cleared before the task's next execution begins, so what stays in it never survives into a later run's collection. Collection covers exactly the declared outputs, in sorted path order, each streamed into the store with its metadata captured as `(relative_path, content_sha256, byte_len, is_executable)`. `is_executable` on Unix is whether any execute bit is set in the mode. No timestamps, user ids, or group ids are captured anywhere. There is nothing time-shaped in an artifact record.
+Undeclared files a task writes are ignored. They stay in the sandbox, are never collected, and the sandbox is scratch space the caller owns. The sandbox is cleared before the task's next execution begins, so what stays in it never survives into a later run's collection. Collection covers exactly the declared outputs, in sorted path order, each streamed into the store through `Cas::put_stream_sized` so `ArtifactRecord.bytes` commits to the exact byte count hashed into the store rather than a separate metadata read, with `is_executable` captured from the Unix execute bits or the Windows executable extension rule. No timestamps, user ids, or group ids are captured anywhere. There is nothing time-shaped in an artifact record.
 
 ## 9. Manifests and the Merkle tree
 
@@ -503,7 +520,7 @@ Swapping two digest pointers inside a manifest, editing a status, or flipping on
 1. Fetch the manifest blob and re-hash it. Mismatch against the requested digest fails with exit code 2.
 2. Parse the manifest bytes with the strict parser and re-encode them. Bytes that are not the canonical encoding of their own content fail with exit code 2.
 3. Recompute every task record digest and the Merkle root from the fields. A mismatch against the stored `merkle_root` fails with exit code 2 and names the stored and recomputed roots.
-4. Collect the set of distinct artifact, stdout, and stderr digests the manifest names, deduplicated by digest across all records, and re-hash each distinct blob exactly once, however many records reference it. The first mismatch fails with exit code 2 and names the expected digest, the actual digest, and one task and path that referenced it.
+4. Collect the set of distinct artifact, stdout, and stderr digests the manifest names, deduplicated by digest across all records, and re-hash each distinct blob once, however many records reference it. Check every `ArtifactRecord.bytes` against the verified byte count of the blob it names. A digest mismatch or byte-length mismatch fails with exit code 2 and names the expected and actual values plus one referencing task and path (`VerifyError::BlobMismatch` or `VerifyError::ArtifactSizeMismatch`).
 
 ### 9.4 Diff
 
@@ -521,9 +538,9 @@ Comparison covers exactly the fields named above. Two records whose execution di
 
 GC reads wall-clock time for ages. That is why GC planning takes ages as inputs in core and reads the clock only in the adapter (`verirun-store::clock`). Deterministic code never decides anything from a clock. GC itself is a maintenance operation outside the determinism boundary: it changes what is stored, never what a digest means.
 
-Pins are files created through the store API (`Cas::pin_manifest`). Nothing pins automatically. In particular a run does not pin its own manifest, so an unpinned manifest and the blobs only it names become sweep candidates once they age past the grace threshold. A file in `pins/` whose name is not a digest with the `.pin` suffix is ignored by the pin listing.
+Pins are files created through the store API (`Cas::pin_manifest` and `Cas::unpin_manifest`) or the CLI (`verirun pin`, `verirun unpin`, and `verirun run --pin`). Nothing pins without an explicit request. An unpinned manifest and the blobs only it names become sweep candidates once they age past the grace threshold. `verirun pin` verifies the manifest under section 9.3 before creating its pin, while `verirun unpin` removes a pin unconditionally so a damaged pin can always be cleared. A file in `pins/` whose name is not a digest with the `.pin` suffix is ignored by the pin listing.
 
-A pin whose manifest is missing, or whose bytes fail verification or parsing, stops the collection before anything is swept (`GcError::MissingPinnedManifest` or `GcError::InvalidPinnedManifest`, exit 2). Deleting around a broken pin could destroy exactly the reachability the pin protects. By-exec entries are read for reachability only when a pinned record names the execution digest, and an absent or malformed entry names nothing. Entries themselves are never swept. Objects are never re-hashed during planning. The name is the index.
+A pin whose manifest is missing, or whose bytes fail blob verification, parsing, canonical re-encoding, or Merkle root recomputation, stops the collection before anything is swept (`GcError::MissingPinnedManifest` or `GcError::InvalidPinnedManifest`, exit 2). Deleting around a broken pin could destroy the reachability the pin protects. By-exec entries are read for reachability only when a pinned record names the execution digest, and an absent or malformed entry names nothing. Entries themselves are never swept. Leaf objects are never re-hashed during planning because the name is the index.
 
 ## 11. Error model
 
@@ -540,23 +557,25 @@ Every domain error type implements `std::error::Error` and `Display`, and every 
 | `RunError` | Task id, spawn or drain detail, the timeout budget when a deadline fired. |
 | `VerifyError` | Expected digest, actual digest, and the referencing task id and path. Never just `Mismatch`. |
 
-Exit code mapping is total. Every error the CLI can surface maps to exactly one code in section 12.2, and the mapping lives in one function in `verirun-cli::main`.
+Exit code mapping is total. Every error the CLI can surface maps to exactly one code in section 12.2 through `CliError::exit_code` in `verirun-cli`.
 
 ## 12. CLI surface and exit codes
 
 ### 12.1 Commands
 
 ```text
-verirun run <run-file> --cas <dir> --work <dir> [--jobs <n>] [--seed <u64>] [--json]
+verirun run <run-file> --cas <dir> --work <dir> [--jobs <n>] [--input <rel>=<file>] [--pin] [--seed <u64>] [--json]
 verirun verify <manifest-digest> --cas <dir> [--json]
 verirun show <manifest-digest> --cas <dir> [--json]
 verirun diff <run-a> <run-b> --cas <dir> [--json]
+verirun pin <manifest-digest> --cas <dir> [--json]
+verirun unpin <manifest-digest> --cas <dir> [--json]
 verirun gc --cas <dir> [--grace-secs <u64>] [--dry-run] [--json]
 ```
 
-`run` prints the manifest digest on stdout on success. Every command prints the active seed to stderr on every run, where the seed comes from `--seed`, else the `SIM_SEED` environment variable, else the default 0. Execution itself does not consume randomness today. The seed governs property runners, simulation tooling, and any future randomized scheduling experiments, and printing it always keeps the reproduction habit in place before it is needed. `--json` renders a structured result object with the same information content as the text output.
+`run` prints the manifest digest on stdout on success. Every command prints the active seed to stderr on every run, where the seed comes from `--seed`, else the `SIM_SEED` environment variable, else the default 0. Execution itself does not consume randomness today. The seed governs property runners, simulation tooling, and any future randomized scheduling experiments, and printing it always keeps the reproduction habit in place before it is needed. `--json` renders a structured result object with the same information content as the text output, including malformed digest and invalid `SIM_SEED` failures.
 
-The `--seed` argument is global. It may appear before or after the subcommand, and the seed line prints after argument parsing succeeds, before the command runs. A `SIM_SEED` value that is not an unsigned integer is a configuration error and exits 3. Help and version output exit 0. A run that produces a manifest prints the manifest digest on stdout even when tasks failed, with the failed tasks named on stderr and the exit code carrying the verdict. The run command passes no caller input bindings, so a declared input that no task in the run produces fails as a missing input and exits 3.
+The `--seed` argument is global. It may appear before or after the subcommand, and the seed line prints after argument parsing and seed resolution succeed, before the command runs. A `SIM_SEED` value that is not an unsigned integer is a configuration error and exits 3. Help and version output exit 0. A run that produces a manifest prints the manifest digest on stdout even when tasks failed, with the failed tasks named on stderr and the exit code carrying the verdict. Repeatable `--input <rel>=<file>` flags validate `<rel>` under section 8.4 and open each host file before touching the store, then stream each file into the store as a caller input binding, while a declared input that neither a dependency nor `--input` satisfies fails as a missing input and exits 3. Passing `--pin` on `run` pins the resulting manifest before exiting.
 
 ### 12.2 Exit codes
 
@@ -581,14 +600,14 @@ The full 1-to-1 mapping from invariants to enforcement lives in docs/INVARIANTS.
 - Concurrency stress. Barrier-synchronized writers put identical and distinct digests in parallel and assert store contents afterwards by full re-hash. Pipe stress writes well past 64 KiB on stdout and stderr simultaneously, including binary data, under a test deadline so a deadlock fails the test instead of hanging CI.
 - Determinism oracles. The same graph runs with 1 worker and with many workers, and from two different workspace directories, and the manifest digests must be equal as bytes. The same seed in two separate processes must produce byte-identical traces from every seeded runner.
 - Benchmarks. Hand-rolled benchmarks cover canonical encoding throughput, streaming hash throughput, CAS put throughput, and verified-read throughput. Each times its workload with `std::time::Instant` and reports throughput from the measured byte totals. CI runs `cargo bench --workspace -- --test` on every pull request, which proves the benchmarks compile and execute. Recorded performance numbers live in the README from Milestone 4. CI does not gate on wall-clock thresholds, because shared runners make such gates flaky. Latency invariants that do gate are stated as bounded behaviour (deadline, memory bound, completion) rather than as timings.
-- Allocation discipline. The streaming paths are checked with a counting sink in tests: a writer test double that records call counts and chunk sizes, proving the encoder and the CAS writer stream in bounded chunks and never hand back one whole-blob buffer for large inputs. A global counting allocator is deliberately not used. Installing one needs unsafe code, which this repository forbids in every target, tests included.
+- Allocation discipline. The streaming paths are checked with a counting sink in tests, a writer test double that records call counts and chunk sizes, proving the encoder and the CAS writer stream in bounded chunks and never hand back one whole-blob buffer for large inputs. A global counting allocator is deliberately not used because installing one needs unsafe code, which every test target and every crate outside `verirun-platform` forbids.
 
 ## 14. Determinism rules
 
 These rules bind every crate and every future change:
 
 - No `HashMap` or `HashSet` iteration in any code path that can influence bytes, order, or scheduling. Ordered collections only.
-- No wall-clock reads and no OS randomness in `verirun-core`. Time enters the system only through `verirun-store::clock`, for GC ages alone.
+- No wall-clock reads and no OS randomness in `verirun-core`. Time enters the system only through `verirun-store::clock`, for GC ages and unhashed temporary file nonces.
 - No host paths, host names, user ids, timestamps, or process ids in any hashed or manifested content. Process ids appear in temporary file names only, which are never hashed.
 - Locale, timezone, and environment of the host process never influence core behaviour. Child environments are built only per section 8.1.
 - Floating point work is limited to the number formatting of section 4.3, which is fully specified, and never feeds arithmetic into a digest.
@@ -633,6 +652,7 @@ The authoritative statements and their enforcement mapping live in docs/INVARIAN
 - GC: reachability preservation and grace protection.
 - CLI: exit code totality and seed reporting.
 - LAT: bounded memory streaming and deadlock freedom stated as latency bounds.
+- PLAT: cross-platform manifest identity across Linux, macOS, and Windows.
 
 ## 17. Milestone map
 

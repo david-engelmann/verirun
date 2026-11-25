@@ -1,12 +1,13 @@
 [package]
 name = "verirun-platform"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-readme.workspace = true
-description = "The platform seam for verirun. Process control and handle relative path traversal behind one safe API, a process group and descriptor relative opens on Unix, a job object and handle relative creates on Windows."
+readme = "README.md"
+documentation = "https://docs.rs/verirun-platform"
+description = "Cross-platform OS boundary for verirun providing process-tree termination, no-follow handle-relative path traversal, and atomic file replacement on Unix and Windows."
 keywords = ["process", "job-object", "cross-platform", "sandbox"]
 categories = ["os"]
 

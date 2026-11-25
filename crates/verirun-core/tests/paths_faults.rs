@@ -4,6 +4,8 @@
 //! absolute spellings are rejected in every platform's spelling,
 //! so the rules have no judgement calls.
 
+#![forbid(unsafe_code)]
+
 use verirun_core::error::PathErrorKind;
 use verirun_core::paths::validate_path;
 

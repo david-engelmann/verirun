@@ -13,6 +13,8 @@
 //! instead of hanging the suite, which is what makes a drain
 //! deadlock observable as a failure at volume.
 
+#![forbid(unsafe_code)]
+
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -253,7 +255,7 @@ fn stress_escaped_grandchild_output_collected() {
     // the script omits setsid and the same drain collects the
     // bytes of the grandchild that outlives its parent in the job.
     #[cfg(unix)]
-    let script = "setsid sh -c 'sleep 2; printf escaped-tail' & exit 0";
+    let script = "perl -MPOSIX -e 'POSIX::setsid() > 0 or die $!; exec @ARGV' /bin/sh -c 'sleep 2; printf escaped-tail' & exit 0";
     #[cfg(windows)]
     let script = "sh -c 'sleep 2; printf escaped-tail' & exit 0";
     let spec = format!(

@@ -22,6 +22,25 @@ fn fresh_root(label: &str) -> PathBuf {
 }
 
 fn remove_tree(root: &std::path::Path) {
+    fn clear(path: &std::path::Path) {
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.is_dir() && !entry_path.is_symlink() {
+                    clear(&entry_path);
+                } else if let Ok(meta) = std::fs::metadata(&entry_path) {
+                    let mut perms = meta.permissions();
+                    #[allow(
+                        clippy::permissions_set_readonly_false,
+                        reason = "test cleanup must remove read-only fixtures"
+                    )]
+                    perms.set_readonly(false);
+                    let _ = std::fs::set_permissions(&entry_path, perms);
+                }
+            }
+        }
+    }
+    clear(root);
     let _ = std::fs::remove_dir_all(root);
 }
 

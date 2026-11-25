@@ -5,6 +5,8 @@
 //! streams, and a cache entry whose blobs have gone missing is
 //! ignored so exactly the affected task re-executes.
 
+#![forbid(unsafe_code)]
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -362,5 +364,50 @@ fn fault_cache_record_with_wrong_artifact_paths_reexecutes() {
         assert_eq!(cold_rec.artifacts, warm_rec.artifacts);
         assert_eq!(cold_rec.exec_digest, warm_rec.exec_digest);
     }
+    remove_tree(&root);
+}
+
+#[test]
+fn fault_cache_record_with_wrong_artifact_bytes_reexecutes() {
+    let root = fresh_root("forged-bytes");
+    let cas_root = root.join("cas");
+    let cas = Cas::open(&cas_root).expect("store opens");
+    let spec = format!(
+        r#"{{"tasks":[{}]}}"#,
+        task(
+            "producer",
+            "printf 'payload-data' > outputs/p.txt",
+            &[],
+            &[],
+            &["p.txt"]
+        )
+    );
+
+    let cold = run(&cas, &root.join("work1"), &spec);
+    assert_eq!(cold.exit_code, 0);
+
+    // Forge the cached record's declared byte length while
+    // keeping its path, digest, status, and canonical encoding
+    // intact. Cache lookup must check the stored blob's actual
+    // byte count against `ArtifactRecord.bytes` and treat the
+    // tampered entry as a miss.
+    let (entry_path, genuine) = cache_entry_for(&cas, "producer");
+    assert_eq!(genuine.artifacts[0].bytes, 12);
+    let mut forged = genuine;
+    forged.artifacts[0].bytes = 999;
+    let mut forged_bytes = Vec::new();
+    canonical::encode(&forged.to_value(), &mut forged_bytes).expect("forged record encodes");
+    let forged_digest = cas.put_bytes(&forged_bytes).expect("forged record stores");
+    std::fs::write(&entry_path, forged_digest.to_hex()).expect("entry repointed");
+
+    let warm = run(&cas, &root.join("work2"), &spec);
+    assert_eq!(warm.exit_code, 0);
+    let got = statuses(&warm.manifest);
+    assert_eq!(
+        got["producer"],
+        TaskStatus::Succeeded,
+        "a cached record with tampered artifact byte length must re-execute"
+    );
+    assert_eq!(warm.manifest.tasks[0].artifacts[0].bytes, 12);
     remove_tree(&root);
 }

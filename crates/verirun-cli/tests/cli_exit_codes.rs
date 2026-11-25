@@ -49,6 +49,29 @@ fn fresh_dir(tag: &str) -> PathBuf {
     dir
 }
 
+fn remove_tree(root: &Path) {
+    fn clear(path: &Path) {
+        if let Ok(entries) = fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.is_dir() && !entry_path.is_symlink() {
+                    clear(&entry_path);
+                } else if let Ok(meta) = fs::metadata(&entry_path) {
+                    let mut perms = meta.permissions();
+                    #[allow(
+                        clippy::permissions_set_readonly_false,
+                        reason = "test cleanup must remove read-only fixtures"
+                    )]
+                    perms.set_readonly(false);
+                    let _ = fs::set_permissions(&entry_path, perms);
+                }
+            }
+        }
+    }
+    clear(root);
+    let _ = fs::remove_dir_all(root);
+}
+
 fn invoke(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_verirun"))
         .args(args)
@@ -263,8 +286,8 @@ fn fault_exit_code_table() {
     let output = invoke(&["gc", "--cas", &cas_arg]);
     assert_eq!(code(&output), 0, "gc: {}", stderr(&output));
 
-    fs::remove_dir_all(&dir).ok();
-    fs::remove_dir_all(&dir2).ok();
+    remove_tree(&dir);
+    remove_tree(&dir2);
 }
 
 #[test]
@@ -308,7 +331,7 @@ fn fault_json_parity_on_failure() {
         stderr(&json_run).contains(&expected),
         "stderr still explains the failure under --json"
     );
-    fs::remove_dir_all(&dir).ok();
+    remove_tree(&dir);
 }
 
 #[test]
@@ -337,7 +360,7 @@ fn fault_cli_integer_out_of_range_exits_3() {
         "out of range integer: {}",
         stderr(&output)
     );
-    fs::remove_dir_all(&dir).ok();
+    remove_tree(&dir);
 }
 
 #[test]
@@ -360,5 +383,91 @@ fn fault_duplicate_env_key_in_run_file() {
         dir.join("work").to_str().expect("utf8 path"),
     ]);
     assert_eq!(code(&output), 3, "duplicate env key: {}", stderr(&output));
-    fs::remove_dir_all(&dir).ok();
+    remove_tree(&dir);
+}
+
+#[test]
+fn fault_json_parity_on_argument_and_seed_errors() {
+    // INV-CLI-2: malformed digest arguments and invalid SIM_SEED
+    // values must emit structured `error_json` on stdout when
+    // `--json` is passed, alongside the stderr message.
+    let dir = fresh_dir("json-arg-parity");
+    let cas_arg = dir.join("cas").to_str().expect("utf8 path").to_string();
+    let work_arg = dir.join("work").to_str().expect("utf8 path").to_string();
+    let spec_path = write_spec(&dir, &spec(&[task("only", "true", &[], &[], None)]));
+    let spec_arg = spec_path.to_str().expect("utf8 path").to_string();
+    let valid_hex = "a".repeat(64);
+
+    let arg_cases: Vec<Vec<&str>> = vec![
+        vec!["verify", "bad-digest", "--cas", &cas_arg, "--json"],
+        vec!["show", "bad-digest", "--cas", &cas_arg, "--json"],
+        vec![
+            "diff",
+            "bad-digest",
+            &valid_hex,
+            "--cas",
+            &cas_arg,
+            "--json",
+        ],
+        vec![
+            "diff",
+            &valid_hex,
+            "bad-digest",
+            "--cas",
+            &cas_arg,
+            "--json",
+        ],
+        vec!["pin", "bad-digest", "--cas", &cas_arg, "--json"],
+        vec!["unpin", "bad-digest", "--cas", &cas_arg, "--json"],
+        vec![
+            "run",
+            &spec_arg,
+            "--cas",
+            &cas_arg,
+            "--work",
+            &work_arg,
+            "--input",
+            "missing-equals",
+            "--json",
+        ],
+    ];
+    for args in arg_cases {
+        let output = invoke(&args);
+        assert_eq!(code(&output), 3, "case {args:?}: {}", stderr(&output));
+        assert!(
+            stderr(&output).contains("error:"),
+            "stderr carries human error for {args:?}: {}",
+            stderr(&output)
+        );
+        let parsed: serde_json::Value =
+            serde_json::from_str(&stdout(&output)).unwrap_or_else(|e| {
+                panic!(
+                    "stdout for {args:?} must be JSON ({e}): {:?}",
+                    stdout(&output)
+                )
+            });
+        assert_eq!(parsed["exit_code"], 3);
+        assert!(
+            parsed["error"].as_str().is_some_and(|s| !s.is_empty()),
+            "error text present in JSON for {args:?}: {parsed}"
+        );
+    }
+
+    let seed_out = Command::new(env!("CARGO_BIN_EXE_verirun"))
+        .args(["gc", "--cas", &cas_arg, "--dry-run", "--json"])
+        .env("SIM_SEED", "not-an-integer")
+        .output()
+        .expect("spawn verirun with invalid SIM_SEED");
+    assert_eq!(code(&seed_out), 3);
+    assert!(stderr(&seed_out).contains("SIM_SEED"));
+    let seed_json: serde_json::Value =
+        serde_json::from_str(&stdout(&seed_out)).expect("SIM_SEED --json error parses");
+    assert_eq!(seed_json["exit_code"], 3);
+    assert!(
+        seed_json["error"]
+            .as_str()
+            .is_some_and(|s| s.contains("SIM_SEED"))
+    );
+
+    remove_tree(&dir);
 }

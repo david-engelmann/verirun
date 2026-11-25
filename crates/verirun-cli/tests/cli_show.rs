@@ -47,6 +47,29 @@ fn fresh_dir(tag: &str) -> PathBuf {
     dir
 }
 
+fn remove_tree(root: &Path) {
+    fn clear(path: &Path) {
+        if let Ok(entries) = fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.is_dir() && !entry_path.is_symlink() {
+                    clear(&entry_path);
+                } else if let Ok(meta) = fs::metadata(&entry_path) {
+                    let mut perms = meta.permissions();
+                    #[allow(
+                        clippy::permissions_set_readonly_false,
+                        reason = "test cleanup must remove read-only fixtures"
+                    )]
+                    perms.set_readonly(false);
+                    let _ = fs::set_permissions(&entry_path, perms);
+                }
+            }
+        }
+    }
+    clear(root);
+    let _ = fs::remove_dir_all(root);
+}
+
 fn invoke(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_verirun"))
         .args(args)
@@ -119,6 +142,7 @@ fn fault_show_renders_verified_manifest() {
     assert_eq!(parsed["tasks"][0]["status"], "succeeded");
     assert_eq!(parsed["tasks"][0]["exit_code"], 0);
     assert_eq!(parsed["tasks"][0]["artifacts"][0]["path"], "out.txt");
+    remove_tree(&dir);
 }
 
 #[test]
@@ -159,6 +183,7 @@ fn fault_show_verifies_before_display() {
         "the failure is explained on stderr: {}",
         stderr(&output)
     );
+    remove_tree(&dir);
 }
 
 #[test]
@@ -181,4 +206,5 @@ fn fault_show_argument_and_absence_codes() {
         "",
         "nothing renders for an absent manifest"
     );
+    remove_tree(&dir);
 }

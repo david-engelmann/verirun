@@ -5,6 +5,8 @@
 //! completes. A task that floods both pipes and then sleeps must
 //! not hang the drains on the way to the deadline.
 
+#![forbid(unsafe_code)]
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -124,6 +126,29 @@ fn fault_timeout_under_pipe_flood() {
     assert!(
         full.starts_with(&stdout),
         "the captured stdout is a prefix of the flooded stream"
+    );
+    remove_tree(&root);
+}
+
+#[test]
+fn fault_max_safe_integer_timeout_does_not_overflow() {
+    // Regression oracle: `timeout_ms` at `MAX_SAFE_INTEGER`
+    // (9_007_199_254_740_991) is valid under the schema and
+    // number domain, and exceeds `Instant`'s nanosecond bound
+    // on platforms like macOS; `supervise` must use `checked_add`
+    // and never panic the worker thread.
+    let spec = r#"{"tasks":[
+        {"task_id":"max_timeout","executable":"sh","args":["-c","printf ok > outputs/ok.txt"],"env":{},"inputs":[],"outputs":["ok.txt"],"depends_on":[],"timeout_ms":9007199254740991}
+    ]}"#;
+    let (root, cas, outcome, _elapsed) = run_spec("max-safe-int", spec);
+    assert_eq!(outcome.exit_code, 0);
+    let record = &outcome.manifest.tasks[0];
+    assert_eq!(record.status, TaskStatus::Succeeded);
+    assert_eq!(record.exit_code, Some(0));
+    assert_eq!(
+        cas.read_to_vec(&record.artifacts[0].digest)
+            .expect("artifact reads"),
+        b"ok"
     );
     remove_tree(&root);
 }

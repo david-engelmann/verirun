@@ -13,6 +13,8 @@
 //! distinct named blob exactly once, however many records
 //! reference it.
 
+#![forbid(unsafe_code)]
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};

@@ -433,7 +433,7 @@ fn expected_prefix() -> Vec<u8> {
 #[test]
 fn cut_stream_is_an_exact_prefix() {
     let (executable, args) = shell_invocation(
-        "setsid sh -c 'i=0; while [ $i -lt 300 ]; do printf x; i=$((i+1)); sleep 0.1; done' & sleep 30",
+        "perl -MPOSIX -e 'POSIX::setsid() > 0 or die $!; exec @ARGV' /bin/sh -c 'i=0; while [ $i -lt 300 ]; do printf x || exit 0; i=$((i+1)); sleep 0.1; done' & sleep 30",
     );
     let (root, cas, execution, elapsed) = run_task("cut", executable, args, &[], Some(500));
     assert!(execution.timed_out, "the deadline fired: {execution:?}");
