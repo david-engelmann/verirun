@@ -15,9 +15,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use verirun_core::cas::PutPhase;
 use verirun_core::digest::{DomainTag, hash_bytes};
 use verirun_store::cas_fs::{Cas, PutObserver};
-// The cross device and disk full tests are the only users of
-// these names in this file, and both are fenced to Unix.
-#[cfg(unix)]
+// The cross device and disk full tests below are fenced to
+// Unix, and the stream source test runs on every platform, so
+// these names are imported unconditionally.
 use verirun_store::error::{StoreError, StoreStep};
 use verirun_store::sha256::Sha256Factory;
 
@@ -374,5 +374,35 @@ fn put_discards_its_temp_when_the_object_lands_mid_put() {
         tmp_entries.is_empty(),
         "the discard removed the put's temp file"
     );
+    remove_store(&root);
+}
+
+#[test]
+fn fault_stream_source_failure_names_the_read_step() {
+    // A source that fails mid stream must surface under the step
+    // that names the read, not the temp write (perfection round
+    // P5, retiring the wart the programme carried from the audit).
+    struct FailingSource {
+        served: bool,
+    }
+    impl std::io::Read for FailingSource {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.served {
+                return Err(std::io::Error::other("source died"));
+            }
+            self.served = true;
+            buf[..4].copy_from_slice(b"data");
+            Ok(4)
+        }
+    }
+    let root = fresh_root("source-failure");
+    let cas = Cas::open(&root).expect("open cas");
+    let err = cas
+        .put_stream(FailingSource { served: false })
+        .expect_err("the put must fail");
+    match err {
+        StoreError::Io { step, .. } => assert_eq!(step, StoreStep::ReadSource),
+        other => panic!("unexpected error: {other:?}"),
+    }
     remove_store(&root);
 }
