@@ -15,9 +15,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use verirun_core::cas::PutPhase;
 use verirun_core::digest::{DomainTag, hash_bytes};
 use verirun_store::cas_fs::{Cas, PutObserver};
-// The cross device and disk full tests are the only users of
-// these names in this file, and both are fenced to Unix.
-#[cfg(unix)]
+// The cross device and disk full tests below are fenced to
+// Unix, and the stream source test runs on every platform, so
+// these names are imported unconditionally.
 use verirun_store::error::{StoreError, StoreStep};
 use verirun_store::sha256::Sha256Factory;
 
