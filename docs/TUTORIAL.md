@@ -2,6 +2,8 @@
 
 This walkthrough runs a two-task build with the verirun command line program, verifies the result, runs it again against the cache, and inspects what collection would do. Every output below is real, captured from the program as shipped. Digests in your own run will differ only where file contents differ.
 
+The examples name a shell called sh and write small shell scripts as task commands. On Linux that is the system shell. On Windows the same examples run under Git Bash, with its sh on the path, and nothing else about the walkthrough changes. The manifest digest printed below is the one this exact run file produces on both platforms, and the test suite proves that identity on every change, because a manifest is meant to name the same run wherever it was produced.
+
 ## The run file
 
 A run file is JSON. Each task names an executable and its arguments, the environment it may see, the input files it needs, the output files it promises, and the tasks it depends on. Save this as build.json.
