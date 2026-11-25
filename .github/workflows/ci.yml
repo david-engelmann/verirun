@@ -29,7 +29,7 @@ jobs:
     name: hygiene
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Required files and copy bar
         run: |
           python3 - <<'PY'
@@ -83,7 +83,7 @@ jobs:
       PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '1000' || '10000' }}
       RUSTDOCFLAGS: "-D warnings"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Print active seed
         run: echo "SIM_SEED=$SIM_SEED PROPTEST_CASES=$PROPTEST_CASES"
       - name: Install the pinned toolchain
@@ -114,6 +114,10 @@ jobs:
           cargo run --locked -p verirun-store --example store_roundtrip
       - name: Bench compile and smoke run
         run: cargo bench --workspace --locked -- --test
+      - name: Python SDK test suite
+        run: |
+          cargo build --locked -p verirun-cli --bin verirun
+          python3 -m unittest discover -s python/tests -v
 
   macos:
     name: macos
@@ -126,7 +130,7 @@ jobs:
       PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '1000' || '100' }}
       RUSTDOCFLAGS: "-D warnings"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Install the pinned toolchain
         run: |
           rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
@@ -156,6 +160,10 @@ jobs:
           cargo run --locked -p verirun-store --example store_roundtrip
       - name: Bench compile and smoke run
         run: cargo bench --workspace --locked -- --test
+      - name: Python SDK test suite
+        run: |
+          cargo build --locked -p verirun-cli --bin verirun
+          python3 -m unittest discover -s python/tests -v
 
   msrv:
     name: msrv
@@ -169,7 +177,7 @@ jobs:
       # job owns the case-count policy.
       PROPTEST_CASES: "100"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Install the declared rust-version
         run: |
           rustup toolchain install 1.88.0 --profile minimal
@@ -202,7 +210,7 @@ jobs:
       PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '1000' || '100' }}
       RUSTDOCFLAGS: "-D warnings"
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Install the pinned toolchain
         shell: bash
         run: |
@@ -239,12 +247,17 @@ jobs:
       - name: Bench compile and smoke run
         shell: bash
         run: cargo bench --workspace --locked -- --test
+      - name: Python SDK test suite
+        shell: bash
+        run: |
+          cargo build --locked -p verirun-cli --bin verirun
+          python3 -m unittest discover -s python/tests -v || python -m unittest discover -s python/tests -v
 
   audit:
     name: audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Install the pinned toolchain
         run: |
           rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal

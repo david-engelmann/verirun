@@ -28,7 +28,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       tag: ${{ steps.meta.outputs.tag }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Verify crate version parity and extract changelog section
         id: meta
         env:
@@ -147,7 +147,7 @@ jobs:
             bin_name: verirun.exe
             native: true
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Install pinned toolchain and target
         shell: bash
         run: |
