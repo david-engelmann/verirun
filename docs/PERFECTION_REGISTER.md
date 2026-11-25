@@ -30,6 +30,9 @@ Raised and rejected in P4. The CLI suites cli_diff, cli_exit_codes, and cli_show
 ### PF-4. Three traceability rows named tests that did not exist
 
 Raised and landed in P6. A mechanical check of the INVARIANTS traceability matrix against the tree, every named test searched by name in its named file, found three of the 82 named tests existing nowhere in the test estate. The integer out of range case for INV-CAN-3, the duplicate env key case for INV-CAN-7, and the relocated store verify that was INV-MAN-2's only named test. All three are written in P6 under the exact names the matrix already carried, and two matrix rows that named their files inexactly now name the CLI test files exactly. The check also confirmed the rest of the matrix resolves, and that the tree carries zero ignored tests.
+### PF-5. Section 8 of the architecture tells one platform's story in three passages
+
+Raised and landed in P8. The section opens by promising that where a mechanism differs by platform the text names both, and three of its passages describe the pre-W world instead. The 8.3 timeout bullet names only the Unix group kill and never the job object. The 8.2 paragraph on PATHEXT resolution sits fused into the section heading itself. Rule 5 of 8.4 describes materialization as following the same component walk, pointing at a rule 4 that has described handle traversal since W3, while materialization keeps its own metadata walk. All three passages are rewritten in P8 to the two platform reality the code implements.
 
 
 ## Workstream records
@@ -99,3 +102,7 @@ The roadmap drew this round as a rewrite of the tutorial and the architecture pl
 ## Cycle 1 closure
 
 The first cycle stands complete on main. Rounds P1 to P7 landed in the audit lens order, correctness, API surface, performance, structure, error handling, tests, and docs. All three carried audit deferrals closed inside the cycle, C1 in P1, C2 in W3, and C3 in P3. The cycle's findings stand at one accepted platform fact (PF-1), two rejections with their evidence (PF-2 and PF-3), and one landed repair (PF-4). Workstream W landed in full inside the cycle's span, W1 to W7, so the repo the second cycle reads is a two platform repo throughout, code, tests, and docs alike. Cycle 2 opens at P8 under the same lens order.
+
+### P8. Correctness, second cycle
+
+The round read the code the first cycle never read with correctness eyes, because it was still being built: the platform seam's two backends side by side, the durability helper's retry contract, the scheduler's by-exec publish under its W5 routing, and the runner's documented corners against the text that states them. The mechanisms agree. Every error mapping the traversal contract names lands in the same variant on both platforms, the rename's one deliberate divergence is documented at the seam and covered by the store's discard path, and the one asymmetry of consequence, a dropped group ending its members on Windows and not on Unix, is stated in the seam's own contract where the runner's authors read it. What the read found instead was the architecture text over the seam, raised as PF-5 and landed in this round. The record should also carry that the round's first suspicion, a stale section opening, belonged to this seat's stale local mirror and not to main, whose fetched text was already correct. Hosted evidence: this round's own pull request CI on the merged head.
