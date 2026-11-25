@@ -135,3 +135,11 @@ The round re-read the error surfaces P5 left. The store step vocabulary's constr
 ### P13. Tests, second cycle
 
 The round re-ran the mechanical traceability check P6 built, against current main (949a487c). Every test the invariants matrix names was resolved against the tree itself: 82 named pairs across the matrix's 62 rows, and all 82 resolve, the three tests P6 wrote into existence among them and nothing new rotted since. The ignored test count stands at zero across every Rust file in the tree, the state the W6 gate set. The W-era suites were read against the invariants they enforce, the platform identity suite against INV-PLAT-1 and the traversal suite against the collection rules, and their coverage stands as the W slices' gates recorded it. A clean mechanical check is this round's finding, and it lands no code. Hosted evidence: the check above and this round's own pull request CI on the merged head.
+
+### P14. Docs and examples, second cycle
+
+The round scanned every reader facing Markdown surface on main (81e040af) for platform claims and read each against the two platform reality. The architecture's durability mapping and eighth section stand as the W slices and P8 left them, the invariants carry the platform family with its identity row, the changelog's workstream bullets are present and accurate, the tutorial carries its platform note, and the two roadmap documents' older lane texts stand as programme records with their decision records appended. No prose change was needed. Hosted evidence: the scan above and this round's own pull request CI on the merged head.
+
+## Cycle 2 closure
+
+Rounds P8 to P14 landed in the audit lens order. The cycle's findings stand at one landed repair (PF-5, the architecture's eighth section), one deferral carried to the publication decision (PF-6), and two rejections (PF-7, PF-8). Its mechanical checks came back clean where the first cycle's had found work: the traceability matrix resolves in full and the bench figures stand unregressed. No major finding stands open at the close of either cycle, so no third cycle seats under the roadmap's rule. What remains is the programme closure: the closing summary, the three reviews at this checkpoint, and direction call D2 returning to David with the perfection evidence in hand.
