@@ -308,7 +308,7 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-CAN-4 | V, P | `canonical_vectors::vec_rfc8785_appendix_b_in_domain`, `canonical_prop::prop_number_layout_matches_oracle` | M1 |
 | INV-CAN-5 | V, P | `canonical_vectors::vec_escaping_table`, `canonical_prop::prop_no_unlisted_escapes` | M1 |
 | INV-CAN-6 | F, P | `canonical_faults::fault_parser_rejection_table`, `canonical_prop::prop_parser_never_panics_on_truncation` | M1 |
-| INV-CAN-7 | F | `canonical_faults::fault_duplicate_key_rejected_at_construction` (core, M1), `canonical_faults::fault_duplicate_env_key_in_run_file` (CLI level, exit 3) | M1, M3 |
+| INV-CAN-7 | F | `canonical_faults::fault_duplicate_key_rejected_at_construction` (core, M1), `cli_exit_codes::fault_duplicate_env_key_in_run_file` in `crates/verirun-cli/tests/` (exit 3) | M1, M3 |
 | INV-HASH-1 | V | `digest_vectors::vec_domain_separation_prefixes` | M1 |
 | INV-HASH-2 | P | `digest_prop::prop_tuple_framing_injective` | M1 |
 | INV-HASH-3 | P | `digest_prop::prop_streaming_chunking_invariant` | M1 |
@@ -343,7 +343,7 @@ Enforcement key: P property test, F fault oracle, V unit or vector test, B bench
 | INV-SBX-5 | F | `runner_collect::fault_corrupt_input_aborts_before_spawn` | M2 |
 | INV-SBX-6 | F | `runner_collect::fault_stale_output_from_earlier_run_not_collected` in `crates/verirun-store/tests/` | Audit R2 |
 | INV-MAN-1 | P | `manifest_prop::prop_manifest_determinism_across_workers_and_workspaces` in `crates/verirun-cli/tests/` | M2 |
-| INV-MAN-2 | F | `manifest_faults::fault_verify_from_relocated_store` | M3 |
+| INV-MAN-2 | F | `manifest_faults::fault_verify_from_relocated_store` in `crates/verirun-cli/tests/` | M3 |
 | INV-MAN-3 | F | `tamper_suite::fault_bitflip_leaf_blobs` in `crates/verirun-cli/tests/` | M4 |
 | INV-MAN-4 | F | `tamper_suite::fault_bitflip_manifest_exhaustive_small` | M4 |
 | INV-MAN-5 | F | `tamper_suite::fault_digest_pointer_swaps` | M4 |
