@@ -8,6 +8,8 @@
 //! and in nothing else: execution digests, artifact digests, and
 //! log digests are identical.
 
+#![forbid(unsafe_code)]
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};

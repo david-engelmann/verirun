@@ -45,6 +45,29 @@ fn fresh_dir(tag: &str) -> PathBuf {
     dir
 }
 
+fn remove_tree(root: &Path) {
+    fn clear(path: &Path) {
+        if let Ok(entries) = fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.is_dir() && !entry_path.is_symlink() {
+                    clear(&entry_path);
+                } else if let Ok(meta) = fs::metadata(&entry_path) {
+                    let mut perms = meta.permissions();
+                    #[allow(
+                        clippy::permissions_set_readonly_false,
+                        reason = "test cleanup must remove read-only fixtures"
+                    )]
+                    perms.set_readonly(false);
+                    let _ = fs::set_permissions(&entry_path, perms);
+                }
+            }
+        }
+    }
+    clear(root);
+    let _ = fs::remove_dir_all(root);
+}
+
 fn invoke(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_verirun"))
         .args(args)
@@ -199,5 +222,5 @@ fn fault_diff_semantics_table() {
     let output = diff(&dir, &baseline, &baseline);
     assert_eq!(code(&output), 2, "corrupted side: {}", stderr(&output));
 
-    fs::remove_dir_all(&dir).ok();
+    remove_tree(&dir);
 }

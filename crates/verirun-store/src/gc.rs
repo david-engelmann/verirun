@@ -221,6 +221,30 @@ fn read_pinned_manifests(cas: &Cas) -> Result<Vec<(Digest, Manifest)>, GcError> 
                 digest,
                 detail: format!("the stored bytes are not a manifest: {source}"),
             })?;
+        let reencoded =
+            manifest
+                .canonical_bytes()
+                .map_err(|source| GcError::InvalidPinnedManifest {
+                    digest,
+                    detail: format!("re-encoding the manifest failed: {source}"),
+                })?;
+        if reencoded != bytes {
+            return Err(GcError::InvalidPinnedManifest {
+                digest,
+                detail: "the stored bytes differ from the canonical encoding of their content"
+                    .to_string(),
+            });
+        }
+        let recomputed = manifest.recompute_root(cas.factory());
+        if recomputed != manifest.merkle_root {
+            return Err(GcError::InvalidPinnedManifest {
+                digest,
+                detail: format!(
+                    "merkle root mismatch: stored {}, recomputed {recomputed}",
+                    manifest.merkle_root
+                ),
+            });
+        }
         pinned.push((digest, manifest));
     }
     Ok(pinned)

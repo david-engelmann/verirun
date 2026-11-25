@@ -1,10 +1,11 @@
 //! The Unix process group: the child leads its own group (the
 //! runner arranges that at spawn through `process_group(0)`),
-//! and termination signals the whole group through the shell's
-//! builtin `kill`.
+//! and termination signals the whole group directly through
+//! `libc::kill` with `SIGKILL`, both on [`ProcessGroup::terminate`]
+//! and when the [`ProcessGroup`] is dropped.
 //!
-//! The same file holds the Unix traversal backend: descriptor
-//! relative opens through `openat`, the crate's one libc use.
+//! The same file holds the Unix traversal backend (descriptor
+//! relative opens through `openat`) and [`rename_replace`].
 
 use std::ffi::{CString, c_int};
 use std::fs::File;
@@ -12,20 +13,18 @@ use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::Child;
 
 use crate::TraversalError;
 
 /// A Unix process group, identified by its leader's process id.
 ///
 /// The group itself is created by the spawn configuration, so
-/// attaching only records the leader. Termination sends KILL to
-/// the group through the shell builtin: the standalone `kill`
-/// utility's negative-pid form was observed to be a silent no-op
-/// in the development sandbox, while the builtin reaches the
-/// syscall directly. A failed shell spawn is silent by design;
-/// the caller follows termination with a direct kill of the
-/// leader as a fallback.
+/// attaching only records the leader. Termination sends `SIGKILL`
+/// directly to `-pid` through `libc::kill`, addressing every
+/// member of the process group without spawning a helper process.
+/// Dropping the group terminates any surviving group members,
+/// matching Windows job object `KILL_ON_JOB_CLOSE` semantics.
 pub struct ProcessGroup {
     /// The group leader's process id, once a child is attached.
     leader: Option<u32>,
@@ -51,17 +50,19 @@ impl ProcessGroup {
         Ok(())
     }
 
-    /// Kills every process in the group with KILL. Does nothing
-    /// when no child was attached.
+    /// Kills every process in the group with `SIGKILL`. Does
+    /// nothing when no child was attached.
     pub fn terminate(&self) {
-        if let Some(leader) = self.leader {
-            let script = format!("kill -KILL -{leader}");
-            let _ = Command::new("/bin/sh")
-                .args(["-c", &script])
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
+        if let Some(leader) = self.leader
+            && let Ok(pid) = i32::try_from(leader)
+            && pid > 1
+        {
+            // SAFETY: `pid > 1` ensures `-pid` is strictly less
+            // than `-1`, so `libc::kill(-pid, libc::SIGKILL)`
+            // targets only the process group whose pgid equals
+            // `pid` and can never target the caller's group (`0`),
+            // every process (`-1`), or `init` (`1`).
+            let _ = unsafe { libc::kill(-pid, libc::SIGKILL) };
         }
     }
 }
@@ -69,6 +70,12 @@ impl ProcessGroup {
 impl Default for ProcessGroup {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Drop for ProcessGroup {
+    fn drop(&mut self) {
+        self.terminate();
     }
 }
 
@@ -220,23 +227,32 @@ fn component(name: &str) -> Result<CString, TraversalError> {
 }
 
 /// Maps an open failure to the traversal error for it.
+///
+/// POSIX and Linux report `ELOOP` when `O_NOFOLLOW` meets a
+/// symbolic link, FreeBSD reports `EMLINK`, and NetBSD reports
+/// `EFTYPE`.
 fn map_open_error(source: io::Error) -> TraversalError {
     match source.raw_os_error() {
         Some(code) if code == libc::ENOENT => TraversalError::NotFound,
-        Some(code) if code == libc::ELOOP => TraversalError::Link,
+        Some(code) if code == libc::ELOOP || code == libc::EMLINK => TraversalError::Link,
+        #[cfg(target_os = "netbsd")]
+        Some(code) if code == libc::EFTYPE => TraversalError::Link,
         _ => TraversalError::Io(source),
     }
 }
 
-/// Renames `from` to `to`, replacing any file at `to`.
+/// Atomically renames `from` to `to`, replacing any existing file
+/// at `to`.
 ///
-/// The rename is atomic on one filesystem. Its durability
-/// comes from the caller's directory syncs after it
-/// returns, the protocol the store's put follows.
+/// On Unix this calls `rename` directly; directory-entry durability
+/// is completed by the caller's `sync_all` on the destination
+/// parent directory. On Windows the counterpart passes
+/// `MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH` while
+/// refusing replacement of read-only destinations.
 ///
 /// # Errors
 ///
 /// Returns the rename failure from the operating system.
-pub fn rename_durable(from: &Path, to: &Path) -> io::Result<()> {
+pub fn rename_replace(from: &Path, to: &Path) -> io::Result<()> {
     std::fs::rename(from, to)
 }

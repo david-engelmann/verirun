@@ -56,37 +56,39 @@ impl Digest {
     /// Returns [`DigestError`] naming the wrong length or the position
     /// of the first invalid character.
     pub fn from_hex(text: &str) -> Result<Self, DigestError> {
-        if text.chars().count() != 64 {
+        let char_count = text.chars().count();
+        if char_count != 64 {
             return Err(DigestError::new(
                 DigestErrorKind::InvalidLength,
-                format!(
-                    "a digest is 64 hex characters, got {} characters",
-                    text.chars().count()
-                ),
+                format!("a digest is 64 hex characters, got {char_count} characters"),
             ));
         }
-        let bytes = text.as_bytes();
+        let mut nibbles = [0_u8; 64];
+        for (position, (byte_offset, ch)) in text.char_indices().enumerate() {
+            nibbles[position] = hex_nibble(ch, position, byte_offset)?;
+        }
         let mut out = [0_u8; 32];
-        for index in 0..32 {
-            let high = hex_nibble(bytes[2 * index], 2 * index)?;
-            let low = hex_nibble(bytes[2 * index + 1], 2 * index + 1)?;
-            out[index] = (high << 4) | low;
+        for (index, slot) in out.iter_mut().enumerate() {
+            *slot = (nibbles[2 * index] << 4) | nibbles[2 * index + 1];
         }
         Ok(Self(out))
     }
 }
 
-fn hex_nibble(byte: u8, position: usize) -> Result<u8, DigestError> {
-    match byte {
-        b'0'..=b'9' => Ok(byte - b'0'),
-        b'a'..=b'f' => Ok(byte - b'a' + 10),
-        _ => Err(DigestError::new(
-            DigestErrorKind::InvalidCharacter,
-            format!(
-                "character {:?} at position {position} is not a lowercase hex digit",
-                char::from(byte)
-            ),
-        )),
+fn hex_nibble(ch: char, char_position: usize, byte_offset: usize) -> Result<u8, DigestError> {
+    match ch {
+        '0'..='9' => Ok((ch as u8) - b'0'),
+        'a'..='f' => Ok((ch as u8) - b'a' + 10),
+        _ => {
+            let detail = if char_position == byte_offset {
+                format!("character {ch:?} at position {char_position} is not a lowercase hex digit")
+            } else {
+                format!(
+                    "character {ch:?} at character {char_position} (byte {byte_offset}) is not a lowercase hex digit"
+                )
+            };
+            Err(DigestError::new(DigestErrorKind::InvalidCharacter, detail))
+        }
     }
 }
 

@@ -8,6 +8,8 @@
 //! is under test; the real factory is pinned by the adapter
 //! suites.
 
+#![forbid(unsafe_code)]
+
 use verirun_core::digest::{
     Digest, DomainTag, HasherFactory, StreamingHasher, TaskStatus, empty_root, hash_bytes,
     node_digest,

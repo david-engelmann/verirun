@@ -2,6 +2,8 @@
 //! framed blob digest against an independent in-test hash, and
 //! chunking invariance through the factory seam.
 
+#![forbid(unsafe_code)]
+
 use sha2::Digest as _;
 use verirun_core::digest::{DomainTag, begin, hash_bytes};
 use verirun_store::sha256::{Sha256Factory, Sha256Hasher};

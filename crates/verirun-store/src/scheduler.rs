@@ -51,9 +51,9 @@ use verirun_core::dag::ValidatedDag;
 use verirun_core::digest::{self, Digest, HasherFactory, TaskStatus};
 use verirun_core::manifest::{Manifest, TaskRecord};
 use verirun_core::paths::NormalizedPath;
-use verirun_platform::rename_durable;
+use verirun_platform::rename_replace;
 
-use crate::cas_fs::{Cas, sync_directory};
+use crate::cas_fs::{Cas, process_nonce, sync_directory};
 use crate::error::{RunError, StoreError, StoreStep};
 use crate::runner::{FIXED_ENV, Runner};
 
@@ -789,12 +789,22 @@ fn lookup_cache(cas: &Cas, item: &WorkItem) -> Result<Option<TaskRecord>, RunErr
     if record.artifacts.len() != recorded.len() || recorded != declared {
         return Ok(None);
     }
+    let mut sizes: BTreeMap<Digest, u64> = BTreeMap::new();
     for named in record.named_digests() {
         match cas.copy_to(&named, &mut io::sink()) {
-            Ok(_) => {}
+            Ok(len) => {
+                sizes.insert(named, len);
+            }
             Err(StoreError::Missing { .. } | StoreError::Integrity { .. }) => return Ok(None),
             Err(source) => return Err(source.into()),
         }
+    }
+    if record
+        .artifacts
+        .iter()
+        .any(|artifact| sizes.get(&artifact.digest) != Some(&artifact.bytes))
+    {
+        return Ok(None);
     }
     let mut cached = record;
     cached.status = TaskStatus::Cached;
@@ -834,13 +844,14 @@ fn store_cache_entry(cas: &Cas, record: &TaskRecord) -> Result<(), RunError> {
     };
 
     let unique = COUNTER.fetch_add(1, Ordering::SeqCst);
+    let nonce = process_nonce();
     let temp_path = cas.root().join("tmp").join(format!(
-        "by-exec-{}-{}-{unique}",
+        "by-exec-{}-{}-{unique}-{nonce:016x}.tmp",
         std::process::id(),
         record.exec_digest
     ));
     let write_temp = |temp_path: &PathBuf| -> Result<(), RunError> {
-        let mut file = fs::File::create(temp_path).map_err(|source| {
+        let mut file = fs::File::create_new(temp_path).map_err(|source| {
             RunError::from(StoreError::Io {
                 path: temp_path.clone(),
                 step: StoreStep::CreateTemp,
@@ -868,7 +879,7 @@ fn store_cache_entry(cas: &Cas, record: &TaskRecord) -> Result<(), RunError> {
         let _ = fs::remove_file(&temp_path);
         return Err(error);
     }
-    rename_durable(&temp_path, &entry_path).map_err(|source| {
+    rename_replace(&temp_path, &entry_path).map_err(|source| {
         RunError::from(StoreError::Io {
             path: entry_path.clone(),
             step: StoreStep::Rename,

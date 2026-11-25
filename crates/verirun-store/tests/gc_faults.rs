@@ -34,6 +34,29 @@ fn fresh_dir(tag: &str) -> PathBuf {
     dir
 }
 
+fn remove_store(root: &Path) {
+    fn clear(path: &Path) {
+        if let Ok(entries) = fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.is_dir() && !entry_path.is_symlink() {
+                    clear(&entry_path);
+                } else if let Ok(meta) = fs::metadata(&entry_path) {
+                    let mut perms = meta.permissions();
+                    #[allow(
+                        clippy::permissions_set_readonly_false,
+                        reason = "test cleanup must remove read-only fixtures"
+                    )]
+                    perms.set_readonly(false);
+                    let _ = fs::set_permissions(&entry_path, perms);
+                }
+            }
+        }
+    }
+    clear(root);
+    let _ = fs::remove_dir_all(root);
+}
+
 const fn digest(byte: u8) -> Digest {
     Digest::from_bytes([byte; 32])
 }
@@ -65,13 +88,10 @@ fn record(
     )
 }
 
-/// Stores a manifest built from `records` and returns its blob
-/// digest.
+/// Stores a valid manifest built from `records` and returns its
+/// blob digest.
 fn store_manifest(cas: &Cas, records: Vec<TaskRecord>) -> Digest {
-    let manifest = Manifest {
-        tasks: records,
-        merkle_root: digest(250),
-    };
+    let manifest = Manifest::build(cas.factory(), records);
     let bytes = manifest.canonical_bytes().expect("encode manifest");
     cas.put_bytes(&bytes).expect("store manifest")
 }
@@ -173,7 +193,7 @@ fn fault_gc_preserves_pinned_reachability() {
             "unreachable object {swept} must be swept"
         );
     }
-    fs::remove_dir_all(&root).ok();
+    remove_store(&root);
 }
 
 #[test]
@@ -196,7 +216,7 @@ fn fault_gc_grace_boundary() {
     let report = collect(&cas, 3600, false, base + Duration::from_secs(3601)).expect("collect");
     assert_eq!(report.objects, 1);
     assert!(!cas.contains(&blob));
-    fs::remove_dir_all(&root).ok();
+    remove_store(&root);
 }
 
 #[test]
@@ -232,7 +252,7 @@ fn fault_gc_reclaims_stale_tmp_only() {
     assert!(!stray.exists() && !named.exists());
     assert!(cas.contains(&manifest));
     assert!(cas.contains(&kept));
-    fs::remove_dir_all(&root).ok();
+    remove_store(&root);
 }
 
 #[test]
@@ -267,7 +287,7 @@ fn fault_gc_dry_run_deletes_nothing() {
     assert!(!cas.contains(&stale));
     assert!(!stray.exists());
     assert!(cas.contains(&manifest) && cas.contains(&kept));
-    fs::remove_dir_all(&root).ok();
+    remove_store(&root);
 }
 
 #[test]
@@ -326,7 +346,7 @@ fn fault_gc_interrupted_sweep_rerun_completes() {
     // A third run has nothing left to do.
     let report = collect(&cas, 3600, false, later).expect("third collect");
     assert_eq!(report.objects, 0);
-    fs::remove_dir_all(&root).ok();
+    remove_store(&root);
 }
 
 #[test]
@@ -349,7 +369,7 @@ fn fault_gc_breaks_a_stale_lock_and_sweeps() {
         !root.join("gc.lock").exists(),
         "the guard's own lock is removed on drop"
     );
-    fs::remove_dir_all(&root).ok();
+    remove_store(&root);
 }
 
 #[test]
@@ -372,5 +392,40 @@ fn fault_gc_fresh_lock_refuses_and_names_the_remedy() {
         "the refusal names the remedy: {error}"
     );
     assert!(cas.contains(&blob), "nothing was swept");
-    fs::remove_dir_all(&root).ok();
+    remove_store(&root);
+}
+
+#[test]
+fn fault_gc_corrupt_pinned_manifest_root_aborts() {
+    let root = fresh_dir("corrupt-pin-root");
+    let cas = Cas::open(&root).expect("open store");
+    let base = SystemTime::now();
+
+    let kept = cas.put_bytes(b"pinned artifact").expect("put kept");
+    let doomed = cas.put_bytes(b"unreachable old blob").expect("put doomed");
+    // Construct a canonically encoded manifest whose stored
+    // `merkle_root` does not match `recompute_root`.
+    let forged = Manifest {
+        tasks: vec![record("t", 30, kept, kept, vec![artifact("out/a", kept)])],
+        merkle_root: digest(250),
+    };
+    let forged_bytes = forged.canonical_bytes().expect("encode forged manifest");
+    let forged_digest = cas.put_bytes(&forged_bytes).expect("store forged manifest");
+    cas.pin_manifest(&forged_digest).expect("pin forged");
+
+    let error = collect(&cas, 0, false, base + Duration::from_secs(7200))
+        .expect_err("a pinned manifest with a corrupt Merkle root must abort GC");
+    assert!(
+        matches!(
+            error,
+            verirun_store::error::GcError::InvalidPinnedManifest { digest, ref detail }
+            if digest == forged_digest && detail.contains("merkle root mismatch")
+        ),
+        "expected InvalidPinnedManifest naming root mismatch, got {error}"
+    );
+    assert!(
+        cas.contains(&doomed),
+        "aborting before sweep preserves every object"
+    );
+    remove_store(&root);
 }

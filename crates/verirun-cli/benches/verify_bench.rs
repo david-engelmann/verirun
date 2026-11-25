@@ -17,18 +17,41 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use verirun_cli::{run_spec_bytes, verify_manifest};
 use verirun_store::cas_fs::Cas;
+
+fn remove_tree(root: &Path) {
+    fn clear(path: &Path) {
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let entry_path = entry.path();
+                if entry_path.is_dir() && !entry_path.is_symlink() {
+                    clear(&entry_path);
+                } else if let Ok(meta) = std::fs::metadata(&entry_path) {
+                    let mut perms = meta.permissions();
+                    #[allow(
+                        clippy::permissions_set_readonly_false,
+                        reason = "bench cleanup must remove read-only store objects"
+                    )]
+                    perms.set_readonly(false);
+                    let _ = std::fs::set_permissions(&entry_path, perms);
+                }
+            }
+        }
+    }
+    clear(root);
+    let _ = std::fs::remove_dir_all(root);
+}
 
 fn fresh_root(label: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
         "verirun-bench-verify-{label}-{}",
         std::process::id()
     ));
-    let _ = std::fs::remove_dir_all(&root);
+    remove_tree(&root);
     root
 }
 
@@ -74,7 +97,7 @@ fn bench_verify_manifest(smoke: bool) {
     println!(
         "bench_verify_manifest: {iterations} verifications of a 128-task manifest in {elapsed:.3}s = {per_sec:.2} verifications/s"
     );
-    let _ = std::fs::remove_dir_all(&root);
+    remove_tree(&root);
 }
 
 fn main() {

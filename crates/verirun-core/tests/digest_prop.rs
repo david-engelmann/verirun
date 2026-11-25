@@ -1,6 +1,8 @@
 //! Framing properties: injectivity, chunking invariance, and
 //! execution tuple sensitivity, over the recording hasher seam.
 
+#![forbid(unsafe_code)]
+
 use std::sync::{Arc, Mutex};
 
 use proptest::prelude::*;

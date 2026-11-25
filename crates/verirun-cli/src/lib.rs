@@ -2,7 +2,7 @@
 //! verification as callable functions, with the binary in
 //! `main.rs` as a thin shell over them.
 //!
-//! Boundary rules (docs/ARCHITECTURE.md section 2.3): this crate
+//! Boundary rules (docs/ARCHITECTURE.md section 2.4): this crate
 //! never canonicalizes, hashes, or validates on its own. It hands
 //! run file bytes to core parsing and validation, hands validated
 //! graphs to the store scheduler, and renders outcomes. Run files
@@ -19,8 +19,10 @@
 
 pub mod cmd_diff;
 pub mod cmd_gc;
+pub mod cmd_pin;
 pub mod cmd_run;
 pub mod cmd_show;
+pub mod cmd_unpin;
 pub mod cmd_verify;
 pub mod spec_io;
 
@@ -86,6 +88,20 @@ pub enum CliError {
         /// The collection failure.
         source: GcError,
     },
+    /// A bound host input file could not be opened or is not a
+    /// regular file (exit 3).
+    InputIo {
+        /// The host file path.
+        path: PathBuf,
+        /// The underlying I/O failure.
+        source: std::io::Error,
+    },
+    /// A command-line argument or configuration value is
+    /// malformed (exit 3).
+    Argument {
+        /// The human-readable diagnostic detail.
+        detail: String,
+    },
 }
 
 impl CliError {
@@ -105,7 +121,11 @@ impl CliError {
     #[must_use]
     pub const fn exit_code(&self) -> i32 {
         match self {
-            Self::Parse { .. } | Self::Dag { .. } | Self::SpecIo { .. } => 3,
+            Self::Parse { .. }
+            | Self::Dag { .. }
+            | Self::SpecIo { .. }
+            | Self::InputIo { .. }
+            | Self::Argument { .. } => 3,
             Self::Run { source } => match source {
                 RunError::Store {
                     source: StoreError::Integrity { .. } | StoreError::Missing { .. },
@@ -143,6 +163,14 @@ impl std::fmt::Display for CliError {
             Self::Store { source } => write!(f, "{source}"),
             Self::Verify { source } => write!(f, "{source}"),
             Self::Gc { source } => write!(f, "{source}"),
+            Self::InputIo { path, source } => {
+                write!(
+                    f,
+                    "cannot read the bound input file {}: {source}",
+                    path.display()
+                )
+            }
+            Self::Argument { detail } => write!(f, "{detail}"),
         }
     }
 }
@@ -153,10 +181,11 @@ impl std::error::Error for CliError {
             Self::Parse { source } => Some(source),
             Self::Dag { source } => Some(source),
             Self::Run { source } => Some(source),
-            Self::SpecIo { source, .. } => Some(source),
+            Self::SpecIo { source, .. } | Self::InputIo { source, .. } => Some(source),
             Self::Store { source } => Some(source),
             Self::Verify { source } => Some(source),
             Self::Gc { source } => Some(source),
+            Self::Argument { .. } => None,
         }
     }
 }
@@ -276,6 +305,20 @@ pub fn error_json(error: &CliError) -> serde_json::Value {
                 object.insert("kind".to_string(), "blob_mismatch".into());
                 object.insert("expected".to_string(), expected.to_hex().into());
                 object.insert("actual".to_string(), actual.to_hex().into());
+                object.insert("task_id".to_string(), task_id.clone().into());
+                object.insert("path".to_string(), path.clone().into());
+            }
+            VerifyError::ArtifactSizeMismatch {
+                digest,
+                expected,
+                actual,
+                task_id,
+                path,
+            } => {
+                object.insert("kind".to_string(), "artifact_size_mismatch".into());
+                object.insert("digest".to_string(), digest.to_hex().into());
+                object.insert("expected".to_string(), (*expected).into());
+                object.insert("actual".to_string(), (*actual).into());
                 object.insert("task_id".to_string(), task_id.clone().into());
                 object.insert("path".to_string(), path.clone().into());
             }
@@ -409,36 +452,17 @@ pub fn verify_manifest_observed(
     // reference in that same order, and the first failure in
     // that order is the one reported, so the verdict and its
     // wording are exactly what a sequential pass produces.
-    let mut references: Vec<(Digest, String, String)> = Vec::new();
-    for record in &manifest.tasks {
-        for artifact in &record.artifacts {
-            push_reference(
-                &mut references,
-                artifact.digest,
-                &record.task_id,
-                &artifact.path,
-            );
-        }
-        push_reference(
-            &mut references,
-            record.stdout_digest,
-            &record.task_id,
-            "stdout",
-        );
-        push_reference(
-            &mut references,
-            record.stderr_digest,
-            &record.task_id,
-            "stderr",
-        );
-    }
+    let references = collect_references(&manifest);
     for (digest, _, _) in &references {
         observer.on_read(digest);
     }
     let outcomes = read_references(cas, &references);
+    let mut verified_sizes: BTreeMap<Digest, u64> = BTreeMap::new();
     for ((digest, task_id, path), outcome) in references.iter().zip(outcomes) {
         match outcome {
-            Ok(()) => {}
+            Ok(byte_len) => {
+                verified_sizes.insert(*digest, byte_len);
+            }
             Err(StoreError::Integrity { actual, .. }) => {
                 return Err(VerifyError::BlobMismatch {
                     expected: *digest,
@@ -464,13 +488,68 @@ pub fn verify_manifest_observed(
             }
         }
     }
+    check_artifact_sizes(&manifest, &verified_sizes)?;
     Ok(manifest)
 }
 
-/// Verifies one referenced blob by streaming it to a sink, so
-/// no whole blob is ever held in memory on this path.
-fn verify_reference(cas: &Cas, digest: &Digest) -> Result<(), StoreError> {
-    cas.copy_to(digest, std::io::sink()).map(|_| ())
+/// Collects distinct blob references across `manifest` in
+/// first-reference order (artifacts in path order, then stdout,
+/// then stderr for each task record).
+fn collect_references(manifest: &Manifest) -> Vec<(Digest, String, String)> {
+    let mut references: Vec<(Digest, String, String)> = Vec::new();
+    for record in &manifest.tasks {
+        for artifact in &record.artifacts {
+            push_reference(
+                &mut references,
+                artifact.digest,
+                &record.task_id,
+                &artifact.path,
+            );
+        }
+        push_reference(
+            &mut references,
+            record.stdout_digest,
+            &record.task_id,
+            "stdout",
+        );
+        push_reference(
+            &mut references,
+            record.stderr_digest,
+            &record.task_id,
+            "stderr",
+        );
+    }
+    references
+}
+
+/// Verifies that every `ArtifactRecord.bytes` in `manifest`
+/// equals the verified byte count of its referenced blob.
+fn check_artifact_sizes(
+    manifest: &Manifest,
+    verified_sizes: &BTreeMap<Digest, u64>,
+) -> Result<(), VerifyError> {
+    for record in &manifest.tasks {
+        for artifact in &record.artifacts {
+            let actual = verified_sizes[&artifact.digest];
+            if actual != artifact.bytes {
+                return Err(VerifyError::ArtifactSizeMismatch {
+                    digest: artifact.digest,
+                    expected: artifact.bytes,
+                    actual,
+                    task_id: record.task_id.clone(),
+                    path: artifact.path.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Verifies one referenced blob by streaming it to a sink and
+/// returning its verified byte length, so no whole blob is ever
+/// held in memory on this path.
+fn verify_reference(cas: &Cas, digest: &Digest) -> Result<u64, StoreError> {
+    cas.copy_to(digest, std::io::sink())
 }
 
 /// Reads every referenced blob and returns one outcome per
@@ -482,7 +561,7 @@ fn verify_reference(cas: &Cas, digest: &Digest) -> Result<(), StoreError> {
 fn read_references(
     cas: &Cas,
     references: &[(Digest, String, String)],
-) -> Vec<Result<(), StoreError>> {
+) -> Vec<Result<u64, StoreError>> {
     const PARALLEL_THRESHOLD: usize = 8;
     if references.len() < PARALLEL_THRESHOLD {
         return references
@@ -494,7 +573,7 @@ fn read_references(
         .map_or(2, std::num::NonZero::get)
         .min(8);
     let chunk_len = references.len().div_ceil(workers);
-    let mut outcomes: Vec<Result<(), StoreError>> = Vec::with_capacity(references.len());
+    let mut outcomes: Vec<Result<u64, StoreError>> = Vec::with_capacity(references.len());
     std::thread::scope(|scope| {
         let mut handles = Vec::new();
         for part in references.chunks(chunk_len) {

@@ -1,19 +1,19 @@
 name: release
 
-# Roadmap lane R7. Cutting a release is a deliberate act by the
-# project owner (roadmap direction call D1), so this workflow is
-# dispatch-only. It creates the GitHub release for one published
-# version, tagged v<version>, with that version's CHANGELOG
-# section as the notes. It publishes nothing to any registry.
-# Publication to crates.io is a separate deliberate act outside
-# this workflow; 0.1.0 was published that way on 2026-11-16
-# after D1 settled in favour of publishing.
+# Cutting a release creates a GitHub release tagged v<version> with
+# prebuilt multi-platform verirun archives, a SHA256SUMS manifest,
+# and the exact matching CHANGELOG.md section as release notes.
+# Publication to crates.io remains a separate deliberate act outside
+# this workflow.
 
 on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release, matching the crate versions"
+        description: "Version to release, matching the crate versions (without leading v)"
         required: true
         type: string
 
@@ -21,33 +21,211 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: release
+  prepare:
+    name: prepare
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Extract the changelog section
+      - name: Verify crate version parity and extract changelog section
+        id: meta
         env:
-          VERSION: ${{ inputs.version }}
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           python3 - <<'PY'
-          import os, pathlib, sys
-          version = os.environ["VERSION"]
-          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
-          marker = f"## {version}"
-          start = text.find(marker)
-          if start == -1:
-              print(f"no changelog section for {version}")
+          import os, pathlib, sys, tomllib
+
+          event = os.environ["EVENT_NAME"]
+          if event == "workflow_dispatch":
+              version = os.environ["INPUT_VERSION"].strip().removeprefix("v")
+          else:
+              ref_name = os.environ["REF_NAME"].strip()
+              if not ref_name.startswith("v"):
+                  print(f"expected tag starting with v, got {ref_name!r}")
+                  sys.exit(1)
+              version = ref_name[1:]
+
+          tag = f"v{version}"
+
+          crate_manifests = [
+              "crates/verirun-core/Cargo.toml",
+              "crates/verirun-platform/Cargo.toml",
+              "crates/verirun-store/Cargo.toml",
+              "crates/verirun-cli/Cargo.toml",
+          ]
+          for manifest_path in crate_manifests:
+              data = tomllib.loads(pathlib.Path(manifest_path).read_text(encoding="utf-8"))
+              pkg_version = data["package"]["version"]
+              if pkg_version != version:
+                  print(f"version mismatch in {manifest_path}: package version is {pkg_version!r}, release is {version!r}")
+                  sys.exit(1)
+              for dep_name, dep_spec in data.get("dependencies", {}).items():
+                  if dep_name.startswith("verirun-") and isinstance(dep_spec, dict):
+                      dep_version = dep_spec.get("version")
+                      if dep_version != version:
+                          print(f"inter-crate version mismatch in {manifest_path} for {dep_name}: {dep_version!r} != {version!r}")
+                          sys.exit(1)
+
+          lines = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+          heading = f"## {version}"
+          start_idx = None
+          end_idx = len(lines)
+          for idx, line in enumerate(lines):
+              if start_idx is None:
+                  if line.strip() == heading:
+                      start_idx = idx + 1
+              elif line.startswith("## "):
+                  end_idx = idx
+                  break
+
+          if start_idx is None:
+              print(f"no exact changelog heading {heading!r} found in CHANGELOG.md")
               sys.exit(1)
-          rest = text[start + len(marker):]
-          nxt = rest.find("\n## ")
-          section = rest if nxt == -1 else rest[:nxt]
-          pathlib.Path("release-notes.md").write_text(
-              section.strip() + "\n", encoding="utf-8")
-          print(f"notes for {version}: {len(section)} chars")
+
+          notes = "\n".join(lines[start_idx:end_idx]).strip()
+          if not notes:
+              print(f"changelog section {heading!r} is empty")
+              sys.exit(1)
+
+          pathlib.Path("release-notes.md").write_text(notes + "\n", encoding="utf-8")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"version={version}\n")
+              out.write(f"tag={tag}\n")
+          print(f"verified version {version} across all crates; extracted {len(notes)} chars of notes")
           PY
-      - name: Create the release
+      - name: Create or update draft GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
-        run: gh release create "v$VERSION" --title "v$VERSION" --notes-file release-notes.md
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --draft --title "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" --target "${{ github.sha }}" --draft --title "$TAG" --notes-file release-notes.md
+          fi
+
+  build:
+    name: build (${{ matrix.label }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - label: linux-x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+            bin_name: verirun
+            native: true
+          - label: linux-aarch64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            archive_ext: tar.gz
+            bin_name: verirun
+            native: true
+          - label: macos-x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            archive_ext: tar.gz
+            bin_name: verirun
+            native: false
+          - label: macos-aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            archive_ext: tar.gz
+            bin_name: verirun
+            native: true
+          - label: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive_ext: zip
+            bin_name: verirun.exe
+            native: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install pinned toolchain and target
+        shell: bash
+        run: |
+          CHANNEL="$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')"
+          rustup toolchain install "$CHANNEL" --profile minimal
+          rustup target add --toolchain "$CHANNEL" "${{ matrix.target }}"
+          rustup show active-toolchain
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: release-${{ matrix.label }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+      - name: Build release binary
+        shell: bash
+        run: cargo build --release --locked -p verirun-cli --bin verirun --target "${{ matrix.target }}"
+      - name: Verify binary version output
+        if: matrix.native
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          GOT="$("target/${{ matrix.target }}/release/${{ matrix.bin_name }}" --version | tr -d '\r')"
+          test "$GOT" = "verirun $VERSION"
+      - name: Package archive and upload to draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          LABEL: ${{ matrix.label }}
+          TARGET: ${{ matrix.target }}
+          BIN_NAME: ${{ matrix.bin_name }}
+          EXT: ${{ matrix.archive_ext }}
+        run: |
+          STAGE="verirun-v${VERSION}-${LABEL}"
+          ARCHIVE="${STAGE}.${EXT}"
+          rm -rf "$STAGE" "$ARCHIVE"
+          mkdir -p "$STAGE"
+          cp "target/${TARGET}/release/${BIN_NAME}" "$STAGE/${BIN_NAME}"
+          cp LICENSE-MIT LICENSE-APACHE README.md "$STAGE/"
+          if [ "$EXT" = "zip" ]; then
+            7z a -tzip "$ARCHIVE" "$STAGE"
+          else
+            tar -czf "$ARCHIVE" "$STAGE"
+          fi
+          gh release upload "$TAG" "$ARCHIVE" --clobber
+
+  publish:
+    name: publish
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate SHA256SUMS and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          mkdir -p dist
+          cd dist
+          gh release download "$TAG"
+          for expected in \
+            "verirun-v${VERSION}-linux-x86_64.tar.gz" \
+            "verirun-v${VERSION}-linux-aarch64.tar.gz" \
+            "verirun-v${VERSION}-macos-x86_64.tar.gz" \
+            "verirun-v${VERSION}-macos-aarch64.tar.gz" \
+            "verirun-v${VERSION}-windows-x86_64.zip"; do
+            test -f "$expected"
+          done
+          LC_ALL=C sha256sum \
+            "verirun-v${VERSION}-linux-aarch64.tar.gz" \
+            "verirun-v${VERSION}-linux-x86_64.tar.gz" \
+            "verirun-v${VERSION}-macos-aarch64.tar.gz" \
+            "verirun-v${VERSION}-macos-x86_64.tar.gz" \
+            "verirun-v${VERSION}-windows-x86_64.zip" > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "$TAG" SHA256SUMS --clobber
+          gh release edit "$TAG" --draft=false

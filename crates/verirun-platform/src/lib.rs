@@ -1,30 +1,26 @@
 //! verirun-platform: the platform seam of verirun.
 //!
-//! One safe API over the platform mechanisms the runner
-//! needs: a Unix process group and a Windows job object for
-//! process control, handle relative path traversal for
-//! output collection, and a write through rename for the
-//! store's put protocol. The rest of the workspace forbids
-//! unsafe code, and the Windows interfaces are foreign
-//! function interfaces, so this crate exists to hold the
-//! workspace's only unsafe blocks, each one small, behind a
-//! safe API, and carrying its safety argument. On Unix the
-//! process side needs no unsafe code at all: the group kill
-//! goes through the shell's builtin `kill`, the mechanism
-//! the runner has used since its first build, moved here
-//! unchanged so both platforms present the same shape to
-//! the runner. The traversal side uses descriptor relative
-//! opens on Unix and handle relative creates on Windows.
+//! One safe API over the platform mechanisms the runner and the
+//! store need: a Unix process group and a Windows job object for
+//! process control, handle relative path traversal for output
+//! collection, and [`rename_replace`] for atomic file replacement
+//! in the store's put and cache protocols. The rest of the
+//! workspace forbids unsafe code, and the operating system
+//! interfaces here are foreign function interfaces, so this crate
+//! exists to hold the workspace's only unsafe blocks, each one
+//! small, behind a safe API, and carrying its safety argument.
 //!
 //! The contract of [`ProcessGroup`] is the runner's contract.
 //! A group is created empty, a freshly spawned child is attached
 //! to it, `terminate` ends every process in the group, and
-//! dropping the group releases it. On Windows the job is created
-//! with kill on job close, so dropping the group also ends any
-//! member still running. A process that escapes its group, by
-//! creating its own session on Unix or by breaking away from the
-//! job on Windows, is beyond the group's reach on both
-//! platforms; the runner's drain grace bounds what that costs.
+//! dropping the group terminates any member still running. On
+//! Unix `terminate` signals the negative process-group id directly
+//! through `libc::kill` with `SIGKILL`. On Windows the job is
+//! created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so explicit
+//! termination and handle close both end every member. A process
+//! that escapes its group, by creating its own session on Unix, is
+//! beyond the group's reach; the runner's drain grace bounds what
+//! that costs.
 //!
 //! The contract of [`DirHandle`] is the collection contract.
 //! A traversal opens one path component at a time, each
@@ -37,6 +33,17 @@
 //! traversal through held handles has no such window, because
 //! renaming a component after it is opened does not change
 //! the object its handle names.
+//!
+//! The contract of [`rename_replace`] is the store's atomic
+//! replacement step. On Windows it calls `MoveFileExW` with
+//! `MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH` so
+//! metadata is flushed before returning while refusing replacement
+//! of a read-only destination. On Unix it performs an atomic
+//! `rename`, with directory-entry durability completed by the
+//! caller's parent-directory `sync_all`.
+
+#![deny(unsafe_op_in_unsafe_fn)]
+#![warn(missing_docs)]
 
 #[cfg(unix)]
 mod unix;
@@ -44,9 +51,9 @@ mod unix;
 mod windows;
 
 #[cfg(unix)]
-pub use unix::{DirHandle, ProcessGroup, rename_durable};
+pub use unix::{DirHandle, ProcessGroup, rename_replace};
 #[cfg(windows)]
-pub use windows::{DirHandle, ProcessGroup, rename_durable};
+pub use windows::{DirHandle, ProcessGroup, rename_replace};
 
 use std::fmt;
 use std::io;

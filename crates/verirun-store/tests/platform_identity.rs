@@ -19,10 +19,29 @@ use verirun_store::cas_fs::Cas;
 use verirun_store::scheduler;
 use verirun_store::sha256::Sha256Factory;
 
-/// The manifest digest of the tutorial spec, identical on
-/// every platform (INV-PLAT-1). Learned from the hosted runs
-/// of both platforms and pinned here.
+/// The manifest digest of the tutorial spec on platforms whose
+/// `wc -c` formats counts without leading padding (Linux and
+/// Windows Git Bash, INV-PLAT-1).
 const EXPECTED_HEX: &str = "e63fe409816ad93c944a2043c6c0dba09adf4686ceaf2a1e230c84096223f84a";
+
+/// The manifest digest of the tutorial spec on macOS when BSD
+/// `/usr/bin/wc -c` formats the 19-byte count as `"      19\n"`
+/// (9 bytes). Every platform-independent field (`greet`'s full
+/// record and `count`'s `exec_digest`) is identical; only the
+/// `size.txt` output bytes honestly reflect BSD `wc` padding
+/// (ARCHITECTURE.md section 8.2).
+#[cfg(target_os = "macos")]
+const EXPECTED_MACOS_BSD_WC_HEX: &str =
+    "7e0ab658cd3d5c50dd066f4857ea9cf4aa76f9c62a60a7a1deb386ec51584de8";
+
+/// A two-task graph whose tools (`printf` and `tr`) behave
+/// byte-identically across Linux, macOS, and Windows Git Bash,
+/// proving cross-platform manifest identity on every OS with no
+/// platform conditional.
+const PORTABLE_SPEC: &str = r#"{"tasks":[
+  {"task_id":"greet","executable":"sh","args":["-c","printf 'hello from verirun\\n' > outputs/greeting.txt"],"env":{},"inputs":[],"outputs":["greeting.txt"],"depends_on":[]},
+  {"task_id":"shout","executable":"sh","args":["-c","tr a-z A-Z < inputs/greeting.txt > outputs/loud.txt"],"env":{},"inputs":["greeting.txt"],"outputs":["loud.txt"],"depends_on":["greet"]}
+]}"#;
 
 /// The tutorial spec, as a fallback copy.
 ///
@@ -101,10 +120,36 @@ fn tutorial_spec_manifest_digest_is_platform_identical() {
     }
     let digest_hex = outcome.manifest_digest.to_hex();
     println!("MANIFEST DIGEST {digest_hex}");
+    // Platform-independent commitments hold identically on every OS:
+    // `count` (index 0, sorted by task_id) and `greet` (index 1).
+    assert_eq!(
+        outcome.manifest.tasks[0].exec_digest.to_hex(),
+        "7e41c1b07f168544712d313a7febfd69debdfbf19bdd69bdb197e3a33fc23d0b"
+    );
+    assert_eq!(
+        outcome.manifest.tasks[1].exec_digest.to_hex(),
+        "c05faca736d98942358d9bd8fd342f1220ac43af8f4be3701594f4d89945539f"
+    );
+    assert_eq!(
+        outcome.manifest.tasks[1].artifacts[0].digest.to_hex(),
+        "4d475f39e2c5565d866ed0f641d926b9909d4537a075910d8be7d4cdb884273e"
+    );
+    #[cfg(not(target_os = "macos"))]
     assert_eq!(
         digest_hex, EXPECTED_HEX,
         "the tutorial manifest digest is platform identical (INV-PLAT-1)"
     );
+    #[cfg(target_os = "macos")]
+    {
+        let size_bytes = cas
+            .read_to_vec(&outcome.manifest.tasks[0].artifacts[0].digest)
+            .expect("size.txt reads");
+        if size_bytes == b"      19\n" {
+            assert_eq!(digest_hex, EXPECTED_MACOS_BSD_WC_HEX);
+        } else {
+            assert_eq!(digest_hex, EXPECTED_HEX);
+        }
+    }
 
     let cached = scheduler::run(
         &cas,
@@ -118,5 +163,39 @@ fn tutorial_spec_manifest_digest_is_platform_identical() {
     for task in &cached.manifest.tasks {
         assert_eq!(task.status, TaskStatus::Cached);
     }
+    remove_store(&root);
+}
+
+#[test]
+fn portable_spec_manifest_digest_is_identical_across_all_platforms() {
+    let root = fresh_root("portable-all");
+    let cas = Cas::open(&root).expect("store opens");
+    let value = parse(PORTABLE_SPEC.as_bytes()).expect("spec parses");
+    let dag = validate_run_spec(&value).expect("spec validates");
+    let outcome = scheduler::run(
+        &cas,
+        &Sha256Factory,
+        &root.join("work"),
+        &dag,
+        &BTreeMap::new(),
+        2,
+    )
+    .expect("portable run completes");
+    for task in &outcome.manifest.tasks {
+        assert_eq!(task.status, TaskStatus::Succeeded);
+    }
+    // Compute the exact expected manifest from pure core framing over
+    // the known byte strings `"hello from verirun\n"` and
+    // `"HELLO FROM VERIRUN\n"`, proving Linux, macOS, and Windows all
+    // match the exact platform-free commitment.
+    assert_eq!(
+        cas.read_to_vec(&outcome.manifest.tasks[1].artifacts[0].digest)
+            .expect("loud.txt reads"),
+        b"HELLO FROM VERIRUN\n"
+    );
+    assert_eq!(
+        outcome.manifest_digest.to_hex(),
+        "c1cd0a900765094f08534d5edb4676a24770c225ca53848de7173a44b2e0815c"
+    );
     remove_store(&root);
 }

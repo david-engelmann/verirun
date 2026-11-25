@@ -4,6 +4,8 @@
 //! against paths that do not exist, an invalid spec leaves both
 //! the store path and the work path uncreated.
 
+#![forbid(unsafe_code)]
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};

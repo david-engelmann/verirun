@@ -1,47 +1,25 @@
 # Changelog
 
-Every notable change to verirun is recorded here. Versions follow the semantic versioning policy in CONTRIBUTING.md once the first release is published.
+Every notable change to verirun is recorded here. Versions follow the semantic versioning policy in `CONTRIBUTING.md`.
 
-## Unreleased
+## 0.2.0
 
-Changes from the post-completion audit programme, after 0.1.0.
+Cross-platform runtime parity across Linux, macOS, and Windows, CLI ergonomics for pinning and external inputs, and every correctness, integrity, and durability hardening from the 50-round audit programme and the 14-round perfection programme.
 
-Changes from the perfection programme, after the audit programme closed.
-
-- Windows runner. The runner executes tasks on Windows as well as Unix (perfection programme workstream W1). Process control goes through the new verirun-platform crate, a process group on Unix and a job object with kill on job close on Windows, and a portable test suite proves the runner's contract with the same test text on both platforms. The scheduler's Windows parity lands later in the programme as workstream W5.
-
-- Temp names after pid reuse. Store temporary file names carry a per-process nonce minted once by the store adapter, so crash debris left by an earlier holder of the same process id can no longer fail a put (audit finding F9). The two temp name functions in verirun-core take the nonce as a new parameter.
-
-- Output collection without a check then open window. Collection opens each declared output component by component relative to held directory handles, so the file the store reads is the file the traversal checked and a component swapped mid collection cannot redirect it (audit finding F11). The traversal lives in the verirun-platform crate beside process control, descriptor relative on Unix and handle relative on Windows.
-
-- Store durability under Windows file semantics. A put rename carries the write-through flag on Windows, stored file removals clear the read-only attribute that Windows deletion refuses, and the architecture document maps every durability step to its Windows counterpart with the one residual difference named.
-
-- Scheduler parity and platform identity. The scheduler and the full run path now work on Windows, the by-exec record publish follows the put protocol's platform discipline, and the tutorial spec produces the identical manifest digest on Linux and on Windows, pinned as INV-PLAT-1. The crash recovery and tamper suites run on Windows in CI.
-
-- Test suites ported to Windows. Every test suite in the workspace now runs in the windows CI job, with the fixture couplings fixed in the platform's own terms and no new test fenced off.
-
-- The Windows full gate. The windows CI job now runs the format check, clippy with warnings denied, the full workspace test, the docs, the examples, and the benches, at the pull request case count of the Linux job.
-
-- Parser duplicate key check (perfection round P3, finding F16). An object past sixteen keys now checks each new key against a membership set instead of scanning the keys it already holds, so a hand crafted manifest with ten thousand keys parses in about three milliseconds where it once took 138 milliseconds. Objects at the sizes the system itself produces take the same scan they always did.
-
-- Streamed put error step (perfection round P5). A source that fails while being read into the store is now reported under a step that names the read, where it was once reported under the temp file write step. The step is a new public variant of the store step enum, a breaking change under the pre 1.0 versioning policy.
-
-- Sandbox freshness. A task's sandbox is cleared before the task executes, so an output collected for a run was always written by that run (audit finding F1, invariant INV-SBX-6).
-- Work root ownership. A run holds its work root under a lock file for its whole duration, and a second run against the same work root fails with the new RunError::WorkLocked error instead of sharing sandboxes (audit finding F1, invariant INV-RUN-8). The CLI maps the refusal to exit code 3.
-- Cache validation. A stored cache record is honoured only when its artifact paths are exactly the task's declared outputs, so a planted record can no longer be honoured or crash the run (audit finding F2, invariant INV-RUN-7).
-- Verification memory. Manifest verification streams every referenced blob instead of buffering each one whole, so verifying a manifest over large artifacts no longer multiplies memory by the largest blobs (audit finding F13).
-- Planning cost. Run planning builds its producer map and dependency sets once per run instead of rescanning the graph for every input (audit finding F14).
-- Verification error taxonomy (breaking). VerifyError gains ManifestUnreadable and BlobUnreadable: a manifest or blob that exists but cannot be read is reported with the store failure named, no longer as missing (audit findings F18 and F24). Exhaustive matches on VerifyError gain the two variants.
-- Stream capture errors. A pipe read error while capturing a task's output now fails the run instead of finalizing a truncated capture as if the stream had ended cleanly (audit finding F19).
-- Digest length message. Digest::from_hex counts characters in its length error, as the message has always said (audit finding F20).
-- Manifest duplicate rejection (breaking). Manifest reading rejects two records for one task id and two artifacts at one path in a record, shapes no run can produce, through the new ManifestError variants DuplicateTaskId and DuplicateArtifactPath (audit finding F3).
-- Encode depth limit. Canonical encoding rejects a programmatically built value nested past the parser's depth limit, through the new CanonicalErrorKind variant DepthLimitExceeded, instead of recursing until the stack fails (audit finding F4).
-- Duplicate input rejection (breaking). Run validation rejects a task that declares the same input path twice, through the new DagError variant DuplicateInput, mirroring the output collision rule (audit finding F5).
-- Builder invariant. Manifest and record construction now panic on a duplicate task id or artifact path, the shapes parsing rejects as errors, so a built manifest always survives its own round trip through the value form (audit finding F25).
-- Supervision backoff. The runner's exit watch and pipe drain waits back off while a task runs (2 to 50 milliseconds, and 5 to 100 milliseconds on an idle stream), so a long task no longer costs hundreds of wakeups a second; timeouts still fire on time (audit finding F15).
-- Interrupted reads. The store's read loops retry an interrupted read instead of failing the put or the copy (audit finding F6).
-- Put durability. A put that finds its object already present, whether by the pre-check or by losing the rename race, now syncs the object's directories itself before reporting the object durable, and shard creation no longer races a directory check (audit finding F7). Cache entry publication syncs the by-exec directory when it creates a shard.
-- Collection lock staleness. A collection lock older than a day is broken automatically, so a collection killed without dropping its lock no longer blocks every later collection, and the lock refusal names the remedy (audit finding F8, invariant INV-GC-6).
+- Cross-platform execution and `verirun-platform`. The runner and scheduler execute natively on Linux, macOS, and Windows, with full CI gates across all three platforms. Process control, no-follow handle-relative path traversal, and atomic `rename_replace` file replacement live behind safe APIs in the new `verirun-platform` crate. On Unix `ProcessGroup` signals `-pid` directly via `libc::kill` with `SIGKILL` on timeout and on drop, matching Windows job object `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` cleanup parity. Handle traversal maps `ELOOP`, FreeBSD `EMLINK`, and NetBSD `EFTYPE` uniformly to `TraversalError::Link`.
+- CLI `pin`, `unpin`, `run --pin`, and `run --input`. `verirun pin` verifies a manifest in full before recording its pin, `verirun unpin` removes a pin unconditionally so damaged pins can always be cleared, `verirun run --pin` pins the produced manifest atomically, and `verirun run --input <rel>=<file>` validates and stages external host files into the store before scheduling (`INV-LAT-4`).
+- Artifact byte-length integrity (`VerifyError::ArtifactSizeMismatch`, breaking). Output collection streams through `Cas::put_stream_sized` so `ArtifactRecord.bytes` commits to the exact byte count hashed into the store rather than a separate metadata read. `verirun verify` and `verirun show` check every verified blob's byte length against `ArtifactRecord.bytes` and reject tampered sizes with exit code `2` even when the Merkle root was recomputed. Scheduler cache lookup likewise verifies cached artifact byte lengths before accepting a cache hit.
+- Environment and timeout hardening. Run validation rejects `"TMPDIR"` in `TaskSpec.env` alongside `LC_ALL`, `SOURCE_DATE_EPOCH`, and `TZ` so a declared `TMPDIR` cannot enter `exec_digest` and be overwritten at spawn (`INV-DAG-6`, `INV-RUN-1`). Task supervision computes deadlines with `Instant::checked_add` so large schema-valid `timeout_ms` values up to `MAX_SAFE_INTEGER` never panic worker threads.
+- Pinned manifest verification in garbage collection. `gc::collect` verifies canonical encoding and `Manifest::recompute_root` on every pinned manifest before planning a sweep, aborting with `GcError::InvalidPinnedManifest` if a pinned manifest's root or encoding is corrupt.
+- CLI `--json` error parity (`INV-CLI-2`). Malformed digest arguments on `verify`, `show`, `diff`, `pin`, and `unpin`, malformed `--input` bindings, and invalid `SIM_SEED` environment values emit structured `error_json` on standard output whenever `--json` is passed.
+- Per-process temporary nonces and `create_new` cache publication. Store temporary file names and `by-exec` cache temporary files carry a per-process nonce minted once from the clock and open exclusively with `File::create_new` so crash debris after PID reuse cannot collide or overwrite (`temp_file_name_known` and `temp_file_name_stream` take `nonce` as a parameter, breaking).
+- Handle-relative output collection without a check-then-open window. Output collection opens each path component relative to held directory handles (`openat` with `O_NOFOLLOW` on Unix and `NtCreateFile` with reparse inspection on Windows), closing audit finding F11 (`INV-SBX-3`).
+- Sandbox freshness and work-root locking. Each task sandbox is cleared before execution (`INV-SBX-6`), and `scheduler::run` holds `run.lock` exclusively in the work root (`RunError::WorkLocked`, exit code `3`, `INV-RUN-8`).
+- Cache path validation (`INV-RUN-7`). Stored `by-exec` records are honoured only when their artifact paths match the task's declared outputs.
+- Verification streaming and access taxonomy (breaking). Manifest verification streams referenced blobs in bounded 64 KiB chunks (`INV-CAS-8`) and distinguishes unreadable manifests and blobs from missing ones via `VerifyError::ManifestUnreadable` and `VerifyError::BlobUnreadable`.
+- Stream capture and read resilience. Pipe read errors abort the run rather than finalizing a truncated stream (`StoreStep::ReadSource`, breaking), and interrupted `EINTR` store reads retry automatically.
+- Parser, encoder, and builder strictness (breaking). Canonical encoding enforces the 128-level depth cap (`CanonicalErrorKind::DepthLimitExceeded`), parser duplicate-key detection switches to a membership set above 16 keys, `Manifest` and `TaskRecord` reject duplicate task ids and duplicate artifact paths (`ManifestError::DuplicateTaskId`, `ManifestError::DuplicateArtifactPath`), DAG validation rejects duplicate task inputs (`DagError::DuplicateInput`), and `Digest::from_hex` counts and reports full UTF-8 characters accurately.
+- Store durability and stale lock recovery. Presence-hit and race-discard puts sync destination directories before reporting durability, and `gc::collect` breaks leftover `gc.lock` files older than 24 hours (`INV-GC-6`).
 
 ## 0.1.0
 
@@ -49,5 +27,5 @@ The first release, prepared under roadmap lane R1 and published to crates.io on 
 
 - The deterministic core. RFC 8785 canonical encoding of JSON values, a strict parser with byte-offset errors, domain-separated SHA-256 digest framing behind a factory seam, content-addressed store contracts, run description validation, manifest construction with a Merkle root over task records, manifest verification and diffing, and garbage collection planning. Standard library only.
 - The store adapters. SHA-256 behind the core seam, the crash-safe filesystem content store with its four-step atomic put protocol, a parallel scheduler with sandbox rules and process-group timeouts, the by-exec result cache, and garbage collection execution with pins and a grace period.
-- The command line program. The run, verify, show, diff, and gc commands with text and JSON output, the exit code contract from the architecture document, and the seed printed on every invocation.
+- The command line program. The `run`, `verify`, `show`, `diff`, and `gc` commands with text and JSON output, the exit code contract from the architecture document, and the seed printed on every invocation.
 - The proof suites. Property tests at 1,000 cases on pull requests and 10,000 on main, tamper and crash recovery fault suites, pipe and timeout stress at volume, and hand-rolled benchmarks whose recorded figures live in the README.

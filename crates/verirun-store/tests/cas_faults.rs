@@ -3,6 +3,8 @@
 //! put, the streaming chunk bound, and the disk-full write
 //! failure.
 
+#![forbid(unsafe_code)]
+
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 // The disk full test below is the only Command user in this
@@ -177,9 +179,9 @@ fn fault_stored_object_write_attempt() {
 }
 
 /// The cross device refusal compares Unix device ids at
-/// store open (ARCHITECTURE.md section 6.3), so the check
-/// and this test exist only on Unix.
-#[cfg(unix)]
+/// store open (ARCHITECTURE.md section 6.3). Staging an
+/// unprivileged second mount uses Linux's `/dev/shm` tmpfs.
+#[cfg(target_os = "linux")]
 #[test]
 fn fault_cross_device_tmp_refused() {
     let shm = Path::new("/dev/shm");
@@ -404,5 +406,22 @@ fn fault_stream_source_failure_names_the_read_step() {
         StoreError::Io { step, .. } => assert_eq!(step, StoreStep::ReadSource),
         other => panic!("unexpected error: {other:?}"),
     }
+    remove_store(&root);
+}
+
+#[test]
+fn put_stream_sized_returns_exact_byte_count() {
+    let root = fresh_root("sized-stream");
+    let cas = Cas::open(&root).expect("open cas");
+    let payload: Vec<u8> = (0_u32..150_000).map(|i| (i % 251) as u8).collect();
+    let (digest, byte_len) = cas
+        .put_stream_sized(Cursor::new(&payload))
+        .expect("put_stream_sized succeeds");
+    assert_eq!(byte_len, payload.len() as u64);
+    assert_eq!(
+        digest,
+        hash_bytes(&Sha256Factory, DomainTag::Blob, &payload)
+    );
+    assert_eq!(cas.read_to_vec(&digest).expect("reads back"), payload);
     remove_store(&root);
 }

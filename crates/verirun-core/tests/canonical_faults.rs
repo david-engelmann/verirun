@@ -1,5 +1,7 @@
 //! Parser and construction fault table (INV-CAN-6, INV-CAN-7).
 
+#![forbid(unsafe_code)]
+
 use verirun_core::canonical::to_vec;
 use verirun_core::error::{CanonicalErrorKind, ParseErrorKind};
 use verirun_core::parse::{MAX_DEPTH, parse};

@@ -1,13 +1,13 @@
 [package]
 name = "verirun-cli"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-readme.workspace = true
+readme = "README.md"
 documentation = "https://docs.rs/verirun-cli"
-description = "The verirun executable and its library surface. A thin shell over the deterministic core and the store adapters: run file validation, scheduling, hermetic execution, and manifest verification."
+description = "Command line runner and verification library for verirun supporting hermetic DAG execution, manifest verification, inspection, diffing, pinning, and garbage collection."
 keywords = ["deterministic", "execution", "content-addressed", "manifest", "verification"]
 categories = ["command-line-utilities"]
 
@@ -16,8 +16,8 @@ name = "verirun"
 path = "src/main.rs"
 
 [dependencies]
-verirun-core = { version = "0.1.0", path = "../verirun-core" }
-verirun-store = { version = "0.1.0", path = "../verirun-store" }
+verirun-core = { version = "0.2.0", path = "../verirun-core" }
+verirun-store = { version = "0.2.0", path = "../verirun-store" }
 clap.workspace = true
 serde_json.workspace = true
 
@@ -30,3 +30,29 @@ workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/verirun-v{ version }-{ target }.{ archive-format }"
+bin-dir = "verirun-v{ version }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/verirun-v{ version }-linux-x86_64.tar.gz"
+bin-dir = "verirun-v{ version }-linux-x86_64/{ bin }"
+
+[package.metadata.binstall.overrides.aarch64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/verirun-v{ version }-linux-aarch64.tar.gz"
+bin-dir = "verirun-v{ version }-linux-aarch64/{ bin }"
+
+[package.metadata.binstall.overrides.x86_64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/verirun-v{ version }-macos-x86_64.tar.gz"
+bin-dir = "verirun-v{ version }-macos-x86_64/{ bin }"
+
+[package.metadata.binstall.overrides.aarch64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/verirun-v{ version }-macos-aarch64.tar.gz"
+bin-dir = "verirun-v{ version }-macos-aarch64/{ bin }"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+pkg-url = "{ repo }/releases/download/v{ version }/verirun-v{ version }-windows-x86_64.zip"
+bin-dir = "verirun-v{ version }-windows-x86_64/{ bin }{ binary-ext }"

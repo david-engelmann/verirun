@@ -14,7 +14,7 @@
 #![forbid(unsafe_code)]
 
 use verirun_core::canonical;
-use verirun_core::digest::{Digest, DomainTag, HasherFactory, StreamingHasher, hash_bytes};
+use verirun_core::digest::{Digest, DomainTag, HasherFactory, StreamingHasher, begin, hash_bytes};
 use verirun_core::parse;
 use verirun_core::value::Value;
 
@@ -23,6 +23,7 @@ use verirun_core::value::Value;
 /// It is not collision resistant and must never address content.
 struct FnvHasher {
     state: [u64; 4],
+    bytes_seen: usize,
 }
 
 impl FnvHasher {
@@ -34,14 +35,16 @@ impl FnvHasher {
                 0x9ce4_8422_2325_cbf2,
                 0x2325_cbf2_9ce4_8422,
             ],
+            bytes_seen: 0,
         }
     }
 }
 
 impl StreamingHasher for FnvHasher {
     fn update(&mut self, bytes: &[u8]) {
-        for (index, byte) in bytes.iter().enumerate() {
-            let lane = index % 4;
+        for byte in bytes {
+            let lane = self.bytes_seen % 4;
+            self.bytes_seen += 1;
             self.state[lane] ^= u64::from(*byte);
             self.state[lane] = self.state[lane].wrapping_mul(0x0000_0100_0000_01b3);
         }
@@ -91,6 +94,15 @@ fn main() {
     );
 
     let digest = hash_bytes(&FnvFactory, DomainTag::Blob, &parsed_bytes);
+    let mut chunked = begin(&FnvFactory, DomainTag::Blob);
+    for chunk in parsed_bytes.chunks(3) {
+        chunked.update(chunk);
+    }
+    assert_eq!(
+        digest,
+        chunked.finalize(),
+        "streaming chunking must match one-shot hashing"
+    );
     println!("blob digest under the teaching hash: {}", digest.to_hex());
     println!("digests are framed by domain tag, so a blob and an exec record");
     println!("over the same bytes can never collide in the store's address space.");
