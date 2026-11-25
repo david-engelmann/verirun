@@ -40,6 +40,8 @@ pub enum StoreStep {
     OpenSource,
     /// Streaming bytes out of an object.
     ReadObject,
+    /// Reading bytes from a streamed put source.
+    ReadSource,
     /// Writing bytes to a read destination.
     WriteDestination,
     /// Removing a discarded temporary file.
@@ -79,6 +81,7 @@ impl fmt::Display for StoreStep {
             Self::OpenObject => "open object",
             Self::OpenSource => "open source file",
             Self::ReadObject => "read object",
+            Self::ReadSource => "read source stream",
             Self::WriteDestination => "write destination",
             Self::RemoveTemp => "remove temp file",
             Self::CreatePin => "create pin file",

@@ -376,3 +376,33 @@ fn put_discards_its_temp_when_the_object_lands_mid_put() {
     );
     remove_store(&root);
 }
+
+#[test]
+fn fault_stream_source_failure_names_the_read_step() {
+    // A source that fails mid stream must surface under the step
+    // that names the read, not the temp write (perfection round
+    // P5, retiring the wart the programme carried from the audit).
+    struct FailingSource {
+        served: bool,
+    }
+    impl std::io::Read for FailingSource {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.served {
+                return Err(std::io::Error::other("source died"));
+            }
+            self.served = true;
+            buf[..4].copy_from_slice(b"data");
+            Ok(4)
+        }
+    }
+    let root = fresh_root("source-failure");
+    let cas = Cas::open(&root).expect("open cas");
+    let err = cas
+        .put_stream(FailingSource { served: false })
+        .expect_err("the put must fail");
+    match err {
+        StoreError::Io { step, .. } => assert_eq!(step, StoreStep::ReadSource),
+        other => panic!("unexpected error: {other:?}"),
+    }
+    remove_store(&root);
+}
