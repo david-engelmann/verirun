@@ -20,6 +20,7 @@ Cross-platform runtime parity across Linux, macOS, and Windows, CLI ergonomics f
 - Stream capture and read resilience. Pipe read errors abort the run rather than finalizing a truncated stream (`StoreStep::ReadSource`, breaking), and interrupted `EINTR` store reads retry automatically.
 - Parser, encoder, and builder strictness (breaking). Canonical encoding enforces the 128-level depth cap (`CanonicalErrorKind::DepthLimitExceeded`), parser duplicate-key detection switches to a membership set above 16 keys, `Manifest` and `TaskRecord` reject duplicate task ids and duplicate artifact paths (`ManifestError::DuplicateTaskId`, `ManifestError::DuplicateArtifactPath`), DAG validation rejects duplicate task inputs (`DagError::DuplicateInput`), and `Digest::from_hex` counts and reports full UTF-8 characters accurately.
 - Store durability and stale lock recovery. Presence-hit and race-discard puts sync destination directories before reporting durability, and `gc::collect` breaks leftover `gc.lock` files older than 24 hours (`INV-GC-6`).
+- Public documentation and visual proof assets. Added `docs/README.md`, light and dark SVG lockups, architecture and Merkle tamper-conviction diagrams, a `1200x630` social preview card, and a real-output `docs/media/money-shot.gif` walkthrough.
 
 ## 0.1.0
 
