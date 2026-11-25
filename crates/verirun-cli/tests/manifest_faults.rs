@@ -177,3 +177,41 @@ fn fault_verify_single_pass_counting_reader() {
     );
     remove_tree(&root);
 }
+
+#[test]
+fn fault_verify_from_relocated_store() {
+    // INV-MAN-2: a manifest produced against one store
+    // verifies against a byte copy of that store at a
+    // different absolute path, because nothing in
+    // verification depends on the producing host's paths.
+    fn copy_tree(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).expect("create copy dir");
+        for entry in std::fs::read_dir(from).expect("read dir").flatten() {
+            let target = to.join(entry.file_name());
+            if entry.file_type().expect("file type").is_dir() {
+                copy_tree(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), &target).expect("copy file");
+            }
+        }
+    }
+    let root = fresh_root("relocated");
+    let cas_root = root.join("cas");
+    let spec = r#"{"tasks":[{"task_id":"only","executable":"sh","args":["-c","printf moved > outputs/out.txt"],"env":{},"inputs":[],"outputs":["out.txt"],"depends_on":[]}]}"#;
+    let outcome = run_spec_bytes(
+        spec.as_bytes(),
+        &cas_root,
+        &root.join("work"),
+        &BTreeMap::new(),
+        1,
+    )
+    .expect("run completes");
+    assert_eq!(outcome.exit_code, 0);
+    let moved_root = root.join("elsewhere").join("cas");
+    copy_tree(&cas_root, &moved_root);
+    let moved = Cas::open(&moved_root).expect("relocated store opens");
+    let verified = verify_manifest(&moved, &outcome.manifest_digest)
+        .expect("manifest verifies from the relocated store");
+    assert_eq!(verified, outcome.manifest);
+    remove_tree(&root);
+}
