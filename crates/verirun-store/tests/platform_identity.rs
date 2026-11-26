@@ -186,8 +186,10 @@ fn portable_spec_manifest_digest_is_identical_across_all_platforms() {
     }
     // Compute the exact expected manifest from pure core framing over
     // the known byte strings `"hello from verirun\n"` and
-    // `"HELLO FROM VERIRUN\n"`, proving Linux, macOS, and Windows all
-    // match the exact platform-free commitment.
+    // `"HELLO FROM VERIRUN\n"`, and check this host's run against
+    // the pinned platform-free commitment. One run proves its own
+    // platform; the three platform proof stands in aggregate across
+    // the CI legs that run this same assertion.
     assert_eq!(
         cas.read_to_vec(&outcome.manifest.tasks[1].artifacts[0].digest)
             .expect("loud.txt reads"),
