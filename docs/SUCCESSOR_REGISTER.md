@@ -28,7 +28,8 @@ the perfection register as their deliverable.
   recorded in its section below. Seated first, on Main's sequencing
   note, since the later slices of S1 and S2 reason from what stands
   published.
-- S1.1 The contract read. Queued.
+- S1.1 The contract read. CLOSED 2026-11-26, no finding, on the
+  correspondence recorded in its section below.
 - S1.2 Binary discovery. Queued.
 - S1.3 Error mapping. Queued.
 - S1.4 Fault-path depth and the Python floor. Queued.
@@ -67,3 +68,32 @@ Disposition: no broken or partial 0.2.0 stands on any channel, the
 three channels agree on the version, and the launch's publish machinery
 completed what PR 223 repaired it to complete. No finding is raised.
 The ground truth the rest of S1 and S2 reason from is this entry.
+
+## S1.1: The contract read
+
+Closed 2026-11-26, no finding. The read covered both sides of every
+--json payload at main 94c66da4. On the CLI side the emitters are
+run_json, the verify form, show_json, diff_json, and the pin, unpin,
+and gc forms in crates/verirun-cli/src/main.rs, with error_json in
+crates/verirun-cli/src/lib.rs. On the SDK side the parsers are the nine
+public functions in python/verirun/__init__.py. Field by field, every
+success payload corresponds exactly, in names, nesting, and types. The
+run form's manifest, exit code, pinned flag, task rows, and failure
+rows, the verify form's manifest, verified flag, and Merkle root, the
+show form's per-task records with their artifact rows, the diff form's
+equivalence flag and per-task difference rows with their five field
+flags, the pin and unpin forms, and the gc form's six counters are each
+emitted by the CLI and read by the SDK under the same names. The SDK
+carries two defensive defaults, over the run form's exit code and
+pinned flag, for fields the CLI always emits. The error object's three
+fields the SDK reads, its error text, exit code, and kind, match
+error_json, with the kind present for the verification family and the
+kind-specific fields carried to consumers untyped on the exception's
+payload. One ambiguity was checked and closed on the code. The SDK
+admits exit code 1 as a result for run and diff, and the CLI's exit
+code map yields only 2 or 3 for every error variant, exit 1 arising
+only from outcomes, so an error object can never arrive under a code
+the SDK treats as a result. Disposition: the contract holds at this
+tree with no drift in either direction, and the correspondence this
+entry records is the baseline the error mapping read in S1.3 and any
+future payload change are judged against.
