@@ -176,7 +176,7 @@ Measured on 2026-11-24 on a hosted Linux runner from full runs of `canonical_ben
 | Understand the store layout, RFC 8785 rules, and OS sandboxing | [Architecture](docs/ARCHITECTURE.md) · [Decisions](DECISIONS.md) |
 | Check every formal invariant and its enforcing property or fault test | [Invariants and traceability matrix](docs/INVARIANTS.md) |
 | Inspect crate-level APIs and examples | [verirun-core](crates/verirun-core/README.md) · [verirun-platform](crates/verirun-platform/README.md) · [verirun-store](crates/verirun-store/README.md) · [verirun-cli](crates/verirun-cli/README.md) |
-| Review the 50-round audit and 14-round perfection programmes | [Audit register](docs/AUDIT_REGISTER.md) · [Perfection register](docs/PERFECTION_REGISTER.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) |
+| Review the audit and perfection registers | [Audit register](docs/AUDIT_REGISTER.md) · [Perfection register](docs/PERFECTION_REGISTER.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) |
 
 ## Contributing
 

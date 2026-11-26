@@ -24,7 +24,7 @@ Reference and operational documentation for `verirun` across all four workspace 
 
 | Document | What it covers |
 | --- | --- |
-| [ROADMAP.md](ROADMAP.md) | Post-Milestone 4 roadmap lanes `R1` through `R7` and owner direction calls. |
+| [ROADMAP.md](ROADMAP.md) | The roadmap the project followed after Milestone 4. |
 | [AUDIT_PROGRAMME.md](AUDIT_PROGRAMME.md) · [AUDIT_REGISTER.md](AUDIT_REGISTER.md) | Scope and findings of the 50-round adversarial audit programme. |
 | [PERFECTION_ROADMAP.md](PERFECTION_ROADMAP.md) · [PERFECTION_REGISTER.md](PERFECTION_REGISTER.md) | The 14-round perfection programme and Windows Job Object and handle-traversal runtime parity slices. |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) · [CHANGELOG.md](../CHANGELOG.md) | Local CI gate commands, prose and testing rules, and version history. |

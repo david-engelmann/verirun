@@ -28,7 +28,7 @@ Cross-platform runtime parity across Linux, macOS, and Windows, CLI ergonomics f
 
 ## 0.1.0
 
-The first release, prepared under roadmap lane R1 and published to crates.io on 2026-11-16 under direction call D1.
+The first release, published to crates.io on 2026-11-16.
 
 - The deterministic core. RFC 8785 canonical encoding of JSON values, a strict parser with byte-offset errors, domain-separated SHA-256 digest framing behind a factory seam, content-addressed store contracts, run description validation, manifest construction with a Merkle root over task records, manifest verification and diffing, and garbage collection planning. Standard library only.
 - The store adapters. SHA-256 behind the core seam, the crash-safe filesystem content store with its four-step atomic put protocol, a parallel scheduler with sandbox rules and process-group timeouts, the by-exec result cache, and garbage collection execution with pins and a grace period.
