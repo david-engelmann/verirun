@@ -46,7 +46,8 @@ use crate::TraversalError;
 ///
 /// The job is created at the first attach, configured with kill
 /// on job close before any process joins it, and closed on drop,
-/// which ends any member still running. Assignment happens
+/// which ends any member still running unless the group was
+/// disarmed first. Assignment happens
 /// immediately after the spawn; a process the child spawns in
 /// the interval before assignment inherits no job membership and
 /// could escape, the same class of window the Unix group has
@@ -104,7 +105,7 @@ impl ProcessGroup {
     /// cleared, so closing the handle on drop no longer ends
     /// members still running. A job handle cannot be confused
     /// with another job the way a recycled group id can, so
-    /// this side needs no disarm for its own safety; it exists
+    /// this side needs no disarm for its own safety. It exists
     /// because the contract is one contract. The clearing is
     /// best effort, like termination: a failure leaves the
     /// armed behavior in place and is not reported.
@@ -160,7 +161,8 @@ impl Drop for ProcessGroup {
             // SAFETY: `job` is a live job object handle owned by
             // this group, and this is its last use. Closing the
             // last handle of a job configured with kill on job
-            // close terminates any member still running.
+            // close terminates any member still running, unless
+            // the group was disarmed first.
             unsafe {
                 CloseHandle(job);
             }

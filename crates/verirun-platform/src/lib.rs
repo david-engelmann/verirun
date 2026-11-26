@@ -25,7 +25,8 @@
 //! Unix `terminate` signals the negative process-group id directly
 //! through `libc::kill` with `SIGKILL`. On Windows the job is
 //! created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so explicit
-//! termination and handle close both end every member. A process
+//! termination and handle close both end every member of a
+//! group that was never disarmed. A process
 //! that escapes its group, by creating its own session on Unix, is
 //! beyond the group's reach; the runner's drain grace bounds what
 //! that costs.

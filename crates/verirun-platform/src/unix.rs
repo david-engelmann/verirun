@@ -52,11 +52,11 @@ impl ProcessGroup {
     }
 
     /// Disarms the group: dropping it afterwards terminates
-    /// nothing. The recorded leader is forgotten, so no later
-    /// drop can signal a group id the system may have handed
-    /// to a new group after this one emptied. A caller disarms
-    /// once it has reaped the leader and sent any termination
-    /// it intends.
+    /// nothing, because the recorded leader is forgotten and
+    /// no later drop can signal a group id the system may
+    /// have handed to a new group after this one emptied. A
+    /// caller disarms once it has reaped the leader and sent
+    /// any termination it intends.
     pub const fn disarm(&mut self) {
         self.leader = None;
     }

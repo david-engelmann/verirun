@@ -333,12 +333,13 @@ impl<'a> Runner<'a> {
                 let _ = stderr_report_tx.send(cas.put_stream(reader));
             });
             let supervision = supervise(&mut child, &group, task.timeout_ms);
-            // Supervision reaped the leader on every exit, and
-            // the timeout path already sent its termination, so
-            // the group is disarmed before the drain waits that
-            // follow: a recorded group id must not outlive its
-            // group across a wait an escaped pipe holder can
-            // stretch without bound.
+            // The leader is reaped, or stands unreaped under a
+            // pid no other group can take while the child is
+            // held, and the timeout path already sent its
+            // termination, so the group is disarmed before the
+            // drain waits that follow: a recorded group id must
+            // not outlive its group across a wait an escaped
+            // pipe holder can stretch without bound.
             group.disarm();
             let stdout_collected = collect_stream(
                 &stdout_report_rx,
