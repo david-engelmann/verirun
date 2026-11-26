@@ -30,9 +30,13 @@ the perfection register as their deliverable.
   published.
 - S1.1 The contract read. CLOSED 2026-11-26, no finding, on the
   correspondence recorded in its section below.
-- S1.2 Binary discovery. Queued.
+- S1.2 Binary discovery. CLOSED 2026-11-26, one finding raised and
+  deferred to S1.4 with its remedy, on the probe evidence recorded in
+  its section below.
 - S1.3 Error mapping. Queued.
-- S1.4 Fault-path depth and the Python floor. Queued.
+- S1.4 Fault-path depth and the Python floor. Queued, and charged by
+  S1.2 with the version-mismatch diagnostic remedy recorded in S1.2's
+  section.
 - S2.1 The publish chain read. Queued.
 - S2.2 Shipped-binary verification, per channel. Queued.
 - S2.3 Version coherence, extended. Queued.
@@ -97,3 +101,36 @@ the SDK treats as a result. Disposition: the contract holds at this
 tree with no drift in either direction, and the correspondence this
 entry records is the baseline the error mapping read in S1.3 and any
 future payload change are judged against.
+
+## S1.2: Binary discovery
+
+Closed 2026-11-26, one finding raised and deferred to S1.4. Hosted
+evidence: diagnostic run 45913524671 on ubuntu-latest. Staging note:
+the scope named the published v0.1.0 release binaries, and the v0.1.0
+GitHub release carries no assets (S2.0), so the 0.1.0 binary was
+staged by cargo install from the published crates.io crate, the same
+published lineage by another route. The 0.2.0 binary was staged the
+same way, and the SDK was the PyPI 0.2.0 install. The probe found the
+discovery order working as the code reads. The VERIRUN_BIN override
+won over every later candidate, and with it unset the install's own
+scripts directory candidate won ahead of PATH, PATH standing last by
+construction in the code. The SDK reported each binary's version
+without complaint, there being no version check anywhere in the
+discovery path. Cross-version behaviour split cleanly. The 0.1.0
+binary verified a manifest the 0.2.0 binary had produced and pinned,
+the forever surface holding in the backward direction through the new
+SDK. The two feature gaps failed loudly rather than silently. A run
+with bound inputs against the 0.1.0 binary failed on its rejection of
+the --input argument, and pin against it failed on the unrecognized
+subcommand, each surfacing the older CLI's own text through the SDK's
+exception at exit code 3. Finding SF-S1-1: nothing in that path names
+the actual cause, a version mismatch between the SDK and the binary
+it found, so a user holding a stale binary meets a raw argument error
+instead of a version statement. A hard version refusal is not the
+remedy, since the probe proves an older binary is correct by design
+for the manifest-reading functions. The remedy charged to S1.4, whose
+wrong-version fault fixture it joins, is diagnostic: on a payload-less
+failure the SDK names the resolved binary's version alongside the
+error, so the mismatch states itself without refusing cross-version
+work. Disposition: the discovery order and the cross-version contract
+stand as designed, and the finding rides to S1.4.
