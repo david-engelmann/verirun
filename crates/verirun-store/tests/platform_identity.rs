@@ -188,8 +188,8 @@ fn portable_spec_manifest_digest_is_identical_across_all_platforms() {
     // the known byte strings `"hello from verirun\n"` and
     // `"HELLO FROM VERIRUN\n"`, and check this host's run against
     // the pinned platform-free commitment. One run proves its own
-    // platform; the three platform proof stands in aggregate across
-    // the CI legs that run this same assertion.
+    // platform. The three-platform proof stands in aggregate
+    // across the CI legs that run this same assertion.
     assert_eq!(
         cas.read_to_vec(&outcome.manifest.tasks[1].artifacts[0].digest)
             .expect("loud.txt reads"),
