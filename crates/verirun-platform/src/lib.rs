@@ -13,11 +13,20 @@
 //! The contract of [`ProcessGroup`] is the runner's contract.
 //! A group is created empty, a freshly spawned child is attached
 //! to it, `terminate` ends every process in the group, and
-//! dropping the group terminates any member still running. On
+//! dropping the group terminates any member still running,
+//! unless the group was disarmed first. A caller that has
+//! reaped the leader and sent any termination it intends
+//! disarms the group before any wait that could outlast the
+//! group itself, because the Unix group is named by a number
+//! the system can hand to a new group once this one is empty,
+//! while the Windows job is named by its handle and cannot be
+//! confused with another job. An abandoned group that was
+//! never disarmed keeps the drop termination. On
 //! Unix `terminate` signals the negative process-group id directly
 //! through `libc::kill` with `SIGKILL`. On Windows the job is
 //! created with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so explicit
-//! termination and handle close both end every member. A process
+//! termination and handle close both end every member of a
+//! group that was never disarmed. A process
 //! that escapes its group, by creating its own session on Unix, is
 //! beyond the group's reach; the runner's drain grace bounds what
 //! that costs.

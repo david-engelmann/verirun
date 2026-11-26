@@ -171,25 +171,24 @@ pub fn collect(
     // Phase 3, sweep: under the lock, delete exactly the plan.
     let _lock = LockGuard::take(&cas.root().join("gc.lock"), now)?;
     for digest in &candidates {
-        let path = cas.object_path(digest);
-        remove_stored_file(&path).map_err(|source| GcError::Store {
-            source: StoreError::Io {
-                path: path.clone(),
-                step: StoreStep::RemoveObject,
-                source,
-            },
-        })?;
+        sweep_remove(&cas.object_path(digest), StoreStep::RemoveObject)?;
     }
     for path in &tmp_plan {
-        remove_stored_file(path).map_err(|source| GcError::Store {
-            source: StoreError::Io {
-                path: path.clone(),
-                step: StoreStep::RemoveTemp,
-                source,
-            },
-        })?;
+        sweep_remove(path, StoreStep::RemoveTemp)?;
     }
     Ok(report)
+}
+
+/// Removes one planned file of the sweep, naming the removal
+/// step the plan assigned to it.
+fn sweep_remove(path: &Path, step: StoreStep) -> Result<(), GcError> {
+    remove_stored_file(path).map_err(|source| GcError::Store {
+        source: StoreError::Io {
+            path: path.to_path_buf(),
+            step,
+            source,
+        },
+    })
 }
 
 /// Reads and parses every pinned manifest. A pin whose

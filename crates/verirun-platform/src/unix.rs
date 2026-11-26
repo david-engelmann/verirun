@@ -24,7 +24,8 @@ use crate::TraversalError;
 /// directly to `-pid` through `libc::kill`, addressing every
 /// member of the process group without spawning a helper process.
 /// Dropping the group terminates any surviving group members,
-/// matching Windows job object `KILL_ON_JOB_CLOSE` semantics.
+/// matching Windows job object `KILL_ON_JOB_CLOSE` semantics,
+/// unless the group was disarmed first.
 pub struct ProcessGroup {
     /// The group leader's process id, once a child is attached.
     leader: Option<u32>,
@@ -48,6 +49,16 @@ impl ProcessGroup {
     pub fn attach(&mut self, child: &Child) -> io::Result<()> {
         self.leader = Some(child.id());
         Ok(())
+    }
+
+    /// Disarms the group: dropping it afterwards terminates
+    /// nothing, because the recorded leader is forgotten and
+    /// no later drop can signal a group id the system may
+    /// have handed to a new group after this one emptied. A
+    /// caller disarms once it has reaped the leader and sent
+    /// any termination it intends.
+    pub const fn disarm(&mut self) {
+        self.leader = None;
     }
 
     /// Kills every process in the group with `SIGKILL`. Does
