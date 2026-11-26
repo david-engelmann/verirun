@@ -24,6 +24,7 @@
 <p align="center">
   <a href="https://github.com/david-engelmann/verirun/actions/workflows/ci.yml?query=branch%3Amain"><img src="https://github.com/david-engelmann/verirun/actions/workflows/ci.yml/badge.svg?branch=main&event=push" alt="CI on main"></a>
   <a href="https://crates.io/crates/verirun-cli"><img src="https://img.shields.io/crates/v/verirun-cli?color=1d4ed8&label=crates.io" alt="crates.io version"></a>
+  <a href="https://pypi.org/project/verirun/"><img src="https://img.shields.io/pypi/v/verirun?color=1d4ed8&label=pypi" alt="PyPI version"></a>
   <a href="https://docs.rs/verirun-core"><img src="https://img.shields.io/docsrs/verirun-core" alt="docs.rs"></a>
   <a href="Cargo.toml"><img src="https://img.shields.io/badge/MSRV-1.88-informational" alt="MSRV 1.88"></a>
   <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="MIT or Apache-2.0 license"></a>
@@ -77,10 +78,21 @@ Build scripts and pipeline steps usually leave behind mutable folders, ambient e
 
 ## Quickstart
 
-Install the `verirun` binary from crates.io, with `cargo-binstall`, or from the prebuilt Linux, macOS, and Windows archives on GitHub Releases.
+Install the `verirun` binary from PyPI, from crates.io, with `cargo-binstall`, or from the prebuilt Linux, macOS, and Windows archives on GitHub Releases.
 
 ```sh
+pip install verirun
+# or run directly without installing
+uvx verirun --version
+# or install from crates.io
 cargo install verirun-cli
+```
+
+```python
+import verirun
+
+result = verirun.run("pipeline.json", cas="./cas", work="./work", pin_manifest=True, check=True)
+verirun.verify(result.manifest, cas="./cas")
 ```
 
 Save a two-task run description as `pipeline.json`. Inside its sandbox, each task reads declared inputs under `inputs/` and writes declared outputs under `outputs/`.

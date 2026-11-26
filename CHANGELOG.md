@@ -4,7 +4,7 @@ Every notable change to verirun is recorded here. Versions follow the semantic v
 
 ## 0.2.0
 
-Cross-platform runtime parity across Linux, macOS, and Windows, CLI ergonomics for pinning and external inputs, and every correctness, integrity, and durability hardening from the 50-round audit programme and the 14-round perfection programme.
+Cross-platform runtime parity across Linux, macOS, and Windows, CLI ergonomics for pinning and external inputs, a typed Python SDK and PyPI binary wheels, and correctness, integrity, and durability hardening across the entire workspace.
 
 - Cross-platform execution and `verirun-platform`. The runner and scheduler execute natively on Linux, macOS, and Windows, with full CI gates across all three platforms. Process control, no-follow handle-relative path traversal, and atomic `rename_replace` file replacement live behind safe APIs in the new `verirun-platform` crate. On Unix `ProcessGroup` signals `-pid` directly via `libc::kill` with `SIGKILL` on timeout and on drop, matching Windows job object `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` cleanup parity. Handle traversal maps `ELOOP`, FreeBSD `EMLINK`, and NetBSD `EFTYPE` uniformly to `TraversalError::Link`.
 - CLI `pin`, `unpin`, `run --pin`, and `run --input`. `verirun pin` verifies a manifest in full before recording its pin, `verirun unpin` removes a pin unconditionally so damaged pins can always be cleared, `verirun run --pin` pins the produced manifest atomically, and `verirun run --input <rel>=<file>` validates and stages external host files into the store before scheduling (`INV-LAT-4`).
@@ -20,7 +20,7 @@ Cross-platform runtime parity across Linux, macOS, and Windows, CLI ergonomics f
 - Stream capture and read resilience. Pipe read errors abort the run rather than finalizing a truncated stream (`StoreStep::ReadSource`, breaking), and interrupted `EINTR` store reads retry automatically.
 - Parser, encoder, and builder strictness (breaking). Canonical encoding enforces the 128-level depth cap (`CanonicalErrorKind::DepthLimitExceeded`), parser duplicate-key detection switches to a membership set above 16 keys, `Manifest` and `TaskRecord` reject duplicate task ids and duplicate artifact paths (`ManifestError::DuplicateTaskId`, `ManifestError::DuplicateArtifactPath`), DAG validation rejects duplicate task inputs (`DagError::DuplicateInput`), and `Digest::from_hex` counts and reports full UTF-8 characters accurately.
 - Store durability and stale lock recovery. Presence-hit and race-discard puts sync destination directories before reporting durability, and `gc::collect` breaks leftover `gc.lock` files older than 24 hours (`INV-GC-6`).
-- Public documentation and visual proof assets. Added `docs/README.md`, light and dark SVG lockups, architecture and Merkle tamper-conviction diagrams, a `1200x630` social preview card, and a real-output `docs/media/money-shot.gif` walkthrough.
+- Public documentation, Python SDK, and release automation. Added `docs/README.md`, light and dark SVG lockups, architecture and Merkle tamper-conviction diagrams, a `1200x630` social preview card, a real-output `docs/media/money-shot.gif` walkthrough, a typed Python SDK and precompiled `verirun` PyPI wheels (`pyproject.toml`, `python/verirun`), and GitHub Actions OIDC release workflows for crates.io, PyPI, and five-platform GitHub Releases.
 
 ## 0.1.0
 
