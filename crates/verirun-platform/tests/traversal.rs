@@ -229,6 +229,86 @@ fn dropping_process_group_terminates_background_members() {
     let _ = fs::remove_dir_all(&root);
 }
 
+#[cfg(unix)]
+#[test]
+fn disarmed_process_group_drop_leaves_background_members() {
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    let root = fresh_root("pgroup-disarm");
+    let marker = root.join("late.txt");
+    let script = format!(
+        "(sleep 1; printf survived > {}) >/dev/null 2>&1 & exit 0",
+        marker.display()
+    );
+    let mut cmd = Command::new("/bin/sh");
+    cmd.process_group(0)
+        .args(["-c", &script])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    let mut child = cmd.spawn().expect("spawn leader");
+    let mut group = ProcessGroup::new();
+    group.attach(&child).expect("attach leader");
+    let status = child.wait().expect("leader exits");
+    assert!(status.success());
+    group.disarm();
+    drop(group);
+    // Survival is proven by the marker's appearance, so poll
+    // for it against a deadline: the member's start latency
+    // varies with the runner's load, and a fixed wait would
+    // judge the machine, not the disarm.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    while !marker.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(
+        marker.exists(),
+        "background group member must survive a disarmed ProcessGroup drop"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[cfg(windows)]
+#[test]
+fn disarmed_process_group_drop_leaves_background_members() {
+    use std::process::{Command, Stdio};
+
+    let root = fresh_root("pgroup-disarm");
+    let marker = root.join("late.txt");
+    let ps_cmd = format!(
+        "Start-Process -WindowStyle Hidden powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 1; Set-Content -LiteralPath ''{}'' -Value survived'",
+        marker.display()
+    );
+    let mut child = Command::new("powershell.exe")
+        .args(["-NoProfile", "-Command", &ps_cmd])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn leader");
+    let mut group = ProcessGroup::new();
+    group.attach(&child).expect("attach leader to job");
+    let status = child.wait().expect("leader exits");
+    assert!(status.success());
+    group.disarm();
+    drop(group);
+    // Survival is proven by the marker's appearance, so poll
+    // for it against a deadline: the member starts through a
+    // two process chain whose latency varies with the
+    // runner's load, and a fixed wait would judge the
+    // machine, not the disarm.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    while !marker.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(
+        marker.exists(),
+        "background job member must survive a disarmed ProcessGroup drop"
+    );
+    let _ = fs::remove_dir_all(&root);
+}
+
 #[test]
 fn traversal_never_collects_the_decoy_during_a_swap() {
     let root = fresh_root("race");

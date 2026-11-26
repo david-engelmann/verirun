@@ -46,7 +46,8 @@ use crate::TraversalError;
 ///
 /// The job is created at the first attach, configured with kill
 /// on job close before any process joins it, and closed on drop,
-/// which ends any member still running. Assignment happens
+/// which ends any member still running unless the group was
+/// disarmed first. Assignment happens
 /// immediately after the spawn; a process the child spawns in
 /// the interval before assignment inherits no job membership and
 /// could escape, the same class of window the Unix group has
@@ -100,6 +101,41 @@ impl ProcessGroup {
         Ok(())
     }
 
+    /// Disarms the group: the job's kill on job close limit is
+    /// cleared, so closing the handle on drop no longer ends
+    /// members still running. A job handle cannot be confused
+    /// with another job the way a recycled group id can, so
+    /// this side needs no disarm for its own safety. It exists
+    /// because the contract is one contract. The clearing is
+    /// best effort, like termination: a failure leaves the
+    /// armed behavior in place and is not reported.
+    pub fn disarm(&mut self) {
+        if let Some(job) = self.job {
+            // SAFETY: every field of the information structure
+            // is plain data with no invalid bit patterns, so the
+            // zeroed value is valid, and its zeroed limit flags
+            // are exactly the cleared state this call installs.
+            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { core::mem::zeroed() };
+            info.BasicLimitInformation.LimitFlags = 0;
+            if let Ok(size) =
+                u32::try_from(core::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>())
+            {
+                // SAFETY: `job` is a live job object handle owned
+                // by this group, `info` points to a valid
+                // structure of the stated size, and the API reads
+                // it synchronously during the call.
+                let _ = unsafe {
+                    SetInformationJobObject(
+                        job,
+                        JobObjectExtendedLimitInformation,
+                        core::ptr::addr_of!(info).cast::<c_void>(),
+                        size,
+                    )
+                };
+            }
+        }
+    }
+
     /// Terminates every process in the job. Does nothing when no
     /// child was ever attached.
     pub fn terminate(&self) {
@@ -125,7 +161,8 @@ impl Drop for ProcessGroup {
             // SAFETY: `job` is a live job object handle owned by
             // this group, and this is its last use. Closing the
             // last handle of a job configured with kill on job
-            // close terminates any member still running.
+            // close terminates any member still running, unless
+            // the group was disarmed first.
             unsafe {
                 CloseHandle(job);
             }

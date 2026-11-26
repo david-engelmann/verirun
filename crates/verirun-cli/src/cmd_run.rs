@@ -98,10 +98,10 @@ pub fn run_with_options(
 ) -> Result<RunOutcome, CliError> {
     let dag = crate::spec_io::load_run_spec(spec_path)?;
 
-    let mut seen_paths: BTreeSet<String> = BTreeSet::new();
-    let mut staged_files: Vec<(String, File)> = Vec::with_capacity(input_bindings.len());
+    let mut seen_paths: BTreeSet<&NormalizedPath> = BTreeSet::new();
+    let mut staged_files: Vec<(NormalizedPath, File)> = Vec::with_capacity(input_bindings.len());
     for (rel_path, host_path) in input_bindings {
-        if !seen_paths.insert(rel_path.as_str().to_string()) {
+        if !seen_paths.insert(rel_path) {
             return Err(CliError::Argument {
                 detail: format!("duplicate --input binding for path {rel_path:?}"),
             });
@@ -120,14 +120,14 @@ pub fn run_with_options(
                 source: std::io::Error::other("bound input is not a regular file"),
             });
         }
-        staged_files.push((rel_path.as_str().to_string(), file));
+        staged_files.push((rel_path.clone(), file));
     }
 
     let cas = Cas::open(cas_root).map_err(RunError::from)?;
     let mut bound_inputs: BTreeMap<String, Digest> = BTreeMap::new();
     for (rel_path, file) in staged_files {
         let digest = cas.put_stream(file).map_err(RunError::from)?;
-        bound_inputs.insert(rel_path, digest);
+        bound_inputs.insert(rel_path.as_str().to_string(), digest);
     }
 
     let outcome = verirun_store::scheduler::run(
