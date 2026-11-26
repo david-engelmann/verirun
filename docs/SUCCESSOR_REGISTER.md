@@ -1,0 +1,49 @@
+# Verirun successor programme: register
+
+The register of the successor programme chartered in
+docs/SUCCESSOR_ROADMAP.md, approved in full by Main Muse on 2026-11-26.
+Every finding is dispositioned LAND, DEFER with reason, or REJECT with
+reason. A slice closes only on an entry here carrying its gate evidence,
+so no slice closes by paperwork alone. Hosted evidence is the gate of
+record throughout.
+
+## Standing record carried into this programme
+
+These items stand settled from the audit and perfection programmes and
+are carried here as record, not as work. None of them re-opens without a
+ruling from Main. PF-1 stands accepted as a platform fact (directory
+entry durability is weaker on Windows, and every read rehashes, so a
+lost entry reads as missing and never as corrupt). PF-2, PF-3, PF-7, and
+PF-8 stand rejected with their reasons in docs/PERFECTION_REGISTER.md.
+F10 and F22 stand rejected with their reasons in docs/AUDIT_REGISTER.md.
+The closure audit's nit N-3 stands accepted as recorded (the wall-clock
+oracle tests, whose mechanisms are time based and whose waits are
+documented at their sites). DECISIONS.md stands exactly as the 0.2.0
+launch left it, and the closure audit's flags on it stand recorded in
+the perfection register as their deliverable.
+
+## Slice ledger
+
+- S2.0 Published-state ground truth. SEATED FIRST, on Main's sequencing
+  note, since the later slices of S1 and S2 reason from what stands
+  published.
+- S1.1 The contract read. Queued.
+- S1.2 Binary discovery. Queued.
+- S1.3 Error mapping. Queued.
+- S1.4 Fault-path depth and the Python floor. Queued.
+- S2.1 The publish chain read. Queued.
+- S2.2 Shipped-binary verification, per channel. Queued.
+- S2.3 Version coherence, extended. Queued.
+- S3.1 The macOS probe. Queued.
+- S3.2 The Windows parity re-proof. Queued.
+- S4.1 The security file and the remaining surfaces. Queued.
+
+## S2.0: Published-state ground truth
+
+Seated 2026-11-26 on the banking of the roadmap and this register. The
+slice establishes, per channel, what stands published under the name
+verirun. On crates.io, on PyPI, and as GitHub Release assets it records
+published or not, the version, the asset inventory, and an install-and-run
+from the index in a clean hosted environment. A broken or partial 0.2.0
+on any channel is a finding of this slice. Its entry lands here with its
+hosted evidence when the pass completes.
