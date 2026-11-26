@@ -57,7 +57,7 @@ impl ProcessGroup {
     /// to a new group after this one emptied. A caller disarms
     /// once it has reaped the leader and sent any termination
     /// it intends.
-    pub fn disarm(&mut self) {
+    pub const fn disarm(&mut self) {
         self.leader = None;
     }
 

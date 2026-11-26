@@ -254,7 +254,14 @@ fn disarmed_process_group_drop_leaves_background_members() {
     assert!(status.success());
     group.disarm();
     drop(group);
-    std::thread::sleep(std::time::Duration::from_millis(1200));
+    // Survival is proven by the marker's appearance, so poll
+    // for it against a deadline: the member's start latency
+    // varies with the runner's load, and a fixed wait would
+    // judge the machine, not the disarm.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    while !marker.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
     assert!(
         marker.exists(),
         "background group member must survive a disarmed ProcessGroup drop"
@@ -286,7 +293,15 @@ fn disarmed_process_group_drop_leaves_background_members() {
     assert!(status.success());
     group.disarm();
     drop(group);
-    std::thread::sleep(std::time::Duration::from_millis(1500));
+    // Survival is proven by the marker's appearance, so poll
+    // for it against a deadline: the member starts through a
+    // two process chain whose latency varies with the
+    // runner's load, and a fixed wait would judge the
+    // machine, not the disarm.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    while !marker.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
     assert!(
         marker.exists(),
         "background job member must survive a disarmed ProcessGroup drop"
