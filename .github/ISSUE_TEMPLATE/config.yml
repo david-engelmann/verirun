@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Published documentation
+    url: https://david-engelmann.github.io/verirun/
+    about: Browse the quickstart, CLI and Python SDK reference, architecture, invariants, and FAQ.
+  - name: GitHub Discussions
+    url: https://github.com/david-engelmann/verirun/discussions
+    about: Ask usage questions, share evaluation pipelines, or discuss design trade-offs.
   - name: Security vulnerability report
     url: https://github.com/david-engelmann/verirun/security/advisories/new
     about: Report suspected store integrity, sandbox traversal, or cryptographic verification vulnerabilities privately.

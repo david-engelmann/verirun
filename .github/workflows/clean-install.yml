@@ -1,0 +1,38 @@
+name: clean-install
+
+# Clean-machine release installer gate on fresh Linux and macOS runners:
+# no repository checkout, no Rust toolchain, and no source build. Fetches
+# `install.sh` from main, downloads and SHA-256 verifies the prebuilt
+# release archive against SHA256SUMS, and checks `--version` and shell
+# completions.
+
+on:
+  release:
+    types: [published]
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clean-install-${{ github.event.release.tag_name || 'latest' }}
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Install prebuilt release via install.sh and smoke-check binary
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/david-engelmann/verirun/main/install.sh | sh
+          ~/.local/bin/verirun --version
+          ~/.local/bin/verirun completions bash >/dev/null

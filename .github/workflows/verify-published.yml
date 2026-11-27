@@ -3,7 +3,7 @@ name: verify-published
 # External consumer verification for published crates.io and PyPI artifacts.
 # Runs entirely in temporary directories outside any repository checkout to
 # prove that fresh Cargo projects, `cargo install verirun-cli`, and
-# `pip install verirun` resolve and execute the published 0.2.1 release.
+# `pip install verirun` resolve and execute the published 0.2.2 release.
 
 on:
   workflow_dispatch:
@@ -34,7 +34,7 @@ jobs:
           cd "$WORK_DIR"
           cargo new scratch-consumer
           cd scratch-consumer
-          cargo add verirun-core@0.2.1 verirun-store@0.2.1
+          cargo add verirun-core@0.2.2 verirun-store@0.2.2
           cat <<'RS' > src/main.rs
           use verirun_core::canonical;
           use verirun_core::digest::{DomainTag, hash_bytes};
@@ -76,9 +76,9 @@ jobs:
           set -euo pipefail
           INSTALL_ROOT="${RUNNER_TEMP:-/tmp}/verirun-install"
           SMOKE_DIR="$(mktemp -d "${RUNNER_TEMP:-/tmp}/verirun-cli-smoke-XXXXXX")"
-          cargo install verirun-cli --version 0.2.1 --root "$INSTALL_ROOT"
+          cargo install verirun-cli --version 0.2.2 --root "$INSTALL_ROOT"
           VERIRUN="$INSTALL_ROOT/bin/verirun"
-          test "$("$VERIRUN" --version)" = "verirun 0.2.1"
+          test "$("$VERIRUN" --version)" = "verirun 0.2.2"
 
           cat <<'JSON' > "$SMOKE_DIR/pipeline.json"
           {
@@ -112,7 +112,7 @@ jobs:
     name: install-pypi
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install verirun from PyPI and verify PipelineBuilder run
@@ -121,14 +121,14 @@ jobs:
           SMOKE_DIR="$(mktemp -d "${RUNNER_TEMP:-/tmp}/verirun-pypi-smoke-XXXXXX")"
           cd "$SMOKE_DIR"
           python -m pip install --upgrade pip
-          pip install verirun==0.2.1
+          pip install verirun==0.2.2
           python - <<'PY'
           from pathlib import Path
           import tempfile
           import verirun
 
-          assert verirun.__version__ == "0.2.1", verirun.__version__
-          assert verirun.version() == "0.2.1", verirun.version()
+          assert verirun.__version__ == "0.2.2", verirun.__version__
+          assert verirun.version() == "0.2.2", verirun.version()
 
           with tempfile.TemporaryDirectory() as tmp:
               root = Path(tmp)

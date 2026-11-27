@@ -1,0 +1,1 @@
+{"tasks":[{"task_id":"a","executable":"sh","args":[],"env":{},"inputs":[],"outputs":["a.txt"],"depends_on":["b"]},{"task_id":"b","executable":"sh","args":[],"env":{},"inputs":[],"outputs":["b.txt"],"depends_on":["a"]}]}

@@ -1,0 +1,1 @@
+{"tasks":[{"task_id":"greet","executable":"sh","args":["-c","true"],"env":{"MODE":"fast"},"inputs":["raw/in.txt"],"outputs":["dist/out.txt"],"depends_on":[],"timeout_ms":5000},{"task_id":"consume","executable":"sh","args":[],"env":{},"inputs":["dist/out.txt"],"outputs":["dist/final.txt"],"depends_on":["greet"]}]}
