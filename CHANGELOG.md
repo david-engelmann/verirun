@@ -2,6 +2,15 @@
 
 Every notable change to verirun is recorded here. Versions follow the semantic versioning policy in `CONTRIBUTING.md`.
 
+## 0.2.2
+
+Deterministic shell completions across CLI and Python, a SHA-256-verifying standalone release installer, `cargo-deny` supply-chain enforcement, and citation and contributor tooling.
+
+- Deterministic shell completions (`verirun completions`, `verirun_cli::Shell`, `verirun_cli::completions_script`, Python `verirun.completions`). Added zero-dependency tab-completion script generation for `bash`, `zsh`, `fish`, and `powershell` covering every subcommand and option without requiring `--cas`, with structured `--json` output parity (`INV-CLI-2`) and exit code `3` usage diagnostics on unknown shells (`INV-CLI-1`).
+- SHA-256-verifying standalone installer (`install.sh`). Added a POSIX `sh` release installer for Linux and macOS (`x86_64` and `aarch64`) that downloads the platform archive and `SHA256SUMS` into a temporary staging directory, verifies the archive SHA-256 digest before extraction, fails closed on mismatch, and supports `--version`, `--install-dir`, and `--base-url` overrides.
+- Supply-chain policy gate (`deny.toml`, `.github/workflows/ci.yml`). Added `cargo-deny` configuration enforcing permissive SPDX license allowlists, zero duplicate crate versions in `Cargo.lock`, wildcard version bans, and `crates.io` source provenance, enforced in pull-request CI alongside `cargo-audit`.
+- Citation metadata, contributor tooling, and GitHub templates (`CITATION.cff`, `CODE_OF_CONDUCT.md`, `Makefile`, `.editorconfig`, `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/`). Added Citation File Format 1.2.0 metadata, Contributor Covenant v2.1 governance, locked local `Makefile` targets mirroring CI, editor formatting defaults, and structured bug and feature templates.
+
 ## 0.2.1
 
 Process-group supervision hardening, programmatic Python DAG authoring and upfront validation, refreshed runtime dependencies, and published-package verification and documentation polish.

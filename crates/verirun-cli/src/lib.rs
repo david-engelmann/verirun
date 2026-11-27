@@ -17,6 +17,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod cmd_completions;
 pub mod cmd_diff;
 pub mod cmd_gc;
 pub mod cmd_pin;
@@ -25,6 +26,8 @@ pub mod cmd_show;
 pub mod cmd_unpin;
 pub mod cmd_verify;
 pub mod spec_io;
+
+pub use cmd_completions::{Shell, completions_script};
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

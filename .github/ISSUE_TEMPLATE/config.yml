@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability report
+    url: https://github.com/david-engelmann/verirun/security/advisories/new
+    about: Report suspected store integrity, sandbox traversal, or cryptographic verification vulnerabilities privately.
+  - name: Architecture and invariant specification
+    url: https://github.com/david-engelmann/verirun/blob/main/docs/ARCHITECTURE.md
+    about: Review the canonical encoding, Merkle manifest, sandbox, and exit code contracts before opening an issue.

@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use Verirun in your research or engineering work, please cite it using the metadata in this file."
+type: software
+title: "Verirun: Content-Addressed Deterministic Execution Runner"
+abstract: "Content-addressed deterministic task DAG runner and Merkle manifest verifier built over RFC 8785 canonical JSON and domain-separated SHA-256 digests."
+authors:
+  - family-names: Engelmann
+    given-names: David
+version: 0.2.2
+date-released: "2026-11-27"
+license: MIT OR Apache-2.0
+repository-code: "https://github.com/david-engelmann/verirun"
+url: "https://docs.rs/verirun-core"
+keywords:
+  - deterministic-execution
+  - content-addressed-storage
+  - merkle-tree
+  - rfc8785
+  - reproducibility
+  - rust

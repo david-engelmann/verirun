@@ -1,14 +1,12 @@
 name: stress
 
-# Roadmap lane R3: the weekly stress tier.
+# Weekly high-volume property and concurrency stress suite.
 # The pull request gate (ci.yml) runs every test once at
 # 1,000 property cases. This workflow runs the same suite at
-# ten times the main-push volume on a schedule: the property
-# tests at 100,000 cases, and the pipe and timeout stress
-# suite, admitted to this tier by name, ten times back to
-# back. Repetition is the volume knob for fixed-size stress
-# tests; a flake that needs nine clean runs to hide shows up
-# here. workflow_dispatch allows the same run on demand.
+# ten times the main-push volume on a schedule, with property
+# tests at 100,000 cases and the pipe and timeout stress
+# suite repeated ten times back to back so rare timing windows
+# surface reliably. workflow_dispatch runs the same job on demand.
 
 on:
   schedule:
