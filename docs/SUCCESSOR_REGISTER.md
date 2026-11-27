@@ -43,7 +43,9 @@ the perfection register as their deliverable.
   David.
 - S2.2 Shipped-binary verification, per channel. CLOSED 2026-11-27,
   no finding, on the hosted proof recorded in its section below.
-- S2.3 Version coherence, extended. Queued.
+- S2.3 Version coherence, extended. CLOSED 2026-11-27, the parity
+  checks extended to every version home and to pull request time,
+  on the evidence recorded in its section below.
 - S3.1 The macOS probe. Queued.
 - S3.2 The Windows parity re-proof. Queued.
 - S4.1 The security file and the remaining surfaces. Queued.
@@ -174,6 +176,36 @@ as 0.2.0 and reproduces the platform-free manifest, no finding is
 raised, and the one channel whose install route the hosted fleet
 cannot exercise stands proven at the binary with the reason on
 the record.
+
+## S2.3: Version coherence, extended
+
+Closed 2026-11-27. S2.1's read confirmed two gaps in the parity
+net: the SDK's own version literal was checked by no workflow,
+and parity ran only at release time, never at pull request time,
+so a skew introduced in a pull request passed the full gate and
+surfaced only when a release was cut. This slice closes both.
+
+The ci.yml hygiene job gains a version parity step that runs on
+every pull request, merge group, and push to main: the pyproject
+version as the reference, checked against the SDK's version
+literal, the four crate package versions, and every inter-crate
+dependency version. release.yml's prepare step now checks the
+pyproject version and the SDK's literal against the release
+version beside the crate checks it already ran, and publish.yml's
+parity step checks the SDK's literal against its pyproject
+reference. Every version home the tree carries now stands under
+a check at pull request time and at release time both.
+
+The new checks were proven able to fail before they were trusted:
+the pull request script and the release script were each run
+against the true tree (pass, at 0.2.0) and against skewed copies
+(an SDK literal at 0.2.1, a crate version at 0.2.1, a pyproject
+version at 0.2.1), each failing with the exact mismatch named.
+The publish step's added lines share the pull request script's
+proven shape and first run at the next crates.io publish.
+Disposition: the gaps are closed, no finding is raised, and
+workstream S2 stands complete with S2.0's ground truth beneath
+it.
 
 ## S1.1: The contract read
 
