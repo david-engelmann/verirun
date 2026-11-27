@@ -38,7 +38,9 @@ the perfection register as their deliverable.
 - S1.4 Fault-path depth and the Python floor. CLOSED 2026-11-26, the
   fault suite and the floor leg landed and S1.2's deferred remedy with
   them, on the evidence recorded in its section below.
-- S2.1 The publish chain read. Queued.
+- S2.1 The publish chain read. CLOSED 2026-11-27, no finding, the
+  account-side confirmations named in its section below for Main or
+  David.
 - S2.2 Shipped-binary verification, per channel. Queued.
 - S2.3 Version coherence, extended. Queued.
 - S3.1 The macOS probe. Queued.
@@ -73,6 +75,67 @@ Disposition: no broken or partial 0.2.0 stands on any channel, the
 three channels agree on the version, and the launch's publish machinery
 completed what PR 223 repaired it to complete. No finding is raised.
 The ground truth the rest of S1 and S2 reason from is this entry.
+
+## S2.1: The publish chain read
+
+Closed 2026-11-27. The four release-side workflows read end to end
+at main 4a9938e8, with their run conclusions read the same day.
+ci.yml stands as every slice's gate evidence and is not this
+slice's subject.
+
+release.yml cuts a GitHub release from a version tag or a
+dispatch. Its prepare job verifies the four crate manifests and
+the inter-crate dependency versions against the release version
+and extracts the matching changelog section, failing without an
+exact version heading. Five platform legs build the archives and
+check the binary's version output where the leg is native, and
+the publish job asserts the five expected archives exist, writes
+SHA256SUMS over them, and undrafts the release. Two runs stand,
+both successful, the 0.1.0 dispatch of 2026-11-17 and the 0.2.0
+tag push of 2026-11-26.
+
+publish.yml carries crates.io. Its package job runs the broadest
+parity check in the tree, taking the pyproject version as the
+expected value across the four crates, their inter-crate
+dependencies, and the tag itself. Its publish job runs under the
+crates-io environment, prefers the registry token secret when
+present with OIDC trusted publishing as the fallback, and
+publishes in topological order with already-published crates
+skipped and sparse-index visibility waits between crates. One run
+stands, the 0.2.0 tag push, successful. Its step record settles
+one question the tree cannot: the OIDC step was skipped and the
+secret check passed, so the 0.2.0 crates.io publish travelled the
+token route, not trusted publishing.
+
+pypi.yml builds five wheels and the source distribution with
+maturin, smoke-tests the installed wheel in a clean virtual
+environment on Linux, macOS, and Windows, and publishes under the
+pypi environment with OIDC and a token fallback, skipping
+existing files. One run stands, the 0.2.0 tag push, successful.
+Which route its publish step took is not separable from the run
+record, the step running identically either way.
+
+stress.yml runs the weekly tier, Mondays at 05:17 UTC and on
+dispatch, the full suite at 100,000 property cases and the pipe
+stress suite ten times under a 300-minute timeout. Three runs
+stand: a dispatch failure on 2026-11-16 in the roadmap era, its
+successful re-dispatch the same evening, and the scheduled run of
+2026-11-23, successful.
+
+The account-side confirmations the tree and the run records
+cannot give are named here for Main or David, unresolved by this
+slice: whether the pypi and crates-io environments carry
+protection rules, whether trusted publishing is registered for
+the project on PyPI's side, whether trusted publishing is to be
+configured per crate on crates.io's side now that the token route
+is proven to be the one carrying publishes, and whether release
+immutability or tag protection stands on the repository.
+Disposition: the chain did what it claims at 0.2.0 on every
+channel, no finding is raised, and the two gaps this read
+confirms pass to their owning slices, the wheel proof to S2.2 and
+the parity gaps to S2.3 (the SDK's own version literal checked by
+no workflow, and parity checked only at release time, never at
+pull request time).
 
 ## S1.1: The contract read
 
