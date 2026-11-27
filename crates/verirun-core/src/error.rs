@@ -303,6 +303,15 @@ pub enum DagError {
         /// The duplicated task id.
         task_id: String,
     },
+    /// Two task ids differ only in letter case, so a
+    /// case-insensitive filesystem would give the two tasks one
+    /// sandbox directory. The error names both ids.
+    CaseCollidingTaskId {
+        /// The task id declared first.
+        first_id: String,
+        /// The task id declared second.
+        task_id: String,
+    },
     /// A `depends_on` entry names no task in the run.
     UnknownDependency {
         /// The task declaring the dependency.
@@ -401,6 +410,12 @@ impl fmt::Display for DagError {
             },
             Self::DuplicateTaskId { task_id } => {
                 write!(f, "duplicate task id {task_id:?}")
+            }
+            Self::CaseCollidingTaskId { first_id, task_id } => {
+                write!(
+                    f,
+                    "task ids {first_id:?} and {task_id:?} differ only in letter case"
+                )
             }
             Self::UnknownDependency { task_id, missing } => {
                 write!(f, "task {task_id:?} depends on unknown task {missing:?}")

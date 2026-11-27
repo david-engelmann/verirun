@@ -67,6 +67,9 @@ the perfection register as their deliverable.
   2026-11-27, charged by Main's ruling at S4 closure as a
   follow-on slice, on the evidence recorded in its section
   below.
+- S4.4 Case-colliding task ids refused. CLOSED 2026-11-27,
+  charged by Main's ruling at S4 closure as a follow-on
+  slice, on the evidence recorded in its section below.
 
 ## S2.0: Published-state ground truth
 
@@ -867,3 +870,36 @@ Disposition: the charged refusal stands landed. The lone
 trailing-character path still validates, because the
 refusal needs a pair, and that control is pinned in the
 same test.
+
+## S4.4: Case-colliding task ids refused
+
+Closed 2026-11-27. This follow-on slice was charged by
+Main's ruling at S4 closure, from the S4 red team's third
+should-fix: task ids were checked exactly only, so two ids
+differing only in letter case share one sandbox directory
+on a case-insensitive filesystem, because each task's
+sandbox is a directory named by its id under the work root
+(scheduler.rs builds work_root/tasks/<task_id> and sandbox
+preparation wipes it). The ruling charges the refusal at
+validation with both ids named, the same defect class as
+INV-DAG-7, with a pin that fails on the pre-rule behaviour.
+
+The build: check 2 keeps a folded map beside the exact set,
+and a second id whose Unicode lowercase form matches an
+earlier id returns DagError::CaseCollidingTaskId naming
+both ids. Exact duplicates still report first as
+duplicates. INV-DAG-9 records the rule, ARCHITECTURE
+sections 7.1 and 11 describe it, and the CHANGELOG's
+Unreleased section carries the breaking note. The pin is
+fault_case_colliding_task_ids in dag_faults, whose refusal
+case validated before this slice, with
+fault_case_colliding_task_ids_exit_3 pinning exit code 3
+and both quoted ids at the CLI. The local gate (clippy
+clean, format check, dag_faults and cli_exit_codes green)
+and hosted CI are the gate of record.
+
+Disposition: the charged refusal stands landed, and with
+it the S4 red team's three should-fixes stand fully
+dispositioned: the fold limitation recorded and its
+widening declined by Main's ruling, and both adjacent
+defects charged and landed as S4.3 and this slice.
