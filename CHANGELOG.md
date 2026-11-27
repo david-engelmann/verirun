@@ -2,6 +2,10 @@
 
 Every notable change to verirun is recorded here. Versions follow the semantic versioning policy in `CONTRIBUTING.md`.
 
+## Unreleased
+
+- Case-colliding declared paths refused at validation. Spec validation now rejects two declared output paths, or two inputs of one task, that differ only in letter case, with exit code 3 naming both paths, because a case-insensitive filesystem would give the pair one file (breaking, under the pre-1.0 versioning policy).
+
 ## 0.2.2
 
 Deterministic shell completions across CLI and Python, a SHA-256-verifying standalone release installer, `cargo-deny` supply-chain enforcement, and citation and contributor tooling.
