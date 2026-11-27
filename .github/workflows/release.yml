@@ -29,7 +29,7 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
-      - name: Verify crate version parity and extract changelog section
+      - name: Verify version parity and extract changelog section
         id: meta
         env:
           INPUT_VERSION: ${{ inputs.version }}
@@ -37,7 +37,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           python3 - <<'PY'
-          import os, pathlib, sys, tomllib
+          import os, pathlib, re, sys, tomllib
 
           event = os.environ["EVENT_NAME"]
           if event == "workflow_dispatch":
@@ -70,6 +70,17 @@ jobs:
                           print(f"inter-crate version mismatch in {manifest_path} for {dep_name}: {dep_version!r} != {version!r}")
                           sys.exit(1)
 
+          pyproject_version = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+          if pyproject_version != version:
+              print(f"version mismatch in pyproject.toml: project version is {pyproject_version!r}, release is {version!r}")
+              sys.exit(1)
+          sdk_text = pathlib.Path("python/verirun/__init__.py").read_text(encoding="utf-8")
+          sdk_match = re.search(r'^__version__ = "([^"]+)"', sdk_text, re.MULTILINE)
+          if sdk_match is None or sdk_match.group(1) != version:
+              found = None if sdk_match is None else sdk_match.group(1)
+              print(f"version mismatch in python/verirun/__init__.py: SDK version is {found!r}, release is {version!r}")
+              sys.exit(1)
+
           lines = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
           heading = f"## {version}"
           start_idx = None
@@ -95,7 +106,7 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
               out.write(f"version={version}\n")
               out.write(f"tag={tag}\n")
-          print(f"verified version {version} across all crates; extracted {len(notes)} chars of notes")
+          print(f"verified version {version} across all version homes; extracted {len(notes)} chars of notes")
           PY
       - name: Create or update draft GitHub release
         env:

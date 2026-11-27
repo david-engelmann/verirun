@@ -6,6 +6,7 @@ Every notable change to verirun is recorded here. Versions follow the semantic v
 
 - Process group cleanup: a task's process group is disarmed once its leader has been reaped, so a finished run can never signal a process group id the system has since handed to another group.
 - Python SDK error messages name the resolved binary's version beside the SDK's own when the binary fails without a structured error, so a stale binary found on PATH explains itself.
+- Version parity now covers every version home at pull request time as well as at release time, including the Python package version and the SDK's own version string, so a version skew fails the gate where it is introduced.
 
 ## 0.2.0
 

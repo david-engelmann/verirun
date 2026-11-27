@@ -51,7 +51,7 @@ jobs:
           REF_TYPE: ${{ github.ref_type }}
         run: |
           python3 - <<'PY'
-          import os, pathlib, sys, tomllib
+          import os, pathlib, re, sys, tomllib
           expected = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
           for manifest in [
               "crates/verirun-platform/Cargo.toml",
@@ -67,6 +67,12 @@ jobs:
                   if dep_name.startswith("verirun-") and isinstance(dep_spec, dict):
                       if dep_spec.get("version") != expected:
                           sys.exit(f"{manifest} dep {dep_name} version {dep_spec.get('version')!r} != {expected!r}")
+          sdk_text = pathlib.Path("python/verirun/__init__.py").read_text(encoding="utf-8")
+          sdk_match = re.search(r'^__version__ = "([^"]+)"', sdk_text, re.MULTILINE)
+          if sdk_match is None:
+              sys.exit("python/verirun/__init__.py carries no __version__ literal")
+          if sdk_match.group(1) != expected:
+              sys.exit(f"SDK __version__ {sdk_match.group(1)!r} != {expected!r}")
           if os.environ.get("REF_TYPE") == "tag":
               tag_ver = os.environ["REF_NAME"].removeprefix("v")
               if tag_ver != expected:

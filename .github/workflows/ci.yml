@@ -75,6 +75,33 @@ jobs:
         run: |
           grep -E '^channel = "[0-9]+\.[0-9]+\.[0-9]+"' rust-toolchain.toml
           test "$(grep -c '^channel' rust-toolchain.toml)" = "1"
+      - name: Version parity across all homes
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys, tomllib
+          expected = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
+          sdk_text = pathlib.Path("python/verirun/__init__.py").read_text(encoding="utf-8")
+          sdk_match = re.search(r'^__version__ = "([^"]+)"', sdk_text, re.MULTILINE)
+          if sdk_match is None:
+              sys.exit("python/verirun/__init__.py carries no __version__ literal")
+          if sdk_match.group(1) != expected:
+              sys.exit(f"SDK __version__ {sdk_match.group(1)!r} != {expected!r}")
+          for manifest in [
+              "crates/verirun-platform/Cargo.toml",
+              "crates/verirun-core/Cargo.toml",
+              "crates/verirun-store/Cargo.toml",
+              "crates/verirun-cli/Cargo.toml",
+          ]:
+              data = tomllib.loads(pathlib.Path(manifest).read_text(encoding="utf-8"))
+              ver = data["package"]["version"]
+              if ver != expected:
+                  sys.exit(f"{manifest} version {ver!r} != {expected!r}")
+              for dep_name, dep_spec in data.get("dependencies", {}).items():
+                  if dep_name.startswith("verirun-") and isinstance(dep_spec, dict):
+                      if dep_spec.get("version") != expected:
+                          sys.exit(f"{manifest} dep {dep_name} version {dep_spec.get('version')!r} != {expected!r}")
+          print(f"version parity ok at {expected}")
+          PY
 
   rust:
     name: rust
