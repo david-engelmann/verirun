@@ -624,7 +624,7 @@ claims it cannot. Verified against the tree: verify and show
 re-hash every referenced object and check recorded artifact
 byte lengths and Merkle roots before trusting stored data.
 Declared paths are restricted to normalized relative paths
-inside the sandbox. collection walks components through held
+inside the sandbox. Collection walks components through held
 handles with O_NOFOLLOW on Unix and FILE_OPEN_REPARSE_POINT
 inspection on Windows, the flag standing in the seam under its
 NT name. The child environment is the declared pairs, the
@@ -718,10 +718,10 @@ files are byte-identical to the first branch's versions.
 
 Validation now compares declared paths case-folded as well
 as exactly. Check 4 in dag.rs keeps a folded owners map
-beside the exact one and returns DagError CaseCollidingOutput
-naming both paths and both tasks. Check 5 keeps a folded set
-within each task's inputs and returns DagError
-CaseCollidingInput naming the task and both paths. Folding
+beside the exact one and returns DagError::CaseCollidingOutput
+naming both paths and both tasks. Check 5 keeps a folded map
+within each task's inputs and returns
+DagError::CaseCollidingInput naming the task and both paths. Folding
 is the Unicode lowercase mapping of the whole normalized
 path, a pure function of the path, so the refusal is
 identical on every platform and a collision through a
@@ -755,3 +755,71 @@ with hosted CI as the gate of record.
 
 Disposition: Main's ruling executed as charged. Workstream
 S4 stands complete with this slice.
+
+## S4 closure
+
+The workstream's two slices landed as PR 254 (S4.1, CI run
+46030187337, main e9727ff4) and PR 260 (S4.2, CI run
+46048141832, main 15d9d4e7), with PR 257 (CI run
+46039165169) closed unmerged on the queue conflict S4.2's
+section records. The three closure reviews ran over the
+landed tree at main 15d9d4e7. Spec fidelity returned every
+charged item MET on both slices, with one observation.
+Standards returned no blockers and no should-fixes, with
+seven nits. The red team returned the S4.1 contract claims,
+the dependabot claim, and the register claim surviving in
+full, and the S4.2 collision claim partially surviving,
+with three should-fixes. My own verification concurred with
+the lanes' citations, which match the code as built and
+locally gated.
+
+Repairs landed with this section: a lowercase sentence
+opening in S4.1's section is capitalized, S4.2's section
+names the two error variants with their separators and
+calls check 5's structure the folded map it is, and
+INV-DAG-7's exact-duplicate edge case now says the older
+error is reported when it is the violation the checks reach
+first in file order. The standards lane's remaining nits
+are dispositioned without changes: S4.1's closing sentence
+stands reconciled by S4.2's section, the folded-claim
+duplication across the two checks is the right call at this
+size, and this section supplies the PR and run citations
+the S4 sections omitted. The spec lane's observation, that
+the docs index rows still carry the word programme, is
+dispositioned without a change: the rows name the repo's
+own programme documents by title, which the earlier scrub
+deliberately kept, and S4.1's sentence is read in that
+sense. The red team's contract nits are dispositioned the
+same way: the seam's own doc comment carries the Windows
+disarm's best-effort disclosure, and the public sentences
+state the contract as implemented.
+
+The red team's first should-fix is recorded as a
+limitation of the rule as charged and landed. The fold is
+the Unicode lowercase mapping, as INV-DAG-7 states, and
+the filesystems' own equivalences diverge from it in
+corners: the long s against s, final sigma against sigma,
+and dotless i against I are one file under the NTFS upcase
+table and distinct under the fold, and the filesystems'
+tables also disagree with each other, so no single fold
+definition closes every corner. Widening the definition is
+a spec-visible change, proposed to Main with this closure
+rather than taken inside it. The ASCII class and the
+common non-ASCII folds are closed as charged.
+
+The red team's other two should-fixes are recorded as
+found adjacent defects, outside both slices' charges and
+proposed to Main as follow-ons to charge or decline. Win32
+strips trailing spaces and dots from each path component,
+so two declared paths differing only that way are one file
+on Windows while validating as distinct. And task ids are
+checked exactly only, so two task ids differing only in
+letter case share one sandbox directory on a
+case-insensitive filesystem, where the folded comparison
+does not reach. Neither contradicts any claim the register
+makes. Both are the same one-file defect family in
+namespaces the case ruling did not name.
+
+Disposition: workstream S4 stands complete on the repaired
+record, with one limitation recorded and two follow-ons
+proposed.
