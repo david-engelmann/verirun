@@ -47,7 +47,9 @@ the perfection register as their deliverable.
 - S2.3 Version coherence, extended. CLOSED 2026-11-27, the parity
   checks extended to every version home and to pull request time,
   on the evidence recorded in its section below.
-- S3.1 The macOS probe. Queued.
+- S3.1 The macOS probe. CLOSED 2026-11-27, one platform fact
+  recorded and a follow-on list scoped, on the probe evidence
+  recorded in its section below.
 - S3.2 The Windows parity re-proof. Queued.
 - S4.1 The security file and the remaining surfaces. Queued.
 
@@ -399,3 +401,53 @@ now states exactly. Disposition: SF-S1-1 is landed, the SDK's fault
 surface is tested per function as this entry states it, and the
 claimed Python range has a hosted floor. Workstream S1 stands
 complete with this slice.
+
+## S3.1: The macOS probe
+
+The bounded probe list ran hosted on macos-latest against a
+binary built from the current tree (diagnostic runs 45994996297
+and 45995412810). Four probes, four answers.
+
+Temp dir and symlink resolution: the runner's TMPDIR is a
+per-user /var/folders path resolving to /private/var/folders,
+and /tmp resolves to /private/tmp. A store placed under either
+runs the portable spec to the pinned manifest digest exactly,
+and the store's object names stand on disk in the lowercase hex
+the code constructs. No divergence.
+
+Rename behaviour: renaming over an existing read-only file, the
+store's replace shape, succeeds on APFS as on Linux, with the
+new content in place. No divergence.
+
+BSD tool divergence: the one known case, the wc padding the
+identity suite's macOS digest branch already pins, stands as
+the recorded instance. The probe raised no new instance, and
+the portable spec's own tools, printf and tr, produce the
+pinned digest on macOS as elsewhere.
+
+Case handling, the one finding of fact: the hosted volume is
+case-insensitive and case-preserving, as APFS is by default. A
+spec whose single task declares two outputs differing only by
+case runs to success on macOS, and the manifest records both
+declared paths with one identical digest, because both writes
+landed on the one file the filesystem allows and collection
+honestly read what was there. Nothing is falsified, the
+manifest matches the collected bytes, and verify stands. But
+the same spec on Linux records two distinct artifacts, so a
+spec can silently mean different things on different platforms
+in a way no later check can see. This is recorded as a platform
+fact of the same family as the wc divergence, not as a store
+defect.
+
+The follow-on list this slice was charged to scope, for Main
+to weigh: one item. A portability guard, either spec validation
+rejecting declared input and output paths that differ only by
+case, or a documented warning in the same place the docs record
+the tool divergence, so the collision is named where a spec
+author can see it rather than discovered in a manifest. No
+other follow-on is proposed. The temp, rename, and tool probes
+came back clean and need none.
+
+Disposition: the probe list is answered in full, the platform
+fact stands on the record, and the follow-on is scoped to a
+single decision. Workstream S3 stands open on S3.2.
