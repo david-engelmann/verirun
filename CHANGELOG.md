@@ -2,11 +2,15 @@
 
 Every notable change to verirun is recorded here. Versions follow the semantic versioning policy in `CONTRIBUTING.md`.
 
-## Unreleased
+## 0.2.1
 
-- Process group cleanup: a task's process group is disarmed once its leader has been reaped, so a finished run can never signal a process group id the system has since handed to another group.
-- Python SDK error messages name the resolved binary's version beside the SDK's own when the binary fails without a structured error, so a stale binary found on PATH explains itself.
-- Version parity now covers the crate versions, the Python package version, and the SDK's own version string at pull request time as well as at release time, so a version skew fails the gate where it is introduced.
+Process-group supervision hardening, programmatic Python DAG authoring and upfront validation, refreshed runtime dependencies, and published-package verification and documentation polish.
+
+- Process-group supervision disarming (`ProcessGroup::disarm`). After a supervised task child is reaped on Unix and Windows, the runner disarms its `ProcessGroup` before pipe drain waits and sandbox directory teardown so drop-time cleanup never signals a recycled Unix process-group identifier while still terminating abandoned groups.
+- Python SDK binary version diagnostic. Error messages raised when the resolved CLI exits without structured JSON now include the binary's reported version alongside the Python SDK version so stale binaries on `PATH` identify themselves.
+- Python SDK DAG builder and upfront validation (`TaskSpec`, `PipelineBuilder`, `run_tasks`). Added the immutable `TaskSpec` dataclass, the fluent `PipelineBuilder` with deterministic topological ordering and upfront validation of task identifiers, reserved environment keys, sandbox-relative paths, output collisions, and dependency cycles, and the `run_tasks` helper for executing in-memory task graphs.
+- Version parity across all homes. Pull-request hygiene, crate publication, and GitHub release gates now verify that `pyproject.toml`, `python/verirun/__init__.py`, and all four `Cargo.toml` manifests agree on one version string.
+- Dependency updates, packaging metadata, and release verification. Updated workspace dependencies (`sha2 0.11`, `windows-sys 0.61`, `clap 4.6.10`), cleaned up `cargo-binstall` archive metadata templates in `verirun-cli`, pinned workflow checkouts to `actions/checkout` `v7.0.1`, added the `.github/workflows/verify-published.yml` external consumer verification workflow across crates.io and PyPI, and switched `README.md` media and documentation links to canonical GitHub URLs so images and links render cleanly on PyPI and crates.io.
 
 ## 0.2.0
 

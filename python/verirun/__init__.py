@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import heapq
 import json
 import os
 from pathlib import Path
@@ -10,7 +11,9 @@ import shutil
 import subprocess
 import sys
 import sysconfig
-from typing import Any, Mapping, Sequence
+import tempfile
+from types import MappingProxyType
+from typing import Any, Mapping, Sequence, overload
 
 __all__ = [
     "__version__",
@@ -20,10 +23,12 @@ __all__ = [
     "GcResult",
     "ManifestSummary",
     "PinResult",
+    "PipelineBuilder",
     "RunResult",
     "TaskDiffSummary",
     "TaskFailure",
     "TaskRecordSummary",
+    "TaskSpec",
     "TaskSummary",
     "VerifyResult",
     "VerirunError",
@@ -32,15 +37,35 @@ __all__ = [
     "gc",
     "pin",
     "run",
+    "run_tasks",
     "show",
     "unpin",
     "verify",
     "version",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 PathInput = str | os.PathLike[str]
+
+_MAX_SAFE_INTEGER = 9_007_199_254_740_991
+_RESERVED_ENV_KEYS = frozenset(
+    {"PATH", "HOME", "TMPDIR", "TZ", "LC_ALL", "SOURCE_DATE_EPOCH"}
+)
+_TASK_FIELDS = frozenset(
+    {
+        "task_id",
+        "executable",
+        "args",
+        "env",
+        "inputs",
+        "outputs",
+        "depends_on",
+        "timeout_ms",
+    }
+)
+_EMPTY_ENV: Mapping[str, str] = MappingProxyType({})
+_UNSET = object()
 
 
 class VerirunError(RuntimeError):
@@ -58,6 +83,362 @@ class VerirunError(RuntimeError):
         self.exit_code = exit_code
         self.kind = kind
         self.payload = payload or {}
+
+
+def _invalid_spec(message: str) -> VerirunError:
+    return VerirunError(message, exit_code=3, kind="invalid_spec")
+
+
+def _normalize_str_tuple(value: Any, field_name: str) -> tuple[str, ...]:
+    if isinstance(value, (str, bytes, bytearray)) or not isinstance(value, Sequence):
+        raise _invalid_spec(f"{field_name!r} must be a sequence of strings")
+    items: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise _invalid_spec(f"{field_name!r} items must be strings")
+        items.append(item)
+    return tuple(items)
+
+
+def _normalize_env_mapping(value: Any) -> Mapping[str, str]:
+    if value is None:
+        return _EMPTY_ENV
+    if not isinstance(value, Mapping):
+        raise _invalid_spec("'env' must be a mapping of string keys to string values")
+    pairs: dict[str, str] = {}
+    for key, val in value.items():
+        if not isinstance(key, str) or not isinstance(val, str):
+            raise _invalid_spec("'env' keys and values must be strings")
+        pairs[key] = val
+    if not pairs:
+        return _EMPTY_ENV
+    return MappingProxyType(dict(sorted(pairs.items())))
+
+
+def _validate_relative_path(raw: str, *, task_id: str, field_name: str) -> str:
+    if not raw or not raw.strip():
+        raise _invalid_spec(f"task {task_id!r} {field_name} path must not be empty")
+    if raw.startswith("/") or (
+        len(raw) >= 2 and raw[0].isascii() and raw[0].isalpha() and raw[1] == ":"
+    ):
+        raise _invalid_spec(
+            f"task {task_id!r} {field_name} path {raw!r} must be relative"
+        )
+    if "\\" in raw:
+        raise _invalid_spec(
+            f"task {task_id!r} {field_name} path {raw!r} must not contain backslashes"
+        )
+    parts = raw.split("/")
+    for part in parts:
+        if part == "":
+            raise _invalid_spec(
+                f"task {task_id!r} {field_name} path {raw!r} contains an empty path component"
+            )
+        if part in {".", ".."}:
+            raise _invalid_spec(
+                f"task {task_id!r} {field_name} path {raw!r} contains unsafe component {part!r}"
+            )
+    return "/".join(parts)
+
+
+@dataclass(frozen=True, init=False, slots=True)
+class TaskSpec:
+    """Declarative specification for one deterministic task in a run graph."""
+
+    task_id: str
+    executable: str
+    args: tuple[str, ...] = ()
+    env: Mapping[str, str] = _EMPTY_ENV
+    inputs: tuple[str, ...] = ()
+    outputs: tuple[str, ...] = ()
+    depends_on: tuple[str, ...] = ()
+    timeout_ms: int | None = None
+
+    def __init__(
+        self,
+        task_id: str,
+        executable: str,
+        args: Sequence[str] = (),
+        env: Mapping[str, str] | None = None,
+        inputs: Sequence[str] = (),
+        outputs: Sequence[str] = (),
+        depends_on: Sequence[str] = (),
+        timeout_ms: int | None = None,
+    ) -> None:
+        if not isinstance(task_id, str):
+            raise _invalid_spec("'task_id' must be a string")
+        if not isinstance(executable, str):
+            raise _invalid_spec("'executable' must be a string")
+        if timeout_ms is not None and (
+            isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int)
+        ):
+            raise _invalid_spec("'timeout_ms' must be an integer of at least 1")
+        object.__setattr__(self, "task_id", task_id)
+        object.__setattr__(self, "executable", executable)
+        object.__setattr__(self, "args", _normalize_str_tuple(args, "args"))
+        object.__setattr__(self, "env", _normalize_env_mapping(env))
+        object.__setattr__(self, "inputs", _normalize_str_tuple(inputs, "inputs"))
+        object.__setattr__(self, "outputs", _normalize_str_tuple(outputs, "outputs"))
+        object.__setattr__(
+            self, "depends_on", _normalize_str_tuple(depends_on, "depends_on")
+        )
+        object.__setattr__(self, "timeout_ms", timeout_ms)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize this task into its ``verirun`` JSON object representation."""
+        out: dict[str, Any] = {
+            "task_id": self.task_id,
+            "executable": self.executable,
+            "args": list(self.args),
+            "env": dict(self.env),
+            "inputs": list(self.inputs),
+            "outputs": list(self.outputs),
+            "depends_on": list(self.depends_on),
+        }
+        if self.timeout_ms is not None:
+            out["timeout_ms"] = self.timeout_ms
+        return out
+
+
+def _coerce_task_spec(item: TaskSpec | Mapping[str, Any]) -> TaskSpec:
+    if isinstance(item, TaskSpec):
+        return item
+    if isinstance(item, Mapping):
+        unknown = [key for key in item if key not in _TASK_FIELDS]
+        if unknown:
+            raise _invalid_spec(f"unknown task field {unknown[0]!r}")
+        if "task_id" not in item:
+            raise _invalid_spec("task is missing required field 'task_id'")
+        if "executable" not in item:
+            raise _invalid_spec("task is missing required field 'executable'")
+        return TaskSpec(
+            task_id=item["task_id"],
+            executable=item["executable"],
+            args=item.get("args", ()),
+            env=item.get("env"),
+            inputs=item.get("inputs", ()),
+            outputs=item.get("outputs", ()),
+            depends_on=item.get("depends_on", ()),
+            timeout_ms=item.get("timeout_ms"),
+        )
+    raise _invalid_spec("each task must be a TaskSpec or mapping")
+
+
+class PipelineBuilder:
+    """Fluent builder and upfront validator for ``verirun`` task DAG specifications."""
+
+    def __init__(
+        self, tasks: Sequence[TaskSpec | Mapping[str, Any]] = ()
+    ) -> None:
+        if isinstance(tasks, (str, bytes, bytearray, Mapping)) or not isinstance(
+            tasks, Sequence
+        ):
+            raise _invalid_spec("'tasks' must be a sequence of TaskSpec or mappings")
+        self._tasks: list[TaskSpec] = [_coerce_task_spec(item) for item in tasks]
+
+    @property
+    def tasks(self) -> tuple[TaskSpec, ...]:
+        """Return the tasks added so far in declaration order."""
+        return tuple(self._tasks)
+
+    @overload
+    def add_task(self, task_id: TaskSpec, /) -> PipelineBuilder: ...
+
+    @overload
+    def add_task(
+        self,
+        task_id: str,
+        executable: str,
+        args: Sequence[str] = (),
+        env: Mapping[str, str] | None = None,
+        inputs: Sequence[str] = (),
+        outputs: Sequence[str] = (),
+        depends_on: Sequence[str] = (),
+        timeout_ms: int | None = None,
+    ) -> PipelineBuilder: ...
+
+    def add_task(
+        self,
+        task_id: TaskSpec | Mapping[str, Any] | str,
+        executable: str | object = _UNSET,
+        args: Sequence[str] | object = _UNSET,
+        env: Mapping[str, str] | None | object = _UNSET,
+        inputs: Sequence[str] | object = _UNSET,
+        outputs: Sequence[str] | object = _UNSET,
+        depends_on: Sequence[str] | object = _UNSET,
+        timeout_ms: int | None | object = _UNSET,
+    ) -> PipelineBuilder:
+        """Append a task via ``TaskSpec`` or field arguments and return ``self``."""
+        extras = (executable, args, env, inputs, outputs, depends_on, timeout_ms)
+        if isinstance(task_id, (TaskSpec, Mapping)):
+            if any(val is not _UNSET for val in extras):
+                raise _invalid_spec(
+                    "cannot pass field arguments alongside a TaskSpec or mapping"
+                )
+            self._tasks.append(_coerce_task_spec(task_id))
+            return self
+
+        if executable is _UNSET or not isinstance(executable, str):
+            raise _invalid_spec("'executable' must be a string")
+        spec = TaskSpec(
+            task_id=task_id,
+            executable=executable,
+            args=() if args is _UNSET else args,  # type: ignore[arg-type]
+            env=None if env is _UNSET else env,  # type: ignore[arg-type]
+            inputs=() if inputs is _UNSET else inputs,  # type: ignore[arg-type]
+            outputs=() if outputs is _UNSET else outputs,  # type: ignore[arg-type]
+            depends_on=() if depends_on is _UNSET else depends_on,  # type: ignore[arg-type]
+            timeout_ms=None if timeout_ms is _UNSET else timeout_ms,  # type: ignore[arg-type]
+        )
+        self._tasks.append(spec)
+        return self
+
+    def validate(self) -> tuple[str, ...]:
+        """Validate the task graph upfront and return deterministic topological order."""
+        if not self._tasks:
+            raise _invalid_spec("pipeline must contain at least one task")
+
+        seen_ids: set[str] = set()
+        for task in self._tasks:
+            tid = task.task_id
+            if (
+                not tid.strip()
+                or tid in {".", ".."}
+                or "/" in tid
+                or "\\" in tid
+            ):
+                raise _invalid_spec(
+                    f"invalid task_id {tid!r}: must be a non-blank single path component"
+                )
+            if tid in seen_ids:
+                raise _invalid_spec(f"duplicate task_id {tid!r}")
+            seen_ids.add(tid)
+
+            if not task.executable.strip():
+                raise _invalid_spec(f"task {tid!r} executable must not be blank")
+
+            if task.timeout_ms is not None and (
+                task.timeout_ms < 1 or task.timeout_ms > _MAX_SAFE_INTEGER
+            ):
+                raise _invalid_spec(
+                    f"task {tid!r} timeout_ms must be between 1 and {_MAX_SAFE_INTEGER}"
+                )
+
+            for key in task.env:
+                if not key.strip():
+                    raise _invalid_spec(f"task {tid!r} env key must not be blank")
+                if key in _RESERVED_ENV_KEYS:
+                    raise _invalid_spec(
+                        f"task {tid!r} env declares reserved key {key!r}"
+                    )
+
+        for task in self._tasks:
+            for dep in task.depends_on:
+                if dep == task.task_id:
+                    raise _invalid_spec(
+                        f"task {task.task_id!r} cannot depend on itself"
+                    )
+                if dep not in seen_ids:
+                    raise _invalid_spec(
+                        f"task {task.task_id!r} depends on unknown task {dep!r}"
+                    )
+
+        output_owners: dict[str, str] = {}
+        for task in self._tasks:
+            seen_inputs: set[str] = set()
+            for raw_in in task.inputs:
+                norm_in = _validate_relative_path(
+                    raw_in, task_id=task.task_id, field_name="input"
+                )
+                if norm_in in seen_inputs:
+                    raise _invalid_spec(
+                        f"task {task.task_id!r} declares duplicate input {norm_in!r}"
+                    )
+                seen_inputs.add(norm_in)
+
+            for raw_out in task.outputs:
+                norm_out = _validate_relative_path(
+                    raw_out, task_id=task.task_id, field_name="output"
+                )
+                if norm_out in output_owners:
+                    first_owner = output_owners[norm_out]
+                    raise _invalid_spec(
+                        f"output path {norm_out!r} collides between {first_owner!r} and {task.task_id!r}"
+                    )
+                output_owners[norm_out] = task.task_id
+
+        deps_by_id = {
+            task.task_id: sorted(set(task.depends_on)) for task in self._tasks
+        }
+        indegree = {tid: len(deps) for tid, deps in deps_by_id.items()}
+        dependents: dict[str, list[str]] = {tid: [] for tid in deps_by_id}
+        for tid, deps in deps_by_id.items():
+            for dep in deps:
+                dependents[dep].append(tid)
+
+        ready = [tid for tid, deg in indegree.items() if deg == 0]
+        heapq.heapify(ready)
+        order: list[str] = []
+        while ready:
+            current = heapq.heappop(ready)
+            order.append(current)
+            for child in dependents[current]:
+                indegree[child] -= 1
+                if indegree[child] == 0:
+                    heapq.heappush(ready, child)
+
+        if len(order) != len(self._tasks):
+            remnants = sorted(tid for tid, deg in indegree.items() if deg > 0)
+            raise _invalid_spec(
+                f"dependency cycle detected among tasks: {', '.join(remnants)}"
+            )
+
+        return tuple(order)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Validate and return the run specification dictionary."""
+        self.validate()
+        return {"tasks": [task.to_dict() for task in self._tasks]}
+
+    def to_json(self, *, indent: int | None = 2) -> str:
+        """Validate and serialize the run specification to JSON text."""
+        return json.dumps(self.to_dict(), indent=indent) + "\n"
+
+    def write(self, path: PathInput) -> Path:
+        """Validate and write the run specification JSON file to ``path``."""
+        payload = self.to_json()
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(payload, encoding="utf-8")
+        return target
+
+    def run(
+        self,
+        *,
+        cas: PathInput,
+        work: PathInput,
+        inputs: Mapping[str, PathInput] | None = None,
+        jobs: int | None = None,
+        pin_manifest: bool = False,
+        seed: int | None = None,
+        check: bool = False,
+        binary: PathInput | None = None,
+    ) -> RunResult:
+        """Validate, materialize a temporary spec file, and run via ``verirun``."""
+        self.validate()
+        with tempfile.TemporaryDirectory(prefix="verirun-spec-") as tmp_dir:
+            spec_path = self.write(Path(tmp_dir) / "pipeline.json")
+            return run(
+                spec_path,
+                cas=cas,
+                work=work,
+                inputs=inputs,
+                jobs=jobs,
+                pin_manifest=pin_manifest,
+                seed=seed,
+                check=check,
+                binary=binary,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -391,6 +772,31 @@ def run(
     if check:
         result.raise_for_failures()
     return result
+
+
+def run_tasks(
+    tasks: Sequence[TaskSpec | Mapping[str, Any]],
+    *,
+    cas: PathInput,
+    work: PathInput,
+    inputs: Mapping[str, PathInput] | None = None,
+    jobs: int | None = None,
+    pin_manifest: bool = False,
+    seed: int | None = None,
+    check: bool = False,
+    binary: PathInput | None = None,
+) -> RunResult:
+    """Validate and execute an in-memory sequence of tasks via ``PipelineBuilder``."""
+    return PipelineBuilder(tasks).run(
+        cas=cas,
+        work=work,
+        inputs=inputs,
+        jobs=jobs,
+        pin_manifest=pin_manifest,
+        seed=seed,
+        check=check,
+        binary=binary,
+    )
 
 
 def verify(

@@ -1,6 +1,6 @@
 [package]
 name = "verirun-cli"
-version = "0.2.0"
+version = "0.2.1"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -16,8 +16,8 @@ name = "verirun"
 path = "src/main.rs"
 
 [dependencies]
-verirun-core = { version = "0.2.0", path = "../verirun-core" }
-verirun-store = { version = "0.2.0", path = "../verirun-store" }
+verirun-core = { version = "0.2.1", path = "../verirun-core" }
+verirun-store = { version = "0.2.1", path = "../verirun-store" }
 clap.workspace = true
 serde_json.workspace = true
 
@@ -32,7 +32,7 @@ workspace = true
 proptest.workspace = true
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/verirun-v{ version }-{ target }.{ archive-format }"
+pkg-url = "{ repo }/releases/download/v{ version }/verirun-v{ version }-{ target }{ archive-suffix }"
 bin-dir = "verirun-v{ version }-{ target }/{ bin }{ binary-ext }"
 pkg-fmt = "tgz"
 

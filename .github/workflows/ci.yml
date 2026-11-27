@@ -30,7 +30,7 @@ jobs:
     name: hygiene
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Required files and copy bar
         run: |
           python3 - <<'PY'
@@ -111,7 +111,7 @@ jobs:
       PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '1000' || '10000' }}
       RUSTDOCFLAGS: "-D warnings"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Print active seed
         run: echo "SIM_SEED=$SIM_SEED PROPTEST_CASES=$PROPTEST_CASES"
       - name: Install the pinned toolchain
@@ -158,7 +158,7 @@ jobs:
       PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '1000' || '100' }}
       RUSTDOCFLAGS: "-D warnings"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Install the pinned toolchain
         run: |
           rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
@@ -205,7 +205,7 @@ jobs:
       # job owns the case-count policy.
       PROPTEST_CASES: "100"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Install the declared rust-version
         run: |
           rustup toolchain install 1.88.0 --profile minimal
@@ -238,7 +238,7 @@ jobs:
       PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '1000' || '100' }}
       RUSTDOCFLAGS: "-D warnings"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Install the pinned toolchain
         shell: bash
         run: |
@@ -285,7 +285,7 @@ jobs:
     name: audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Install the pinned toolchain
         run: |
           rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
@@ -308,7 +308,7 @@ jobs:
     name: python-floor
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Install the pinned toolchain
         run: |
           rustup toolchain install
