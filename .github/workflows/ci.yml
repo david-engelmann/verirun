@@ -3,8 +3,9 @@ name: ci
 # Gate design for verirun.
 # Every pull request, merge group, and push to main runs repository
 # hygiene, the full Rust gate on Linux, macOS, and Windows, the
-# declared minimum supported Rust version build and test gate, and
-# cargo-audit over the committed Cargo.lock.
+# declared minimum supported Rust version build and test gate,
+# cargo-audit over the committed Cargo.lock, and the Python SDK
+# suite on its declared 3.10 floor.
 
 on:
   push:
@@ -275,3 +276,30 @@ jobs:
         # Roadmap lane R7. A vulnerability in the locked
         # dependency set fails this job and therefore the gate.
         run: cargo audit
+
+  python-floor:
+    name: python-floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the pinned toolchain
+        run: |
+          rustup toolchain install
+          rustup show active-toolchain
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-floor-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-floor-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Python SDK test suite on the declared 3.10 floor
+        run: |
+          cargo build --locked -p verirun-cli --bin verirun
+          python -m unittest discover -s python/tests -v

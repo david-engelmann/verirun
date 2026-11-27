@@ -5,6 +5,7 @@ Every notable change to verirun is recorded here. Versions follow the semantic v
 ## Unreleased
 
 - Process group cleanup: a task's process group is disarmed once its leader has been reaped, so a finished run can never signal a process group id the system has since handed to another group.
+- Python SDK error messages name the resolved binary's version beside the SDK's own when the binary fails without a structured error, so a stale binary found on PATH explains itself.
 
 ## 0.2.0
 
