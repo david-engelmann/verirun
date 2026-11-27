@@ -112,7 +112,7 @@ jobs:
     name: install-pypi
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Install verirun from PyPI and verify PipelineBuilder run

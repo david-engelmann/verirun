@@ -323,7 +323,7 @@ jobs:
           key: ${{ runner.os }}-cargo-floor-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-floor-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.10"
       - name: Python SDK test suite on the declared 3.10 floor
