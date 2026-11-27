@@ -24,8 +24,9 @@ the perfection register as their deliverable.
 
 ## Slice ledger
 
-- S2.0 Published-state ground truth. CLOSED 2026-11-26, on the evidence
-  recorded in its section below. Seated first, on Main's sequencing
+- S2.0 Published-state ground truth. CLOSED 2026-11-26, no finding,
+  on the evidence recorded in its section below. Seated first, on
+  Main's sequencing
   note, since the later slices of S1 and S2 reason from what stands
   published.
 - S1.1 The contract read. CLOSED 2026-11-26, no finding, on the
@@ -129,8 +130,9 @@ The account-side confirmations the tree and the run records
 cannot give are named here for Main or David, unresolved by this
 slice: whether the pypi and crates-io environments carry
 protection rules, whether trusted publishing is registered for
-the project on PyPI's side, whether trusted publishing is to be
-configured per crate on crates.io's side now that the token route
+the project on PyPI's side, whether trusted publishing stands
+configured per crate on crates.io's side today and whether it is
+to be configured there now that the token route
 is proven to be the one carrying publishes, and whether release
 immutability or tag protection stands on the repository.
 Disposition: the chain did what it claims at 0.2.0 on every
@@ -146,10 +148,12 @@ Closed 2026-11-27. The builds under proof are pypi.yml's own: the
 workflow was dispatched on main f0d6fbf0 with publishing disabled
 (run 45958953858, all five wheel legs and the source distribution
 built, the three smoke tests green, the publish job skipped). A
-diagnostic workflow then installed each artifact in a clean
-virtual environment on a runner of its own architecture and drove
-the portable spec from the platform identity suite through the
-installed SDK. The criterion is the one the scope decided: the
+diagnostic workflow then installed the artifacts in clean
+virtual environments on runners of their own architecture and
+drove the portable spec from the platform identity suite through
+the installed SDK, five of the six in that form, with the sixth
+handled as this entry records below. The criterion is the one
+the scope decided: the
 binary's version string and the portable spec's manifest digest
 against the pinned platform-free commitment, per channel against
 its own build inputs, with no byte-for-byte claim between
@@ -177,6 +181,21 @@ raised, and the one channel whose install route the hosted fleet
 cannot exercise stands proven at the binary with the reason on
 the record.
 
+Completion, recorded at the workstream's closure on 2026-11-27:
+the closure reviews found this entry's proof covered one of the
+two build channels its charge names, the release archives built
+by release.yml standing unexamined under the criterion, and the
+omission is corrected here rather than defended. The five
+published v0.2.0 archives were downloaded on runners of their
+own architecture, each verified against the release's
+SHA256SUMS, and each archive's binary was put through the same
+criterion (run 45985768062): all five report version 0.2.0 and
+produce the pinned manifest digest exactly, the macOS x86_64
+archive at the binary under Rosetta as with its wheel. With
+that, both channels the charge names stand proven, and S2.0's
+ground truth gains the functional half its inventory lacked,
+every published archive now checksummed and run.
+
 ## S2.3: Version coherence, extended
 
 Closed 2026-11-27. S2.1's read confirmed two gaps in the parity
@@ -198,14 +217,40 @@ a check at pull request time and at release time both.
 
 The new checks were proven able to fail before they were trusted:
 the pull request script and the release script were each run
-against the true tree (pass, at 0.2.0) and against skewed copies
+locally against the true tree (pass, at 0.2.0) and against skewed copies
 (an SDK literal at 0.2.1, a crate version at 0.2.1, a pyproject
 version at 0.2.1), each failing with the exact mismatch named.
 The publish step's added lines share the pull request script's
-proven shape and first run at the next crates.io publish.
+proven shape and first run at the next crates.io publish. Two
+boundaries stand on the record: the generated version entries in
+Cargo.lock are read by no parity script and stand covered
+transitively, because every cargo command in the gate runs
+locked, and the three scripts walk each manifest's top level
+dependencies table, which is where every inter-crate pin lives
+today.
 Disposition: the gaps are closed, no finding is raised, and
 workstream S2 stands complete with S2.0's ground truth beneath
 it.
+
+## S2 closure
+
+Workstream S2 closed 2026-11-27 under the checkpoint rule's
+three reviews. The red team found three of the workstream's
+four closure claims surviving as written and one overstatement,
+S2.2's single-channel proof, with S2.0's no-broken verdict
+resting at its writing on single-platform functional evidence.
+Spec fidelity found S2.0, S2.1, and S2.3 meeting their charges
+and S2.2 partial on the same gap. Standards found no blockers,
+its nits being the changelog's one internal term, one inexact
+error message in release.yml, and wording precision in two
+entries. Every finding was repaired in the closure pass that
+carries this section: the archives channel proven and recorded
+in S2.2's entry, the account-side list in S2.1's entry restored
+to its charge's full form, S2.3's boundaries stated in its
+entry, the changelog bullet reworded, and the release message
+split to match its siblings. My own verification re-read each
+repair against its review and re-checked the closure claims
+against the tree.
 
 ## S1.1: The contract read
 
