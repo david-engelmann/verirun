@@ -76,9 +76,11 @@ jobs:
               sys.exit(1)
           sdk_text = pathlib.Path("python/verirun/__init__.py").read_text(encoding="utf-8")
           sdk_match = re.search(r'^__version__ = "([^"]+)"', sdk_text, re.MULTILINE)
-          if sdk_match is None or sdk_match.group(1) != version:
-              found = None if sdk_match is None else sdk_match.group(1)
-              print(f"version mismatch in python/verirun/__init__.py: SDK version is {found!r}, release is {version!r}")
+          if sdk_match is None:
+              print("python/verirun/__init__.py carries no __version__ literal")
+              sys.exit(1)
+          if sdk_match.group(1) != version:
+              print(f"version mismatch in python/verirun/__init__.py: SDK version is {sdk_match.group(1)!r}, release is {version!r}")
               sys.exit(1)
 
           lines = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
