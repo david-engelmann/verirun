@@ -241,6 +241,33 @@ def find_binary(binary: PathInput | None = None) -> Path:
     )
 
 
+def _probe_version(exe: Path) -> str | None:
+    """Best-effort version of a resolved binary, for error messages.
+
+    Returns the version only when the binary answers ``--version``
+    in the CLI's own ``verirun <version>`` form. Any failure, and
+    any other output shape, yields ``None`` and the caller's
+    message stands unchanged.
+    """
+    try:
+        proc = subprocess.run(
+            [str(exe), "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            timeout=10,
+        )
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    if not proc.stdout:
+        return None
+    parts = proc.stdout.strip().split()
+    if proc.returncode == 0 and len(parts) == 2 and parts[0] == "verirun":
+        return parts[1]
+    return None
+
+
 def _invoke_json(
     args: Sequence[str],
     *,
@@ -271,8 +298,12 @@ def _invoke_json(
                 kind=payload.get("kind"),
                 payload=payload,
             )
+        message = proc.stderr.strip() or stdout or "verirun failed"
+        probed = _probe_version(exe)
+        if probed is not None:
+            message = f"{message} (binary version {probed}, SDK version {__version__})"
         raise VerirunError(
-            proc.stderr.strip() or stdout or "verirun failed",
+            message,
             exit_code=proc.returncode,
         )
 

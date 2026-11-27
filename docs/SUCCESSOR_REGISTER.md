@@ -35,9 +35,9 @@ the perfection register as their deliverable.
   its section below.
 - S1.3 Error mapping. CLOSED 2026-11-26, no finding, on the mapping
   recorded in its section below.
-- S1.4 Fault-path depth and the Python floor. Queued, and charged by
-  S1.2 with the version-mismatch diagnostic remedy recorded in S1.2's
-  section.
+- S1.4 Fault-path depth and the Python floor. CLOSED 2026-11-26, the
+  fault suite and the floor leg landed and S1.2's deferred remedy with
+  them, on the evidence recorded in its section below.
 - S2.1 The publish chain read. Queued.
 - S2.2 Shipped-binary verification, per channel. Queued.
 - S2.3 Version coherence, extended. Queued.
@@ -168,3 +168,56 @@ check option, accepted here with S1.4's fault suite charged to pin
 it. Disposition: no finding, and the payload-less fallback this entry
 describes is confirmed as the site where S1.2's deferred diagnostic
 remedy attaches in S1.4.
+
+## S1.4: Fault-path depth and the Python floor
+
+Closed 2026-11-26. This slice built three things. First, the fault
+suite at python/tests/test_sdk_faults.py, covering the public
+functions per fixture in the adopted form, with the coverage stated
+exactly. A missing binary raises FileNotFoundError from all nine
+public functions including find_binary itself. The seven
+process-backed functions that take their result from _invoke_json
+are covered against every other fixture: a failing binary (the
+Python interpreter standing in as an executable that runs and
+refuses the CLI's arguments without a payload, with two stubs
+pinning exit codes 1 and 3 exactly) raises VerirunError with the
+fixture's exit code and no kind, malformed payloads (a non-JSON
+reply and a JSON reply that is not an object, each at a successful
+exit) raise the not-a-JSON-object error, and a wrong-version binary
+raises VerirunError at exit code 3. The remaining two functions are
+dispositioned in words: find_binary never executes the binary it
+resolves, so it has no failing or wrong-version mode to test, and
+version is fault-tested against the always-failing stub, the one
+fixture that can fail a --version call. Second, S1.2's deferred
+remedy landed with the suite. The wrong-version fixture is a
+generated stub that mimics the 0.1.0 CLI's surface exactly where
+S1.2 probed it, answering --version as 0.1.0, rejecting pin as an
+unrecognized subcommand, and rejecting the rest without a payload,
+and _invoke_json's payload-less path now probes the resolved binary
+and names its version beside the SDK's own in the exception message
+when the binary answers in the CLI's version form. The pin and run
+fault tests assert both version strings, so the diagnostic is pinned
+by tests that fail without it. For the five functions S1.2 never
+probed against the real binary, the stub proves the SDK's uniform
+handling of the payload-less exit 3 shape, not the real binary's
+behaviour on those calls. The stub stands in for the real 0.1.0
+binary deliberately: it is hermetic and fast, it mimics the two
+failure shapes S1.2 proved against the real binary, and the real
+cross-version proof already stands in S1.2's probe. The probe costs
+one extra --version execution, bounded at ten seconds, on
+payload-less failures only. Third, the Python floor is owned by a
+hosted leg: a python-floor CI job runs the full SDK suite under
+Python 3.10, the oldest version the package claims, so the
+classifiers stand as a tested claim rather than an aspiration.
+S1.3's recorded shape is pinned by two check-mode tests in the
+end-to-end suite, which assert the raised exception carries
+execution failures in its message, falls back to its generic text
+for a plain exit-code failure, and keeps an empty payload either
+way. The workstream closure reviews ran over this slice: the red
+team found one should-fix, a version probe that could itself throw
+on non-UTF-8 output, repaired here with a discriminating test, and
+the spec and standards axes charged the coverage wording this entry
+now states exactly. Disposition: SF-S1-1 is landed, the SDK's fault
+surface is tested per function as this entry states it, and the
+claimed Python range has a hosted floor. Workstream S1 stands
+complete with this slice.
