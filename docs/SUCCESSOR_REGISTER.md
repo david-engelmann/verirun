@@ -63,6 +63,10 @@ the perfection register as their deliverable.
   2026-11-27, charged by Main's ruling on the follow-on
   decision S3.1 scoped, on the evidence recorded in its
   section below.
+- S4.3 Trailing-colliding declared paths refused. CLOSED
+  2026-11-27, charged by Main's ruling at S4 closure as a
+  follow-on slice, on the evidence recorded in its section
+  below.
 
 ## S2.0: Published-state ground truth
 
@@ -823,3 +827,43 @@ namespaces the case ruling did not name.
 Disposition: workstream S4 stands complete on the repaired
 record, with one limitation recorded and two follow-ons
 proposed.
+
+## S4.3: Trailing-colliding declared paths refused
+
+Closed 2026-11-27. This follow-on slice was charged by
+Main's ruling at S4 closure, from the S4 red team's second
+should-fix: Win32 strips trailing spaces and dots from each
+path component when it opens a file, so two declared paths
+differing only that way are one file on Windows while
+validating as distinct. The ruling charges the refusal at
+validation with both paths named, the same defect class as
+INV-DAG-7, with a pin that fails on the pre-rule behaviour.
+
+The build: validation checks 4 and 5 gain a third
+comparison beside the exact and case-folded ones, keyed on
+the case-folded Win32-stripped form of the whole normalized
+path, each component with trailing spaces and dots removed.
+A stripped hit with a different original path returns
+DagError::TrailingCollidingOutput naming both paths and
+both tasks, or DagError::TrailingCollidingInput naming the
+task and both paths. Keying the stripped form folded means
+a pair differing in both letter case and trailing
+characters is refused as well. Exact duplicates and pure
+case collisions still report first under the older errors.
+INV-DAG-8 records the rule, ARCHITECTURE sections 7.1 and
+11 describe it, and the CHANGELOG's Unreleased section
+carries the breaking note. The pin is
+fault_trailing_colliding_paths in dag_faults, whose refusal
+cases (a trailing space across tasks, a trailing dot within
+one task, a directory-component collision, a combined case
+and trailing pair, and a trailing-dot input pair) each
+validated before this slice, with
+fault_trailing_colliding_outputs_exit_3 pinning exit code 3
+and both quoted paths at the CLI. The local gate (clippy
+clean, format check, dag_faults and cli_exit_codes green)
+and hosted CI are the gate of record.
+
+Disposition: the charged refusal stands landed. The lone
+trailing-character path still validates, because the
+refusal needs a pair, and that control is pinned in the
+same test.

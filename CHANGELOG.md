@@ -5,6 +5,7 @@ Every notable change to verirun is recorded here. Versions follow the semantic v
 ## Unreleased
 
 - Case-colliding declared paths refused at validation. Spec validation now rejects two declared output paths, or two inputs of one task, that differ only in letter case, with exit code 3 naming both paths, because a case-insensitive filesystem would give the pair one file (breaking, under the pre-1.0 versioning policy).
+- Trailing-colliding declared paths refused at validation. Spec validation now also rejects two declared output paths, or two inputs of one task, whose components differ only in trailing spaces and dots, with exit code 3 naming both paths, because Win32 strips those characters from each component and would give the pair one file (breaking, under the pre-1.0 versioning policy).
 
 ## 0.2.2
 
