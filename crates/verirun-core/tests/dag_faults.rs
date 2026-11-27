@@ -1,4 +1,4 @@
-//! DAG validation fault oracles (INV-DAG-1 to INV-DAG-7).
+//! DAG validation fault oracles (INV-DAG-1 to INV-DAG-8).
 //!
 //! Every test feeds a parsed run file to core validation and
 //! asserts the exact first error, because the fixed check order of
@@ -396,4 +396,83 @@ fn fault_case_colliding_paths() {
     let one = task("a").replace(r#""outputs":[]"#, r#""outputs":["a.txt"]"#);
     let two = task("b").replace(r#""outputs":[]"#, r#""outputs":["a2.txt"]"#);
     assert!(validate(&run(&[one, two])).is_ok());
+}
+
+#[test]
+fn fault_trailing_colliding_paths() {
+    // Two outputs of different tasks that differ only in a
+    // trailing space name one file on Windows, where trailing
+    // spaces and dots in a component are stripped (INV-DAG-8).
+    let first = task("a").replace(r#""outputs":[]"#, r#""outputs":["out.txt "]"#);
+    let second = task("b").replace(r#""outputs":[]"#, r#""outputs":["out.txt"]"#);
+    assert_eq!(
+        validate(&run(&[first, second])),
+        Err(DagError::TrailingCollidingOutput {
+            first_path: "out.txt ".to_string(),
+            path: "out.txt".to_string(),
+            first_task: "a".to_string(),
+            second_task: "b".to_string()
+        })
+    );
+
+    // A trailing dot across one task's own two outputs.
+    let pair = task("a").replace(r#""outputs":[]"#, r#""outputs":["report.","report"]"#);
+    assert_eq!(
+        validate(&run(&[pair])),
+        Err(DagError::TrailingCollidingOutput {
+            first_path: "report.".to_string(),
+            path: "report".to_string(),
+            first_task: "a".to_string(),
+            second_task: "a".to_string()
+        })
+    );
+
+    // A collision through a directory component alone.
+    let left = task("a").replace(r#""outputs":[]"#, r#""outputs":["dir /f.txt"]"#);
+    let right = task("b").replace(r#""outputs":[]"#, r#""outputs":["dir/f.txt"]"#);
+    assert_eq!(
+        validate(&run(&[left, right])),
+        Err(DagError::TrailingCollidingOutput {
+            first_path: "dir /f.txt".to_string(),
+            path: "dir/f.txt".to_string(),
+            first_task: "a".to_string(),
+            second_task: "b".to_string()
+        })
+    );
+
+    // A case difference and a trailing space together still
+    // name one file on Windows.
+    let upper = task("a").replace(r#""outputs":[]"#, r#""outputs":["OUT.txt "]"#);
+    let lower = task("b").replace(r#""outputs":[]"#, r#""outputs":["out.txt"]"#);
+    assert_eq!(
+        validate(&run(&[upper, lower])),
+        Err(DagError::TrailingCollidingOutput {
+            first_path: "OUT.txt ".to_string(),
+            path: "out.txt".to_string(),
+            first_task: "a".to_string(),
+            second_task: "b".to_string()
+        })
+    );
+
+    // Two inputs in one task that differ only in a trailing
+    // dot are refused the same way.
+    let inputs = task("a").replace(r#""inputs":[]"#, r#""inputs":["in.txt.","in.txt"]"#);
+    assert_eq!(
+        validate(&run(&[inputs])),
+        Err(DagError::TrailingCollidingInput {
+            task_id: "a".to_string(),
+            first_path: "in.txt.".to_string(),
+            path: "in.txt".to_string()
+        })
+    );
+
+    // Control: a lone output carrying a trailing dot
+    // validates, because the refusal needs a pair.
+    let lone = task("a").replace(r#""outputs":[]"#, r#""outputs":["solo."]"#);
+    assert!(validate(&run(&[lone])).is_ok());
+
+    // Control: outputs that differ in more than the trailing
+    // characters validate.
+    let apart = task("a").replace(r#""outputs":[]"#, r#""outputs":["a.txt","a.txt.bak"]"#);
+    assert!(validate(&run(&[apart])).is_ok());
 }

@@ -128,6 +128,10 @@ Edge cases. `timeout_ms` of 1 and `MAX_SAFE_INTEGER` (`9007199254740991`) are ac
 Two declared output paths that differ only in letter case are rejected with exit code 3, naming both paths and both task ids, and two input paths declared by one task that differ only in letter case are rejected the same way, naming the task and both paths. A case-insensitive filesystem would give such a pair one file, so the spec's meaning would depend on the host filesystem. Folding is the Unicode lowercase mapping, a pure function of the path, so the refusal is identical on every platform.
 Edge cases: a collision through a directory component alone (`Data/out.txt` against `data/out.txt`), fold-equal inputs declared by different tasks (accepted, each task materializes its own inputs), an exact duplicate (reported under INV-DAG-4 or as a duplicate input when it is the violation the checks reach first in file order).
 
+### INV-DAG-8. Trailing-colliding declared paths rejected upfront
+Two declared output paths whose components differ only in trailing spaces and dots are rejected with exit code 3, naming both paths and both task ids, and two input paths declared by one task that differ that way are rejected the same way, naming the task and both paths. Win32 strips trailing spaces and dots from each component when it opens a file, so such a pair is one file on Windows and two files elsewhere. The comparison runs on the case-folded Win32-stripped form of the whole normalized path, so a pair differing in both letter case and trailing characters is refused as well, and the refusal is identical on every platform.
+Edge cases: a collision through a directory component alone (`dir /f.txt` against `dir/f.txt`), a lone declared path carrying a trailing dot or space (accepted, the refusal needs a pair), paths differing in more than the trailing characters (accepted).
+
 ## 5. Execution invariants (RUN)
 
 ### INV-RUN-1. Hermetic environment
