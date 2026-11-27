@@ -27,28 +27,62 @@ if args == ["--version"]:
 if "pin" in args:
     print("error: unrecognized subcommand 'pin'", file=sys.stderr)
     raise SystemExit(3)
-print("error: unexpected argument '--input' found", file=sys.stderr)
+print("error: unexpected argument found", file=sys.stderr)
+raise SystemExit(3)
+'''
+
+ALWAYS_FAIL_SOURCE = '''\
+import sys
+
+print("error: this binary always fails", file=sys.stderr)
+raise SystemExit(3)
+'''
+
+EXIT_ONE_SOURCE = '''\
+import sys
+
+print("error: this binary fails at exit code 1", file=sys.stderr)
+raise SystemExit(1)
+'''
+
+GARBAGE_SOURCE = '''\
+print("this is not json")
+'''
+
+LIST_SOURCE = '''\
+print("[1, 2, 3]")
+'''
+
+NONUTF8_SOURCE = '''\
+import os
+import sys
+
+args = sys.argv[1:]
+if args == ["--version"]:
+    os.write(1, b"verirun \\xff\\xfe\\n")
+    raise SystemExit(0)
+print("error: unexpected argument found", file=sys.stderr)
 raise SystemExit(3)
 '''
 
 
-def write_stub(directory: Path) -> Path:
-    """Create an executable stub mimicking the 0.1.0 CLI's surface.
+def write_stub(directory: Path, source: str, stem: str) -> Path:
+    """Create an executable stub from ``source`` under ``directory``.
 
-    The stub answers ``--version`` as 0.1.0, rejects ``pin`` as an
-    unrecognized subcommand, and rejects everything else the way the
-    0.1.0 argument parser rejected flags it did not know, always
-    without a JSON payload.
+    The wrapper is a shell script on POSIX and a batch file on
+    Windows, both delegating to the running interpreter, so the
+    suite exercises the SDK's real subprocess path on every
+    platform.
     """
-    script = directory / "verirun_stub.py"
-    script.write_text(STUB_SOURCE, encoding="utf-8")
+    script = directory / f"{stem}.py"
+    script.write_text(source, encoding="utf-8")
     if os.name == "nt":
-        wrapper = directory / "verirun.bat"
+        wrapper = directory / f"{stem}.bat"
         wrapper.write_text(
             f'@echo off\n"{sys.executable}" "{script}" %*\n', encoding="utf-8"
         )
     else:
-        wrapper = directory / "verirun"
+        wrapper = directory / stem
         wrapper.write_text(
             f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n',
             encoding="utf-8",
@@ -80,8 +114,10 @@ def call_each(binary: Path) -> dict[str, object]:
     """Call every process-backed public function against ``binary``.
 
     Returns a mapping of function name to the exception it raised.
-    ``version`` is exercised separately, since a binary that answers
-    ``--version`` at all does not fail that call.
+    ``version`` is exercised separately by the fixtures that can
+    fail it, since a binary that answers ``--version`` at all does
+    not fail that call, and ``find_binary`` never executes the
+    binary it resolves.
     """
     outcomes: dict[str, object] = {}
     with tempfile.TemporaryDirectory() as tmp:
@@ -134,12 +170,15 @@ class MissingBinaryTests(unittest.TestCase):
 
 
 class FailingBinaryTests(unittest.TestCase):
-    """A binary that runs but fails without JSON yields VerirunError.
+    """Binaries that run but fail without JSON yield VerirunError.
 
-    The Python interpreter itself stands in as the failing binary: it
+    The Python interpreter itself stands in as one failing binary: it
     runs, rejects the CLI's arguments on stderr, exits nonzero, and
     never emits a payload. Its own ``--version`` output is not in the
-    CLI's form, so no version diagnostic may be attached.
+    CLI's form, so no version diagnostic may be attached. Two stubs
+    pin the exact exit codes the interpreter cannot produce, 1 and 3,
+    and the always-failing stub also fails ``--version`` itself, so
+    ``version`` has a failing fixture of its own.
     """
 
     def test_every_function_raises_verirun_error(self) -> None:
@@ -148,40 +187,85 @@ class FailingBinaryTests(unittest.TestCase):
             self.assertIsInstance(
                 outcome, verirun.VerirunError, f"{name} raised {outcome!r}"
             )
-            assert isinstance(outcome, verirun.VerirunError)
             self.assertNotEqual(outcome.exit_code, 0, name)
             self.assertIsNone(outcome.kind, name)
             self.assertNotIn("binary version", str(outcome), name)
 
-
-class WrongVersionBinaryTests(unittest.TestCase):
-    """A 0.1.0-shaped binary fails loudly and names both versions.
-
-    The payload-less failures the 0.1.0 CLI produces must surface as
-    VerirunError at exit code 3, and the message must carry the
-    binary's version beside the SDK's, so a stale binary explains
-    itself instead of leaking a bare argument error.
-    """
-
-    def test_version_reports_the_stub_version(self) -> None:
+    def test_exit_code_1_is_preserved_exactly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            stub = write_stub(Path(tmp))
-            self.assertEqual(verirun.version(binary=stub), "0.1.0")
-
-    def test_every_function_raises_verirun_error_at_exit_3(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            stub = write_stub(Path(tmp))
+            stub = write_stub(Path(tmp), EXIT_ONE_SOURCE, "verirun-exit-one")
             outcomes = call_each(stub)
         for name, outcome in outcomes.items():
             self.assertIsInstance(
                 outcome, verirun.VerirunError, f"{name} raised {outcome!r}"
             )
-            assert isinstance(outcome, verirun.VerirunError)
+            self.assertEqual(outcome.exit_code, 1, name)
+
+    def test_version_against_an_always_failing_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = write_stub(Path(tmp), ALWAYS_FAIL_SOURCE, "verirun-always-fail")
+            with self.assertRaises(verirun.VerirunError) as ctx:
+                verirun.version(binary=stub)
+        self.assertEqual(ctx.exception.exit_code, 3)
+
+
+class MalformedPayloadTests(unittest.TestCase):
+    """A successful exit with unusable stdout yields VerirunError.
+
+    Both a non-JSON reply and a JSON reply that is not an object
+    reach the SDK's not-a-JSON-object path, which must raise rather
+    than return a half-built result.
+    """
+
+    def test_non_json_stdout_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = write_stub(Path(tmp), GARBAGE_SOURCE, "verirun-garbage")
+            outcomes = call_each(stub)
+        for name, outcome in outcomes.items():
+            self.assertIsInstance(
+                outcome, verirun.VerirunError, f"{name} raised {outcome!r}"
+            )
+            self.assertIn("did not return a JSON object", str(outcome), name)
+
+    def test_non_object_json_stdout_raises(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = write_stub(Path(tmp), LIST_SOURCE, "verirun-list")
+            with self.assertRaises(verirun.VerirunError) as ctx:
+                verirun.verify(DIGEST, cas=Path(tmp), binary=stub)
+        self.assertIn("did not return a JSON object", str(ctx.exception))
+
+
+class WrongVersionBinaryTests(unittest.TestCase):
+    """A 0.1.0-shaped binary fails loudly and names both versions.
+
+    S1.2 probed the real 0.1.0 binary on pin and on run with bound
+    inputs; this stub mimics those two probed shapes and extends the
+    same payload-less exit 3 shape to the remaining functions, so the
+    suite proves the SDK's uniform handling of that shape rather
+    than the real binary's behaviour on calls never probed against
+    it. The exception messages must carry the binary's version beside
+    the SDK's, so a stale binary explains itself instead of leaking a
+    bare argument error.
+    """
+
+    def test_version_reports_the_stub_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = write_stub(Path(tmp), STUB_SOURCE, "verirun")
+            self.assertEqual(verirun.version(binary=stub), "0.1.0")
+
+    def test_every_function_raises_verirun_error_at_exit_3(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = write_stub(Path(tmp), STUB_SOURCE, "verirun")
+            outcomes = call_each(stub)
+        for name, outcome in outcomes.items():
+            self.assertIsInstance(
+                outcome, verirun.VerirunError, f"{name} raised {outcome!r}"
+            )
             self.assertEqual(outcome.exit_code, 3, name)
 
     def test_pin_failure_names_both_versions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            stub = write_stub(Path(tmp))
+            stub = write_stub(Path(tmp), STUB_SOURCE, "verirun")
             with self.assertRaises(verirun.VerirunError) as ctx:
                 verirun.pin(DIGEST, cas=Path(tmp), binary=stub)
         message = str(ctx.exception)
@@ -192,7 +276,7 @@ class WrongVersionBinaryTests(unittest.TestCase):
     def test_run_failure_names_both_versions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            stub = write_stub(root)
+            stub = write_stub(root, STUB_SOURCE, "verirun")
             spec_path = write_spec(root)
             seed = root / "seed.txt"
             seed.write_text("hello\n", encoding="utf-8")
@@ -207,6 +291,15 @@ class WrongVersionBinaryTests(unittest.TestCase):
         message = str(ctx.exception)
         self.assertIn("binary version 0.1.0", message)
         self.assertIn(f"SDK version {verirun.__version__}", message)
+
+    def test_non_utf8_version_output_leaves_the_message_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = write_stub(Path(tmp), NONUTF8_SOURCE, "verirun-nonutf8")
+            with self.assertRaises(verirun.VerirunError) as ctx:
+                verirun.pin(DIGEST, cas=Path(tmp), binary=stub)
+        message = str(ctx.exception)
+        self.assertIn("unexpected argument", message)
+        self.assertNotIn("binary version", message)
 
 
 if __name__ == "__main__":

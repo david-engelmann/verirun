@@ -3,8 +3,9 @@ name: ci
 # Gate design for verirun.
 # Every pull request, merge group, and push to main runs repository
 # hygiene, the full Rust gate on Linux, macOS, and Windows, the
-# declared minimum supported Rust version build and test gate, and
-# cargo-audit over the committed Cargo.lock.
+# declared minimum supported Rust version build and test gate,
+# cargo-audit over the committed Cargo.lock, and the Python SDK
+# suite on its declared 3.10 floor.
 
 on:
   push:

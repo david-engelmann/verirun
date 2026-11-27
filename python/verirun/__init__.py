@@ -258,7 +258,7 @@ def _probe_version(exe: Path) -> str | None:
             check=False,
             timeout=10,
         )
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, ValueError, subprocess.SubprocessError):
         return None
     parts = proc.stdout.strip().split()
     if proc.returncode == 0 and len(parts) == 2 and parts[0] == "verirun":
