@@ -333,6 +333,20 @@ pub enum DagError {
         /// The second task that claimed a path.
         second_task: String,
     },
+    /// Two declared output paths name the same file on Windows,
+    /// where trailing spaces and dots in a component are stripped
+    /// when a file is opened. The error names both paths and both
+    /// tasks.
+    TrailingCollidingOutput {
+        /// The normalized path claimed first.
+        first_path: String,
+        /// The normalized path claimed second.
+        path: String,
+        /// The first task that claimed a path.
+        first_task: String,
+        /// The second task that claimed a path.
+        second_task: String,
+    },
     /// A task declares the same normalized input path more than
     /// once.
     DuplicateInput {
@@ -345,6 +359,18 @@ pub enum DagError {
     /// case, so a case-insensitive filesystem would give them one
     /// file. The error names the task and both paths.
     CaseCollidingInput {
+        /// The task declaring the inputs.
+        task_id: String,
+        /// The normalized input path declared first.
+        first_path: String,
+        /// The normalized input path declared second.
+        path: String,
+    },
+    /// A task declares two input paths that name the same file on
+    /// Windows, where trailing spaces and dots in a component are
+    /// stripped when a file is opened. The error names the task
+    /// and both paths.
+    TrailingCollidingInput {
         /// The task declaring the inputs.
         task_id: String,
         /// The normalized input path declared first.
@@ -396,6 +422,15 @@ impl fmt::Display for DagError {
                 f,
                 "output paths {first_path:?} and {path:?} differ only in letter case (claimed by {first_task:?} and {second_task:?})"
             ),
+            Self::TrailingCollidingOutput {
+                first_path,
+                path,
+                first_task,
+                second_task,
+            } => write!(
+                f,
+                "output paths {first_path:?} and {path:?} name the same file on Windows, where trailing spaces and dots in a component are stripped (claimed by {first_task:?} and {second_task:?})"
+            ),
             Self::DuplicateInput { task_id, path } => {
                 write!(f, "task {task_id:?} declares input {path:?} more than once")
             }
@@ -406,6 +441,14 @@ impl fmt::Display for DagError {
             } => write!(
                 f,
                 "task {task_id:?} declares inputs {first_path:?} and {path:?}, which differ only in letter case"
+            ),
+            Self::TrailingCollidingInput {
+                task_id,
+                first_path,
+                path,
+            } => write!(
+                f,
+                "task {task_id:?} declares inputs {first_path:?} and {path:?}, which name the same file on Windows, where trailing spaces and dots in a component are stripped"
             ),
             Self::InvalidPath { task_id, source } => {
                 write!(f, "task {task_id:?} declares an invalid path: {source}")

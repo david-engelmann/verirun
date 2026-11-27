@@ -122,6 +122,20 @@ fn case_folded(path: &str) -> String {
     path.chars().flat_map(char::to_lowercase).collect()
 }
 
+/// The Win32-stripped form of a normalized path, used by the
+/// collision checks in [`validate_run_spec`]. Win32 strips
+/// trailing spaces and dots from each path component when it
+/// opens a file, so two paths whose components differ only in
+/// those characters name one file on Windows and two files
+/// elsewhere. The stripped form is a pure function of the
+/// path and agrees on every platform.
+fn win32_stripped(path: &str) -> String {
+    path.split('/')
+        .map(|component| component.trim_end_matches([' ', '.']))
+        .collect::<Vec<&str>>()
+        .join("/")
+}
+
 /// Validates a parsed run file value into a [`ValidatedDag`].
 ///
 /// The checks run in the fixed order of section 7.1 and the module
@@ -132,8 +146,9 @@ fn case_folded(path: &str) -> String {
 ///
 /// Returns [`DagError`] describing the first violation found: a
 /// schema violation, a duplicated task id, an unknown dependency, a
-/// colliding or case-colliding output, a duplicated or
-/// case-colliding input, an unsafe path, or the
+/// colliding, case-colliding, or trailing-colliding output, a
+/// duplicated, case-colliding, or trailing-colliding input, an
+/// unsafe path, or the
 /// sorted cyclic remnant.
 ///
 /// # Panics
@@ -214,13 +229,17 @@ pub fn validate_run_spec(spec: &Value) -> Result<ValidatedDag, DagError> {
 /// case-sensitive filesystem and one file on a
 /// case-insensitive one, so the spec's meaning would depend
 /// on the host filesystem; the folded claim is refused
-/// everywhere, naming both paths.
+/// everywhere, naming both paths. The comparison also runs on
+/// Win32-stripped forms, folded: two paths whose components
+/// differ only in trailing spaces and dots name one file on
+/// Windows, and that claim is refused the same way.
 fn check_colliding_outputs(
     specs: &[TaskSpec],
     output_results: &[Vec<Result<NormalizedPath, crate::error::PathError>>],
 ) -> Result<(), DagError> {
     let mut owners: BTreeMap<&str, &str> = BTreeMap::new();
     let mut folded_owners: BTreeMap<String, (&str, &str)> = BTreeMap::new();
+    let mut stripped_owners: BTreeMap<String, (&str, &str)> = BTreeMap::new();
     for (task, results) in specs.iter().zip(output_results.iter()) {
         for normalized in results.iter().filter_map(|result| result.as_ref().ok()) {
             if let Some(first) = owners.get(normalized.as_str()) {
@@ -239,8 +258,18 @@ fn check_colliding_outputs(
                     second_task: task.task_id.clone(),
                 });
             }
+            let stripped = case_folded(&win32_stripped(normalized.as_str()));
+            if let Some((first_path, first_task)) = stripped_owners.get(&stripped) {
+                return Err(DagError::TrailingCollidingOutput {
+                    first_path: (*first_path).to_string(),
+                    path: normalized.as_str().to_string(),
+                    first_task: (*first_task).to_string(),
+                    second_task: task.task_id.clone(),
+                });
+            }
             owners.insert(normalized.as_str(), task.task_id.as_str());
             folded_owners.insert(folded, (normalized.as_str(), task.task_id.as_str()));
+            stripped_owners.insert(stripped, (normalized.as_str(), task.task_id.as_str()));
         }
     }
     Ok(())
@@ -258,6 +287,7 @@ fn normalize_declared_paths(
     for (task, results) in specs.iter().zip(output_results.iter()) {
         let mut inputs: Vec<NormalizedPath> = Vec::with_capacity(task.inputs.len());
         let mut folded_inputs: BTreeMap<String, String> = BTreeMap::new();
+        let mut stripped_inputs: BTreeMap<String, String> = BTreeMap::new();
         for declared in &task.inputs {
             match crate::paths::validate_path(declared) {
                 Ok(normalized) => {
@@ -284,6 +314,20 @@ fn normalize_declared_paths(
                         });
                     }
                     folded_inputs.insert(folded, normalized.as_str().to_string());
+                    // The stripped comparison of check 4, within
+                    // this task's own inputs: Win32 strips
+                    // trailing spaces and dots from each
+                    // component, so two such inputs are one file
+                    // on Windows.
+                    let stripped = case_folded(&win32_stripped(normalized.as_str()));
+                    if let Some(first_path) = stripped_inputs.get(&stripped) {
+                        return Err(DagError::TrailingCollidingInput {
+                            task_id: task.task_id.clone(),
+                            first_path: first_path.clone(),
+                            path: normalized.as_str().to_string(),
+                        });
+                    }
+                    stripped_inputs.insert(stripped, normalized.as_str().to_string());
                     inputs.push(normalized);
                 }
                 Err(source) => {
