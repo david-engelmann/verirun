@@ -4,8 +4,8 @@ name: ci
 # Every pull request, merge group, and push to main runs repository
 # hygiene, the full Rust gate on Linux, macOS, and Windows, the
 # declared minimum supported Rust version build and test gate,
-# cargo-audit over the committed Cargo.lock, and the Python SDK
-# suite on its declared 3.10 floor.
+# cargo-audit and cargo-deny over the committed Cargo.lock, and the
+# Python SDK suite on its declared 3.10 floor.
 
 on:
   push:
@@ -39,6 +39,12 @@ jobs:
           required = [
               "Cargo.toml",
               "Cargo.lock",
+              "deny.toml",
+              "CITATION.cff",
+              "CODE_OF_CONDUCT.md",
+              "Makefile",
+              ".editorconfig",
+              "install.sh",
               "README.md",
               "CONTRIBUTING.md",
               "CHANGELOG.md",
@@ -52,6 +58,10 @@ jobs:
               "crates/verirun-cli/README.md",
               "rust-toolchain.toml",
               ".github/workflows/ci.yml",
+              ".github/pull_request_template.md",
+              ".github/ISSUE_TEMPLATE/bug_report.md",
+              ".github/ISSUE_TEMPLATE/feature_request.md",
+              ".github/ISSUE_TEMPLATE/config.yml",
           ]
           missing = [p for p in required if not (root / p).is_file()]
           if missing:
@@ -197,7 +207,7 @@ jobs:
     name: msrv
     runs-on: ubuntu-latest
     env:
-      # Roadmap lane R1: the declared rust-version is a promise, so CI
+      # The declared rust-version is a compatibility contract, so CI
       # builds and tests at exactly that version. RUSTUP_TOOLCHAIN
       # overrides the development pin in rust-toolchain.toml.
       RUSTUP_TOOLCHAIN: "1.88.0"
@@ -229,12 +239,10 @@ jobs:
     name: windows
     runs-on: windows-latest
     env:
-      # Perfection slice W7: this job carries the full gate. Pull
-      # requests run the same 1,000 cases as the rust job. Pushes
-      # and merge groups keep 100, because the full suite at 1,000
-      # cases measured 1,251 seconds on this runner in the W7
-      # probe and the 10,000 case main policy stays with the
-      # rust job.
+      # Pull requests run the same 1,000 property cases as the
+      # Linux rust job. Pushes and merge groups run 100 cases to
+      # bound Windows process-spawn wall time while the Linux rust
+      # job enforces the 10,000-case main branch volume.
       PROPTEST_CASES: ${{ github.event_name == 'pull_request' && '1000' || '100' }}
       RUSTDOCFLAGS: "-D warnings"
     steps:
@@ -300,9 +308,33 @@ jobs:
       - name: Install cargo-audit
         run: which cargo-audit || cargo install cargo-audit --locked
       - name: Audit the dependency set
-        # Roadmap lane R7. A vulnerability in the locked
-        # dependency set fails this job and therefore the gate.
+        # Any vulnerability advisory against the locked dependency
+        # graph fails this job and blocks the merge gate.
         run: cargo audit
+
+  deny:
+    name: deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Install the pinned toolchain
+        run: |
+          rustup toolchain install "$(grep '^channel' rust-toolchain.toml | sed 's/.*"\(.*\)".*/\1/')" --profile minimal
+          rustup show active-toolchain
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/advisory-dbs/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+          key: ${{ runner.os }}-cargo-deny-${{ hashFiles('Cargo.lock', 'deny.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deny-
+      - uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2.90.6
+        with:
+          tool: cargo-deny
+      - name: Check advisories, licenses, bans, and sources
+        run: cargo deny check
 
   python-floor:
     name: python-floor

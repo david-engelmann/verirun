@@ -1,17 +1,15 @@
 //! Hand-rolled manifest verification benchmark (the
-//! workspace pins no benchmark framework; see DECISIONS.md
-//! Q5 and the M4 bench design). Run with:
+//! workspace pins no external benchmark framework; see
+//! `DECISIONS.md` Q5). Run with:
 //!
 //! ```text
 //! cargo bench -p verirun-cli --bench verify_bench
 //! ```
 //!
-//! The workload is the one roadmap lane R4 prices: a
-//! manifest naming many distinct blobs, verified end to
-//! end. Setup runs a 128-task spec whose tasks each write
-//! a distinct 256 KiB artifact, so one verification pass
-//! re-hashes about 32 MiB across 129 distinct objects. The
-//! timed region is `verify_manifest` alone.
+//! Setup runs a 128-task spec whose tasks each write a
+//! distinct 256 KiB artifact, so one end-to-end verification
+//! pass re-hashes roughly 32 MiB across 129 distinct objects.
+//! The timed region covers `verify_manifest` alone.
 
 #![forbid(unsafe_code)]
 

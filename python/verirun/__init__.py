@@ -32,6 +32,7 @@ __all__ = [
     "TaskSummary",
     "VerifyResult",
     "VerirunError",
+    "completions",
     "diff",
     "find_binary",
     "gc",
@@ -44,7 +45,7 @@ __all__ = [
     "version",
 ]
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 PathInput = str | os.PathLike[str]
 
@@ -600,12 +601,21 @@ def find_binary(binary: PathInput | None = None) -> Path:
     search_dirs.extend([py_dir, py_dir / "Scripts", py_dir / "bin"])
 
     repo_root = Path(__file__).resolve().parents[2]
-    search_dirs.extend(
-        [
-            repo_root / "target" / "release",
-            repo_root / "target" / "debug",
-        ]
-    )
+    target_dirs = [
+        repo_root / "target" / "release",
+        repo_root / "target" / "debug",
+    ]
+
+    def _newest_exe_mtime(directory: Path) -> int:
+        best = -1
+        for name in exe_names:
+            candidate = directory / name
+            if candidate.is_file():
+                best = max(best, candidate.stat().st_mtime_ns)
+        return best
+
+    target_dirs.sort(key=_newest_exe_mtime, reverse=True)
+    search_dirs.extend(target_dirs)
 
     for directory in search_dirs:
         for name in exe_names:
@@ -713,6 +723,22 @@ def version(*, binary: PathInput | None = None) -> str:
         )
     parts = proc.stdout.strip().split()
     return parts[-1] if parts else proc.stdout.strip()
+
+
+def completions(
+    shell: str = "bash",
+    *,
+    binary: PathInput | None = None,
+) -> str:
+    """Return the shell completion script for ``bash``, ``zsh``, ``fish``, or ``powershell``."""
+    if not isinstance(shell, str):
+        raise _invalid_spec("'shell' must be a string")
+    data, _ = _invoke_json(
+        ["completions", shell, "--json"],
+        allowed_codes=(0,),
+        binary=binary,
+    )
+    return str(data["script"])
 
 
 def run(

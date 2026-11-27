@@ -1,6 +1,6 @@
 [package]
 name = "verirun-cli"
-version = "0.2.1"
+version = "0.2.2"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -16,8 +16,8 @@ name = "verirun"
 path = "src/main.rs"
 
 [dependencies]
-verirun-core = { version = "0.2.1", path = "../verirun-core" }
-verirun-store = { version = "0.2.1", path = "../verirun-store" }
+verirun-core = { version = "0.2.2", path = "../verirun-core" }
+verirun-store = { version = "0.2.2", path = "../verirun-store" }
 clap.workspace = true
 serde_json.workspace = true
 

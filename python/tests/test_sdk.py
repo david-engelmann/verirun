@@ -27,8 +27,48 @@ def _shell_copy_cmd(src_rel: str, dst_rel: str) -> tuple[str, list[str]]:
 
 class VerirunSdkTests(unittest.TestCase):
     def test_version_matches_package(self) -> None:
-        self.assertEqual(verirun.__version__, "0.2.1")
+        self.assertEqual(verirun.__version__, "0.2.2")
         self.assertEqual(verirun.version(), verirun.__version__)
+
+    def test_completions_all_shells_and_invalid_shell(self) -> None:
+        default_script = verirun.completions()
+        self.assertEqual(default_script, verirun.completions("bash"))
+        for shell in ("bash", "zsh", "fish", "powershell"):
+            script = verirun.completions(shell)
+            self.assertTrue(script.endswith("\n"))
+            for subcmd in (
+                "run",
+                "verify",
+                "show",
+                "diff",
+                "gc",
+                "pin",
+                "unpin",
+                "completions",
+            ):
+                self.assertIn(subcmd, script)
+            for flag in (
+                "--cas",
+                "--work",
+                "--jobs",
+                "--input",
+                "--pin",
+                "--dry-run",
+                "--json",
+                "--seed",
+                "--help",
+                "--version",
+            ):
+                self.assertIn(flag, script)
+
+        for invalid_shell in ("tcsh", "invalid-shell", ""):
+            with self.assertRaises(verirun.VerirunError) as ctx:
+                verirun.completions(invalid_shell)
+            self.assertEqual(ctx.exception.exit_code, 3)
+
+        with self.assertRaises(verirun.VerirunError) as type_ctx:
+            verirun.completions(123)  # type: ignore[arg-type]
+        self.assertEqual(type_ctx.exception.exit_code, 3)
 
     def test_task_spec_normalization_and_immutability(self) -> None:
         self.assertTrue(is_dataclass(verirun.TaskSpec))

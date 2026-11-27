@@ -157,6 +157,17 @@ fn build_cli() -> Command {
                         .action(ArgAction::SetTrue)
                         .help("Print the plan and delete nothing"),
                 )
+                .arg(json.clone()),
+        )
+        .subcommand(
+            Command::new("completions")
+                .about("Print shell completion script for bash, zsh, fish, or powershell")
+                .arg(
+                    Arg::new("shell")
+                        .value_name("SHELL")
+                        .required(true)
+                        .help("Target shell (bash, zsh, fish, or powershell)"),
+                )
                 .arg(json),
         )
 }
@@ -223,6 +234,9 @@ fn real_main() -> i32 {
         return 3;
     };
     let json = sub.get_flag("json");
+    if name == "completions" {
+        return completions_command(sub, json);
+    }
     let seed = match resolve_seed(&matches) {
         Ok(seed) => seed,
         Err(error) => return fail(&error, json),
@@ -238,6 +252,29 @@ fn real_main() -> i32 {
         "gc" => gc_command(sub, json),
         _ => 3,
     }
+}
+
+fn completions_command(sub: &clap::ArgMatches, json: bool) -> i32 {
+    let Some(raw) = sub.get_one::<String>("shell") else {
+        return 3;
+    };
+    let shell = match raw.parse::<verirun_cli::Shell>() {
+        Ok(shell) => shell,
+        Err(error) => return fail(&error, json),
+    };
+    let script = verirun_cli::completions_script(shell);
+    if json {
+        println!(
+            "{}",
+            serde_json::json!({
+                "shell": shell.as_str(),
+                "script": script,
+            })
+        );
+    } else {
+        print!("{script}");
+    }
+    0
 }
 
 fn run_command(sub: &clap::ArgMatches, json: bool) -> i32 {
