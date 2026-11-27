@@ -119,6 +119,39 @@ class VerirunSdkTests(unittest.TestCase):
             self.assertEqual(ctx.exception.exit_code, 2)
             self.assertEqual(ctx.exception.kind, "blob_mismatch")
 
+    def test_check_mode_raises_with_failures_in_message(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            if os.name == "nt":
+                executable = "cmd"
+                args = ["/C", "exit 3"]
+            else:
+                executable = "sh"
+                args = ["-c", "exit 3"]
+            spec_path = root / "pipeline.json"
+            spec = {
+                "tasks": [
+                    {
+                        "task_id": "boom",
+                        "executable": executable,
+                        "args": args,
+                        "env": {},
+                        "inputs": [],
+                        "outputs": [],
+                        "depends_on": [],
+                    }
+                ]
+            }
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            with self.assertRaises(verirun.VerirunError) as ctx:
+                verirun.run(
+                    spec_path, cas=root / "cas", work=root / "work", check=True
+                )
+            self.assertEqual(ctx.exception.exit_code, 1)
+            self.assertIn("boom", str(ctx.exception))
+            self.assertEqual(ctx.exception.payload, {})
+
 
 if __name__ == "__main__":
     unittest.main()

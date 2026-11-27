@@ -35,9 +35,9 @@ the perfection register as their deliverable.
   its section below.
 - S1.3 Error mapping. CLOSED 2026-11-26, no finding, on the mapping
   recorded in its section below.
-- S1.4 Fault-path depth and the Python floor. Queued, and charged by
-  S1.2 with the version-mismatch diagnostic remedy recorded in S1.2's
-  section.
+- S1.4 Fault-path depth and the Python floor. CLOSED 2026-11-26, the
+  fault suite and the floor leg landed and S1.2's deferred remedy with
+  them, on the evidence recorded in its section below.
 - S2.1 The publish chain read. Queued.
 - S2.2 Shipped-binary verification, per channel. Queued.
 - S2.3 Version coherence, extended. Queued.
@@ -168,3 +168,37 @@ check option, accepted here with S1.4's fault suite charged to pin
 it. Disposition: no finding, and the payload-less fallback this entry
 describes is confirmed as the site where S1.2's deferred diagnostic
 remedy attaches in S1.4.
+
+## S1.4: Fault-path depth and the Python floor
+
+Closed 2026-11-26. This slice built three things. First, the fault
+suite at python/tests/test_sdk_faults.py, one fault test per public
+function against three fixtures in the adopted form. A missing binary
+raises FileNotFoundError from every function including find_binary
+itself. A failing binary, the Python interpreter standing in as an
+executable that runs and refuses the CLI's arguments without a
+payload, raises VerirunError with a nonzero exit code and no kind
+from every process-backed function. A wrong-version binary raises
+VerirunError at exit code 3 from every process-backed function.
+Second, S1.2's deferred remedy landed with the suite. The
+wrong-version fixture is a generated stub that mimics the 0.1.0 CLI's
+surface exactly where S1.2 probed it, answering --version as 0.1.0,
+rejecting pin as an unrecognized subcommand, and rejecting the rest
+without a payload, and _invoke_json's payload-less path now probes
+the resolved binary and names its version beside the SDK's own in the
+exception message when the binary answers in the CLI's version form.
+The pin and run fault tests assert both version strings, so the
+diagnostic is pinned by tests that fail without it. The stub stands
+in for the real 0.1.0 binary deliberately: it is hermetic and fast,
+it mimics the two failure shapes S1.2 proved against the real
+binary, and the real cross-version proof already stands in S1.2's
+probe. Third, the Python floor is owned by a hosted leg: a
+python-floor CI job runs the full SDK suite under Python 3.10, the
+oldest version the package claims, so the classifiers stand as a
+tested claim rather than an aspiration. S1.3's recorded shape is
+pinned by a check-mode test in the end-to-end suite, which asserts
+the raised exception carries the task failures in its message and an
+empty payload. Disposition: SF-S1-1 is landed, the SDK's fault
+surface is tested per function, and the claimed Python range has a
+hosted floor. Workstream S1 stands complete with this slice, its
+closure reviews recorded at the programme level.
