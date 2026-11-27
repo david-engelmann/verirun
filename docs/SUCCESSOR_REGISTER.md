@@ -55,7 +55,10 @@ the perfection register as their deliverable.
   identity re-proved in one pass and the charge's three items
   dispositioned at closure, on the evidence recorded in its
   section below.
-- S4.1 The security file and the remaining surfaces. Queued.
+- S4.1 The security file and the remaining surfaces. CLOSED
+  2026-11-27, two findings landed, one nit landed, and the
+  unverifiable claims named, on the evidence recorded in its
+  section below.
 
 ## S2.0: Published-state ground truth
 
@@ -604,3 +607,87 @@ verification re-read the banked charge against both entries
 before repairing them, confirmed the windows job's success in
 the programme-start run from the hosted record, and read the
 durability seam in the current tree firsthand.
+
+## S4.1: The security file and the remaining surfaces
+
+Closed 2026-11-27. One sweep over the launch surfaces no lane
+of this seat had read since they landed, each read against the
+current tree with the surfaces' blobs verified unchanged on
+main.
+
+SECURITY.md separates into claims this seat can verify and
+claims it cannot. Verified against the tree: verify and show
+re-hash every referenced object and check recorded artifact
+byte lengths and Merkle roots before trusting stored data.
+Declared paths are restricted to normalized relative paths
+inside the sandbox. collection walks components through held
+handles with O_NOFOLLOW on Unix and FILE_OPEN_REPARSE_POINT
+inspection on Windows, the flag standing in the seam under its
+NT name. The child environment is the declared pairs, the
+three fixed defaults, and the sandbox TMPDIR, and the
+frozen-format claim beneath the supported-versions section is
+the forever surface this programme has verified in both
+directions. Not verifiable from this seat, named as such: the
+reporting route, which depends on GitHub private
+vulnerability reporting standing enabled on the repository, an
+account-side state, and the seven-day initial response, which
+is a practice commitment no tree can evidence. One claim did
+not survive the read. The threat model said process groups
+are terminated on timeout and on drop, written before PR 221
+made drop-termination conditional on the group standing armed.
+The sentence is repaired in this slice to the landed contract:
+terminated on timeout and on drop while supervision is live,
+with a supervised task's group disarmed before it is dropped.
+Finding SF-S4-1, landed here.
+
+The same imprecision stood on two more surfaces the sweep
+read. The platform crate's README said its ProcessGroup
+terminates every member on timeout or when the group is
+dropped, and the main README promised surviving background
+group members are cleaned up when the task finishes. Both are
+repaired to the same contract in this slice, the main
+README's clause removed rather than reworded, the timeout
+claim being the whole of what the runner promises there. The
+platform README's remaining claims check out, including its
+rename_replace sentence, which compresses the seam's
+documented refusal to clear a read-only destination's
+attributes before replacing. The core, store, and CLI crate
+READMEs read clean in full: the core's module list and its
+Pattern S and Pattern T framing are the code's own, the
+store's usage example names real methods, and the CLI's
+cargo-binstall claim stands on the binstall metadata block in
+its manifest, with an override per release target.
+
+dependabot.yml covered Cargo and GitHub Actions and not the
+Python home the launch added, whose build requirement is the
+tree's one Python dependency. A pip entry in the file's own
+shape is added in this slice. Finding SF-S4-2, landed here.
+
+PR 218's text changes, read against the standing copy bar
+with the post-scrub text as baseline: the README and the docs
+index as they now stand carry no programme talk and no bar
+violations beyond the items repaired above, its one changelog
+line is ordinary release copy, and its media assets are
+outside a copy read as charged. The tamper diagram's alt text
+in the README named two domain tags that do not exist, the
+framing inverted and a manifest tag invented. The alt text is
+repaired to describe the diagram without naming tags. A nit,
+landed with the slice.
+
+PR 228 landed while this slice stood staged, on 2026-11-27,
+and the slice re-baselined onto its main, e530df2e, as this
+roadmap provides for that event. The README was re-read at
+the new state: the landing converted relative links to
+absolute ones for PyPI rendering and rewrote the Python
+quickstart around its new PipelineBuilder, and both repair
+sites stood verbatim in the new text, so the repairs above
+apply to it unchanged. The landing's other new surfaces, the
+PipelineBuilder in the SDK and the verify-published
+workflow, stand outside this slice's enumerated list and are
+named here for the programme closure's reviews, not absorbed
+into a sweep whose charge does not name them.
+
+Disposition: two findings landed, one nit landed, and the
+unverifiable claims named rather than chased. Workstream S4
+stands complete with this slice, and the programme's slices
+stand complete with it.
