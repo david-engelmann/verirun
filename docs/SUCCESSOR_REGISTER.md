@@ -41,7 +41,8 @@ the perfection register as their deliverable.
 - S2.1 The publish chain read. CLOSED 2026-11-27, no finding, the
   account-side confirmations named in its section below for Main or
   David.
-- S2.2 Shipped-binary verification, per channel. Queued.
+- S2.2 Shipped-binary verification, per channel. CLOSED 2026-11-27,
+  no finding, on the hosted proof recorded in its section below.
 - S2.3 Version coherence, extended. Queued.
 - S3.1 The macOS probe. Queued.
 - S3.2 The Windows parity re-proof. Queued.
@@ -136,6 +137,43 @@ confirms pass to their owning slices, the wheel proof to S2.2 and
 the parity gaps to S2.3 (the SDK's own version literal checked by
 no workflow, and parity checked only at release time, never at
 pull request time).
+
+## S2.2: Shipped-binary verification, per channel
+
+Closed 2026-11-27. The builds under proof are pypi.yml's own: the
+workflow was dispatched on main f0d6fbf0 with publishing disabled
+(run 45958953858, all five wheel legs and the source distribution
+built, the three smoke tests green, the publish job skipped). A
+diagnostic workflow then installed each artifact in a clean
+virtual environment on a runner of its own architecture and drove
+the portable spec from the platform identity suite through the
+installed SDK. The criterion is the one the scope decided: the
+binary's version string and the portable spec's manifest digest
+against the pinned platform-free commitment, per channel against
+its own build inputs, with no byte-for-byte claim between
+channels.
+
+Five channels pass in that form: the linux x86_64, linux aarch64,
+macOS aarch64, and windows x86_64 wheels, and the source
+distribution built from source on Linux. On each, the SDK
+reported 0.2.0, the bundled binary reported 0.2.0, and the run's
+manifest digest equalled the commitment exactly (diagnostic run
+45959386921).
+
+The sixth channel, the macOS x86_64 wheel, cannot be installed by
+pip on the current hosted fleet: the macOS runners are arm64
+only, and the x86_64 interpreter the setup action offers there
+reports itself arm64 universal2, so pip finds no matching
+distribution (proven from the runner, not inferred). That channel
+was proven at the binary instead: the wheel unpacked, its bundled
+binary is a Mach-O x86_64 executable, and under Rosetta it
+reports 0.2.0 and produces the same pinned manifest digest
+through the command line (run 45960492377). Disposition: every
+channel pypi.yml ships carries a binary that identifies itself
+as 0.2.0 and reproduces the platform-free manifest, no finding is
+raised, and the one channel whose install route the hosted fleet
+cannot exercise stands proven at the binary with the reason on
+the record.
 
 ## S1.1: The contract read
 
