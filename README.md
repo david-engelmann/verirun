@@ -15,7 +15,8 @@
 
 <p align="center">
   <a href="https://github.com/david-engelmann/verirun/blob/main/docs/TUTORIAL.md"><b>Tutorial</b></a> ·
-  <a href="https://github.com/david-engelmann/verirun/blob/main/docs/README.md">Docs</a> ·
+  <a href="https://david-engelmann.github.io/verirun/">Docs</a> ·
+  <a href="https://github.com/david-engelmann/verirun/tree/main/examples">Examples</a> ·
   <a href="https://github.com/david-engelmann/verirun/blob/main/docs/ARCHITECTURE.md">Architecture</a> ·
   <a href="https://github.com/david-engelmann/verirun/blob/main/docs/INVARIANTS.md">Invariants</a> ·
   <a href="https://github.com/david-engelmann/verirun/releases">Releases</a>
@@ -74,18 +75,22 @@ Build scripts and pipeline steps usually leave behind mutable folders, ambient e
 | [`verirun-core`](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-core/README.md) | library | none (`std` only) | Strict JSON parser, RFC 8785 canonical encoder, domain-framed digests, DAG validator, and manifest builder and differ. |
 | [`verirun-platform`](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-platform/README.md) | library | `libc` (Unix), `windows-sys` (Win) | Sole OS FFI seam for process groups and Job Objects, no-follow handle-relative path traversal, and `rename_replace` atomic replacement. |
 | [`verirun-store`](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-store/README.md) | library | `sha2` | Crash-safe sharded content-addressed store, hermetic subprocess runner, parallel scheduler, `by-exec` cache, and garbage collector. |
-| [`verirun-cli`](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-cli/README.md) | library and binary (`verirun`) | `clap`, `serde_json` | Command line interface (`run`, `verify`, `show`, `diff`, `pin`, `unpin`, `gc`) with total `--json` parity and documented exit codes. |
+| [`verirun-cli`](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-cli/README.md) | library and binary (`verirun`) | `clap`, `serde_json` | Command line interface (`run`, `verify`, `show`, `diff`, `pin`, `unpin`, `gc`, `completions`) with total `--json` parity and documented exit codes. |
 
 ## Quickstart
 
-Install the `verirun` binary from PyPI, from crates.io, with `cargo-binstall`, or from the prebuilt Linux, macOS, and Windows archives on GitHub Releases.
+Install the `verirun` binary with the standalone SHA-256 verified release installer, from PyPI, from crates.io, with `cargo-binstall`, or from the prebuilt Linux, macOS, and Windows archives on GitHub Releases.
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/david-engelmann/verirun/main/install.sh | sh
+# or install binary + typed Python SDK from PyPI
 pip install verirun
 # or run directly without installing
 uvx verirun --version
 # or install from crates.io
 cargo install verirun-cli
+# generate deterministic shell completions
+verirun completions <bash|zsh|fish|powershell>
 ```
 
 ```python
@@ -162,6 +167,7 @@ verified c1cd0a900765094f08534d5edb4676a24770c225ca53848de7173a44b2e0815c
 | `verirun diff` | Verify two manifests first, then list tasks whose status, exit code, execution digest, streams, or artifacts differ. | `0` identical, `1` differences found, `2` verification failed |
 | `verirun pin` / `unpin` | Verify and pin a manifest against garbage collection, or remove an existing pin. | `0` updated, `2` verification failed (`pin`) |
 | `verirun gc` | Sweep unreachable objects and debris older than `--grace-secs` while preserving pinned manifests and live blobs. | `0` completed, `2` corrupt pinned manifest |
+| `verirun completions` | Print deterministic tab-completion script for `bash`, `zsh`, `fish`, or `powershell` (`--json`). | `0` printed, `3` unsupported shell |
 
 ## Benchmarks and verification
 
@@ -188,12 +194,15 @@ Measured on 2026-11-24 on a hosted Linux runner from full runs of `canonical_ben
 
 | If you want to... | Read |
 | --- | --- |
+| Read the published book with search and diagrams | [Published documentation](https://david-engelmann.github.io/verirun/) |
 | Walk a complete first run from JSON spec to diff and GC | [Step-by-step tutorial](https://github.com/david-engelmann/verirun/blob/main/docs/TUTORIAL.md) |
-| Browse every document in the repository | [Documentation index](https://github.com/david-engelmann/verirun/blob/main/docs/README.md) |
+| Run end-to-end Python evaluation DAG and CLI examples | [Runnable examples](https://github.com/david-engelmann/verirun/tree/main/examples) |
 | Understand the store layout, RFC 8785 rules, and OS sandboxing | [Architecture](https://github.com/david-engelmann/verirun/blob/main/docs/ARCHITECTURE.md) · [Decisions](https://github.com/david-engelmann/verirun/blob/main/DECISIONS.md) |
 | Check every formal invariant and its enforcing property or fault test | [Invariants and traceability matrix](https://github.com/david-engelmann/verirun/blob/main/docs/INVARIANTS.md) |
+| Compare `verirun` against `make`, `Bazel`, containers, and Python scripts | [How verirun compares](https://github.com/david-engelmann/verirun/blob/main/docs/COMPARISON.md) · [FAQ](https://github.com/david-engelmann/verirun/blob/main/docs/FAQ.md) |
+| Drive `verirun` from an AI coding agent or automation harness | [Agent guide](https://github.com/david-engelmann/verirun/blob/main/AGENTS.md) |
 | Inspect crate-level APIs and examples | [verirun-core](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-core/README.md) · [verirun-platform](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-platform/README.md) · [verirun-store](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-store/README.md) · [verirun-cli](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-cli/README.md) |
-| Review the audit and perfection registers | [Audit register](https://github.com/david-engelmann/verirun/blob/main/docs/AUDIT_REGISTER.md) · [Perfection register](https://github.com/david-engelmann/verirun/blob/main/docs/PERFECTION_REGISTER.md) · [Security policy](https://github.com/david-engelmann/verirun/blob/main/SECURITY.md) · [Changelog](https://github.com/david-engelmann/verirun/blob/main/CHANGELOG.md) |
+| Check security boundaries, prebuilt binaries, and audit history | [Security policy](https://github.com/david-engelmann/verirun/blob/main/SECURITY.md) · [Releases](https://github.com/david-engelmann/verirun/releases) · [Changelog](https://github.com/david-engelmann/verirun/blob/main/CHANGELOG.md) · [Audit register](https://github.com/david-engelmann/verirun/blob/main/docs/AUDIT_REGISTER.md) · [Perfection register](https://github.com/david-engelmann/verirun/blob/main/docs/PERFECTION_REGISTER.md) |
 
 ## Contributing
 

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img">
+  <title>verirun</title>
+  <path d="M16 14 L32 30 M48 14 L32 30 M32 30 L32 48" stroke="#1d4ed8" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="16" cy="14" r="7.5" fill="#1d4ed8"/>
+  <circle cx="48" cy="14" r="7.5" fill="#1d4ed8"/>
+  <circle cx="32" cy="29" r="7" fill="#1d4ed8"/>
+  <polygon points="32,38 44,49 32,60 20,49" fill="#1d4ed8"/>
+</svg>

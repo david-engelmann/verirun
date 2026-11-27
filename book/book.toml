@@ -1,0 +1,27 @@
+[book]
+title = "verirun"
+authors = ["david-engelmann"]
+description = "Deterministic task runner and content-addressed build store with cryptographic RFC 8785 Merkle manifests, verified by-exec caching, and total exit-code contracts."
+language = "en"
+src = "src"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[build]
+build-dir = "build"
+
+[output.html]
+default-theme = "ayu"
+git-repository-url = "https://github.com/david-engelmann/verirun"
+site-url = "/verirun/"
+additional-css = ["theme/brand.css"]
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+
+# Dead-link gate: fail `mdbook build` on any broken internal link or missing
+# anchor. External web links are not fetched so CI stays offline-safe and free
+# of network flakiness. Adding this second renderer places HTML output under
+# `book/build/html/`, which `.github/workflows/docs.yml` deploys to Pages.
+[output.linkcheck]
+follow-web-links = false
+warning-policy = "error"

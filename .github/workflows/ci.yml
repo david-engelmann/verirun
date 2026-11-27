@@ -46,12 +46,22 @@ jobs:
               ".editorconfig",
               "install.sh",
               "README.md",
+              "AGENTS.md",
               "CONTRIBUTING.md",
               "CHANGELOG.md",
               "SECURITY.md",
               "DECISIONS.md",
               "docs/ARCHITECTURE.md",
               "docs/INVARIANTS.md",
+              "docs/FAQ.md",
+              "docs/COMPARISON.md",
+              "book/book.toml",
+              "book/sync-docs.sh",
+              "examples/README.md",
+              "examples/reproducible_eval_pipeline.py",
+              "examples/run_and_verify.sh",
+              "fuzz/Cargo.toml",
+              "fuzz/Cargo.lock",
               "crates/verirun-core/README.md",
               "crates/verirun-platform/README.md",
               "crates/verirun-store/README.md",
@@ -135,13 +145,19 @@ jobs:
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
             target/
-          key: ${{ runner.os }}-cargo-rust-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          key: ${{ runner.os }}-cargo-rust-${{ hashFiles('Cargo.lock', 'fuzz/Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-rust-
       - name: Format
-        run: cargo fmt --all -- --check
+        run: |
+          cargo fmt --all -- --check
+          cargo fmt --manifest-path fuzz/Cargo.toml --all -- --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Compile-check fuzz targets
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: cargo check --manifest-path fuzz/Cargo.toml --locked --bins
       - name: Test
         run: cargo test --workspace --all-features --locked --no-fail-fast
       - name: Doc
@@ -152,10 +168,12 @@ jobs:
           cargo run --locked -p verirun-store --example store_roundtrip
       - name: Bench compile and smoke run
         run: cargo bench --workspace --locked -- --test
-      - name: Python SDK test suite
+      - name: Python SDK test suite and runnable examples
         run: |
           cargo build --locked -p verirun-cli --bin verirun
           python3 -m unittest discover -s python/tests -v
+          python3 examples/reproducible_eval_pipeline.py
+          sh examples/run_and_verify.sh
 
   macos:
     name: macos
@@ -355,10 +373,11 @@ jobs:
           key: ${{ runner.os }}-cargo-floor-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-floor-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.10"
       - name: Python SDK test suite on the declared 3.10 floor
         run: |
           cargo build --locked -p verirun-cli --bin verirun
           python -m unittest discover -s python/tests -v
+          python examples/reproducible_eval_pipeline.py
