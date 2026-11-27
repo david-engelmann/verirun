@@ -48,10 +48,12 @@ the perfection register as their deliverable.
   checks extended to every version home and to pull request time,
   on the evidence recorded in its section below.
 - S3.1 The macOS probe. CLOSED 2026-11-27, one platform fact
-  recorded and a follow-on list scoped, on the probe evidence
-  recorded in its section below.
+  recorded, a second placed beside PF-1 at closure, and a
+  follow-on list scoped, on the probe evidence recorded in its
+  section below.
 - S3.2 The Windows parity re-proof. CLOSED 2026-11-27, no finding,
-  identity re-proved in one pass on the evidence recorded in its
+  identity re-proved in one pass and the charge's three items
+  dispositioned at closure, on the evidence recorded in its
   section below.
 - S4.1 The security file and the remaining surfaces. Queued.
 
@@ -406,9 +408,11 @@ complete with this slice.
 
 ## S3.1: The macOS probe
 
-The bounded probe list ran hosted on macos-latest against a
-binary built from the current tree (diagnostic runs 45994996297
-and 45995412810). Four probes, four answers.
+Closed 2026-11-27. The bounded probe list ran hosted on
+macos-latest against a binary built from main b1a91396
+(diagnostic runs 45994996297 and 45995412810, the second
+re-running the case probe inside the annotation cap). Four
+probes, four answers.
 
 Temp dir and symlink resolution: the runner's TMPDIR is a
 per-user /var/folders path resolving to /private/var/folders,
@@ -417,9 +421,9 @@ runs the portable spec to the pinned manifest digest exactly,
 and the store's object names stand on disk in the lowercase hex
 the code constructs. No divergence.
 
-Rename behaviour: renaming over an existing read-only file, the
-store's replace shape, succeeds on APFS as on Linux, with the
-new content in place. No divergence.
+Rename behaviour: renaming over an existing read-only file,
+the store's rename-over-existing shape, succeeds on APFS as
+on Linux, with the new content in place. No divergence.
 
 BSD tool divergence: the one known case, the wc padding the
 identity suite's macOS digest branch already pins, stands as
@@ -437,9 +441,17 @@ honestly read what was there. Nothing is falsified, the
 manifest matches the collected bytes, and verify stands. But
 the same spec on Linux records two distinct artifacts, so a
 spec can silently mean different things on different platforms
-in a way no later check can see. This is recorded as a platform
+in a way no step in the run or verify path flags, the identical
+digests being indistinguishable from legitimately identical
+outputs. This is recorded as a platform
 fact of the same family as the wc divergence, not as a store
-defect.
+defect. The charged angle of this probe, case handling against
+the store's own lowercase hex object paths, answers cleanly on
+the code and the temp probe's listing together: object names
+are constructed from lowercase hex digests by the code itself
+and every lookup uses a constructed path, never a name taken
+from the filesystem, so case-insensitive resolution has no
+name of the store's to misresolve.
 
 The follow-on list this slice was charged to scope, for Main
 to weigh: one item. A portability guard, either spec validation
@@ -454,15 +466,57 @@ Disposition: the probe list is answered in full, the platform
 fact stands on the record, and the follow-on is scoped to a
 single decision. Workstream S3 stands open on S3.2.
 
+Completion, recorded at the workstream's closure on 2026-11-27:
+the closure reviews found the rename probe's durability half
+unexamined under the verdict this entry first carried, and the
+gap is closed here. A completion probe (run 46015640040)
+exercised the sync sequence the store's protocol issues, on
+APFS through the operating system's own calls: file fsync,
+rename, directory fsync, and a replace followed by resync, all
+succeeding with the new content in place. The store issues the
+standard Unix sync calls on macOS exactly as on Linux. What
+those calls promise differs by platform documentation: macOS
+documents fsync as not guaranteeing the storage device's own
+cache stands flushed, the stronger request being the
+platform's full-sync call, which stands defined on the runner
+and which the store does not issue. Power-loss behaviour
+itself is not host testable and is not claimed. The residual
+is recorded as a platform fact beside PF-1, in PF-1's own
+family: durability on this platform is weaker than the call
+names suggest, and the mitigation is the same, every read
+rehashing, so a lost entry reads as missing and never as
+corrupt. The case fact above is placed beside PF-1 by the same
+paragraph, and its scope is widened on the record: it is a
+case-insensitive-filesystem fact, proven on macOS and expected
+on Windows by the same default, and the follow-on item scoped
+above covers both. Three verdict bounds are also stated where
+they belong: the temp verdict rests on one store run per
+location, the rename verdict on the single replace operation
+and the sync sequence above, and the tool probe's census is
+printf and tr, the two tools the identity suite chose for
+byte-identity, so that probe re-proves the suite's premise
+rather than hunting divergence. With the durability half
+answered, this entry's disposition stands as written.
+
 ## S3.2: The parity re-proof
 
-The bounded one-pass re-proof ran hosted once, on all three
-platforms, against binaries built from the current tree
+Closed 2026-11-27. The bounded one-pass re-proof ran hosted
+once, on all three
+platforms, against binaries built from main 965e416f
 (diagnostic run 46005448059). The portable spec produced its
-pinned digest identically on Linux, Windows, and macOS. The
-tutorial spec produced its pinned digest on Linux and on
-Windows, and the documented macOS variant on macOS, the BSD wc
-padding and nothing else. Cross-platform manifest identity,
+pinned digest, c1cd0a900765094f08534d5edb4676a24770c225ca53848de7173a44b2e0815c,
+identically on Linux, Windows, and macOS. The
+tutorial spec produced its pinned digest,
+e63fe409816ad93c944a2043c6c0dba09adf4686ceaf2a1e230c84096223f84a,
+on Linux and on
+Windows, and the documented macOS variant,
+7e0ab658cd3d5c50dd066f4857ea9cf4aa76f9c62a60a7a1deb386ec51584de8,
+on macOS, the BSD wc
+padding and nothing else, the localization to the wc output
+resting on the identity suite's per-task assertions, which pin
+both tasks' exec digests and the greet artifact identically
+across platforms where this pass harvested manifest digests.
+Cross-platform manifest identity,
 INV-PLAT-1, stands re-proved on the record in a single pass,
 and the one divergence in the frame is the tool's, exactly
 where the identity suite's own constants say it lives.
@@ -476,3 +530,77 @@ terms. The re-proof concerns manifest identity only.
 Disposition: identity re-proved in one pass, no finding
 raised. Workstream S3's slices stand complete, and the
 workstream closes under its reviews.
+
+Completion, recorded at the workstream's closure on 2026-11-27:
+the closure reviews found this entry, as landed, dispositioned
+none of the three items its charge names, the identity pass
+above having been executed under a reading of the slice's name
+that the charge's text does not carry. The three items are
+dispositioned here, and the identity pass stands as additional
+evidence under the workstream's framing, not as a substitute
+for them.
+
+First, the windows job's full gate, confirmed green at the
+programme's start: the hosted record for main 956b705e, the
+programme's banking head, is run 45776179849 of 2026-11-26,
+completed with the windows job successful, format, clippy, the
+full test suite, docs, examples, and benches all green on
+windows-latest at the start, and the job has run green on
+every gated head since. The confirmation is recorded at
+closure from that record.
+
+Second, the SDK's Windows binary discovery, re-proved on
+S1.2's evidence pattern (diagnostic runs 46015618613 and
+46016036172, windows-latest, the tree's own SDK): with a
+placeholder binary at each candidate in turn, the VERIRUN_BIN
+override resolved first, the install's scripts directory
+resolved next, ahead of the executable's own directory and of
+PATH, the executable's directory resolved next, and PATH
+resolved last through the system lookup, its returned name
+carrying the extension in the lookup's own casing, the same
+file on a case-insensitive filesystem. The precedence matches
+the code's construction and S1.2's Linux findings tier for
+tier.
+
+Third, PF-1 re-checked against the current tree: the platform
+seam's files stand byte-identical on current main to their
+state across the programme, and read as they stand they say
+what PF-1 records. Directory sync on Windows remains the
+no-operation variant of the split function, rename remains
+MoveFileExW with replace and write-through, and every read
+still rehashes. PF-1's terms describe the current tree
+exactly. The re-check verifies the recorded fact. It does not
+re-open, re-measure, or move it, and any movement needs Main's
+ruling under the standing rule.
+
+With the three charged items dispositioned, this slice's
+disposition stands as written above.
+
+## S3 closure
+
+Workstream S3 closed 2026-11-27 under the checkpoint rule's
+three reviews, and the reviews found this workstream's record
+wanting in ways the earlier closures did not. Spec fidelity
+returned S3.1 PARTIAL and S3.2 NOT MET as landed: S3.2's entry
+dispositioned none of the three items its charge names, the
+slice having been designed from the design fold's shorthand
+for the charge rather than from the banked roadmap's text, and
+S3.1's rename probe carried a durability half it never ran.
+The red team graded S3.1's verdicts as broader than their
+exercises and its follow-on list as complete only against the
+thinner probe set, and S3.2's identity claim as surviving with
+its completeness claim partial. Standards found no blockers
+and charged the two sections' form: no closure dates, no main
+commits, no quoted digests, and one overstated sentence in
+S3.1. Every finding was repaired in the closure pass that
+carries this section: the three charged items executed and
+dispositioned in S3.2's entry, the durability half probed and
+dispositioned in S3.1's, both platform facts placed beside
+PF-1, the verdict bounds and calibrations stated, and the form
+brought up to the register's own shape. The ledger's name for
+S3.2 is the roadmap's own, kept as written there, for a slice
+whose executed pass covered all three platforms. My own
+verification re-read the banked charge against both entries
+before repairing them, confirmed the windows job's success in
+the programme-start run from the hosted record, and read the
+durability seam in the current tree firsthand.
