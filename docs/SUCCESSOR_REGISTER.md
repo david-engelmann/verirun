@@ -50,7 +50,9 @@ the perfection register as their deliverable.
 - S3.1 The macOS probe. CLOSED 2026-11-27, one platform fact
   recorded and a follow-on list scoped, on the probe evidence
   recorded in its section below.
-- S3.2 The Windows parity re-proof. Queued.
+- S3.2 The Windows parity re-proof. CLOSED 2026-11-27, no finding,
+  identity re-proved in one pass on the evidence recorded in its
+  section below.
 - S4.1 The security file and the remaining surfaces. Queued.
 
 ## S2.0: Published-state ground truth
@@ -451,3 +453,26 @@ came back clean and need none.
 Disposition: the probe list is answered in full, the platform
 fact stands on the record, and the follow-on is scoped to a
 single decision. Workstream S3 stands open on S3.2.
+
+## S3.2: The parity re-proof
+
+The bounded one-pass re-proof ran hosted once, on all three
+platforms, against binaries built from the current tree
+(diagnostic run 46005448059). The portable spec produced its
+pinned digest identically on Linux, Windows, and macOS. The
+tutorial spec produced its pinned digest on Linux and on
+Windows, and the documented macOS variant on macOS, the BSD wc
+padding and nothing else. Cross-platform manifest identity,
+INV-PLAT-1, stands re-proved on the record in a single pass,
+and the one divergence in the frame is the tool's, exactly
+where the identity suite's own constants say it lives.
+
+The PF-1 guard, stated at the slice as charged: PF-1,
+directory entry durability being weaker on Windows, stands as
+an accepted platform fact from the perfection programme. This
+slice does not re-open it, re-measure it, or restate its
+terms. The re-proof concerns manifest identity only.
+
+Disposition: identity re-proved in one pass, no finding
+raised. Workstream S3's slices stand complete, and the
+workstream closes under its reviews.
