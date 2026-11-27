@@ -1,48 +1,40 @@
 # verirun
 
-`verirun` is a deterministic task runner and content-addressed build and evaluation store written in Rust, paired with a zero-dependency typed Python 3.10+ SDK.
+<p>
+  <img class="theme-light-only" src="docs/media/verirun-lockup-light.svg" alt="verirun" height="50">
+  <img class="theme-dark-only" src="docs/media/verirun-lockup-dark.svg" alt="verirun" height="50">
+</p>
 
-You describe a directed acyclic graph (DAG) of tasks as strict JSON data or through `verirun.PipelineBuilder`. Before spawning a single subprocess, `verirun` validates the entire graph, runs each task inside an isolated working directory with a scrubbed environment, streams every input, output artifact, and standard stream into a crash-safe SHA-256 content-addressed store, and seals the run with an RFC 8785 (JCS) canonical manifest and domain-separated Merkle root.
+`verirun` is a deterministic task-DAG runner, crash-safe SHA-256 content-addressed store, and RFC 8785 (JCS) Merkle manifest verifier written in Rust, paired with a zero-dependency Python 3.10+ SDK (`verirun.PipelineBuilder`).
 
-```mermaid
-flowchart LR
-  Spec["JSON Spec or PipelineBuilder"] --> Validate["Upfront DAG & Path Validation"]
-  Validate --> Sched["Deterministic Kahn Scheduler"]
-  Sched --> Cache{"Verified by-exec Cache?"}
-  Cache -- "Hit (blobs + sizes verified)" --> Record["TaskRecord (cached)"]
-  Cache -- "Miss" --> Sandbox["Hermetic Sandbox + ProcessGroup"]
-  Sandbox --> CAS["Crash-Safe Sharded CAS"]
-  CAS --> Record2["TaskRecord (succeeded)"]
-  Record --> Manifest["RFC 8785 Manifest + Merkle Root"]
-  Record2 --> Manifest
-  Manifest --> Ops["verify / show / diff / pin / gc"]
-```
+<p>
+  <img src="docs/media/money-shot.gif" alt="verirun hermetic task execution, verified by-exec cache hit, manifest diff, and exit-2 single-byte tamper conviction" width="860">
+</p>
 
-## Core guarantees
+## Execution & Crash-Safe Store Pipeline
 
-- **Upfront validation before side effects.** Cycles, unknown dependencies, duplicate task IDs, colliding outputs, reserved environment keys (`PATH`, `HOME`, `TMPDIR`, `TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`), out-of-range integers above `2^53 - 1`, and unsafe paths fail with exit code `3` before opening the store or work root (`INV-LAT-4`).
-- **Hermetic execution and process-tree containment.** Tasks run with a cleared environment holding only declared `env` pairs plus `LC_ALL=C`, `TZ=UTC`, `SOURCE_DATE_EPOCH=0`, and a private sandbox `TMPDIR`. Timeouts terminate the entire Unix process group or Windows Job Object (`INV-RUN-4`).
-- **Race-free, crash-safe content store.** Declared outputs are collected component by component relative to open directory handles (`openat` with `O_NOFOLLOW` on Unix, `NtCreateFile` reparse-point rejection on Windows). Every stored blob lands via temporary file write, `fsync`, atomic rename, and directory sync in bounded `64 KiB` chunks (`INV-CAS-1`, `INV-CAS-8`).
-- **Verified `by-exec` caching.** Before reusing a cached task record, `verirun` verifies that every referenced artifact and stream blob exists in the store and matches its recorded SHA-256 digest and byte count (`INV-RUN-7`).
-- **End-to-end tamper conviction.** `verirun verify` checks the manifest digest, canonical RFC 8785 byte identity, Merkle root, and every referenced blob, exiting with code `2` on any corrupted byte or size mismatch (`INV-MAN-3`, `INV-MAN-4`, `INV-MAN-5`).
+<p>
+  <img class="theme-light-only" src="docs/media/execution-cas-pipeline-light.svg" alt="How verirun validates JSON task graphs upfront, resolves verified by-exec cache hits, runs hermetic sandboxes on misses, and commits blobs via the 4-step atomic CAS protocol" width="880">
+  <img class="theme-dark-only" src="docs/media/execution-cas-pipeline-dark.svg" alt="How verirun validates JSON task graphs upfront, resolves verified by-exec cache hits, runs hermetic sandboxes on misses, and commits blobs via the 4-step atomic CAS protocol" width="880">
+</p>
 
-## Workspace architecture
+- **Upfront validation before side effects (`exit 3`).** Strict JSON parsing, IEEE-754 safe-integer checks (`<= 2^53 - 1`), Kahn cycle detection, case-folded path collision checks, and reserved `env` key checks complete before touching `--cas` or `--work` (`INV-LAT-4`).
+- **Verified `by-exec` cache vs hermetic sandbox.** Cache hits verify every referenced blob and recorded byte length (`status: "cached"`, `INV-RUN-7`); misses execute in a scrubbed environment (`LC_ALL=C`, `TZ=UTC`, `SOURCE_DATE_EPOCH=0`) inside a Unix `ProcessGroup` or Windows `JobObject` (`INV-RUN-4`) with handle-relative no-follow output collection (`INV-SBX-3`).
+- **4-step atomic CAS commit.** Blobs stream in `64 KiB` chunks into `<cas>/tmp/`, `sync_all`, become read-only (`0o444`), atomically rename to `objects/<xx>/<digest>`, and sync the shard directory (`INV-CAS-1..8`).
 
-| Crate | Role | External runtime dependencies |
-| --- | --- | --- |
-| `verirun-core` | Strict JSON parser, RFC 8785 canonical encoder, domain-separated digest framing, DAG validator, and Merkle manifest model | None (`std` only, `#![forbid(unsafe_code)]`) |
-| `verirun-platform` | OS FFI boundary for process groups / Job Objects, no-follow handle-relative traversal, and atomic `rename_replace` | `libc` (Unix), `windows-sys` (Windows) |
-| `verirun-store` | Sharded filesystem CAS, hermetic subprocess runner, parallel scheduler, `by-exec` cache, and garbage collector | `sha2` |
-| `verirun-cli` | `verirun` binary and high-level pipeline library with total `--json` parity and total exit codes (`0`, `1`, `2`, `3`) | `clap`, `serde_json` |
+## Domain-Separated Merkle Tamper Conviction
 
-## Where to start
+<p>
+  <img class="theme-light-only" src="docs/media/merkle-domain-tree-light.svg" alt="Exact domain-separated SHA-256 framing tree in verirun-core from raw blob streams up to the canonical RFC 8785 manifest and exit-2 tamper conviction" width="880">
+  <img class="theme-dark-only" src="docs/media/merkle-domain-tree-dark.svg" alt="Exact domain-separated SHA-256 framing tree in verirun-core from raw blob streams up to the canonical RFC 8785 manifest and exit-2 tamper conviction" width="880">
+</p>
 
-| Goal | Chapter |
-| --- | --- |
-| Install `verirun` and run your first Python or CLI pipeline in two minutes | [Quickstart](./quickstart.md) |
-| Follow a CLI walkthrough covering cold run, warm cache, diff, pin, and GC | [Step-by-step tutorial](docs/TUTORIAL.md) |
-| Look up CLI flags, `--json` schemas, exit codes, and Python SDK types | [CLI and Python SDK](./cli-and-python.md) |
-| Inspect the wire formats, store state machine, and Merkle framing rules | [Architecture](docs/ARCHITECTURE.md) |
-| Audit every formal invariant (`INV-*`) and its enforcing test or fault oracle | [Invariants and traceability](docs/INVARIANTS.md) |
-| Decide when to use `verirun` vs `make`, `Bazel`, containers, or custom scripts | [How verirun compares](docs/COMPARISON.md) |
-| Check common questions about warm-cache manifests, number bounds, and GC | [FAQ](docs/FAQ.md) |
+Every hash prefixes its exact `verirun/v1/{blob,input,env,exec,artifact,task,node,empty}` tag plus `0x00`. `verirun verify` checks the manifest digest, canonical RFC 8785 encoding, Merkle root, and every referenced blob and byte count, convicting single-byte corruption with exit code `2` (`INV-MAN-3..5`).
+
+## Chapters in This Book
+
+- **[Quickstart](./quickstart.md):** Install `verirun` and run your first Python `PipelineBuilder` or CLI graph.
+- **[Step-by-Step Tutorial](docs/TUTORIAL.md):** Cold execution, warm `by-exec` cache rerun, `verify`, `show`, `diff`, `pin`, and `gc`.
+- **[CLI and Python SDK](./cli-and-python.md):** Command flags, `--json` output schemas, four-code exit contract (`0`, `1`, `2`, `3`), and Python API types.
+- **[Architecture](docs/ARCHITECTURE.md) & [Invariants](docs/INVARIANTS.md):** Normative byte framing, store state machine, and 1-to-1 invariant test matrix.
+- **[Comparison](docs/COMPARISON.md) & [FAQ](docs/FAQ.md):** Choosing between `verirun`, `make`, `Bazel`/`Nix`, containers, and custom eval scripts.
