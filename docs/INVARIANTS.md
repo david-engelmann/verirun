@@ -126,7 +126,7 @@ Edge cases. `timeout_ms` of 1 and `MAX_SAFE_INTEGER` (`9007199254740991`) are ac
 
 ### INV-DAG-7. Case-colliding declared paths rejected upfront
 Two declared output paths that differ only in letter case are rejected with exit code 3, naming both paths and both task ids, and two input paths declared by one task that differ only in letter case are rejected the same way, naming the task and both paths. A case-insensitive filesystem would give such a pair one file, so the spec's meaning would depend on the host filesystem. Folding is the Unicode lowercase mapping, a pure function of the path, so the refusal is identical on every platform.
-Edge cases: a collision through a directory component alone (`Data/out.txt` against `data/out.txt`), fold-equal inputs declared by different tasks (accepted, each task materializes its own inputs), an exact duplicate (reported under INV-DAG-4 or as a duplicate input, whose checks run first).
+Edge cases: a collision through a directory component alone (`Data/out.txt` against `data/out.txt`), fold-equal inputs declared by different tasks (accepted, each task materializes its own inputs), an exact duplicate (reported under INV-DAG-4 or as a duplicate input when it is the violation the checks reach first in file order).
 
 ## 5. Execution invariants (RUN)
 
