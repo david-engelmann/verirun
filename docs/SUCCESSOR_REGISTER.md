@@ -33,7 +33,8 @@ the perfection register as their deliverable.
 - S1.2 Binary discovery. CLOSED 2026-11-26, one finding raised and
   deferred to S1.4 with its remedy, on the probe evidence recorded in
   its section below.
-- S1.3 Error mapping. Queued.
+- S1.3 Error mapping. CLOSED 2026-11-26, no finding, on the mapping
+  recorded in its section below.
 - S1.4 Fault-path depth and the Python floor. Queued, and charged by
   S1.2 with the version-mismatch diagnostic remedy recorded in S1.2's
   section.
@@ -134,3 +135,36 @@ failure the SDK names the resolved binary's version alongside the
 error, so the mismatch states itself without refusing cross-version
 work. Disposition: the discovery order and the cross-version contract
 stand as designed, and the finding rides to S1.4.
+
+## S1.3: Error mapping
+
+Closed 2026-11-26, no finding. The read covered the CLI's error
+surface against the SDK's exception at main 92f55ba4, on top of S1.1's
+payload census. The CLI's side is error_json and the exit code map in
+crates/verirun-cli, and the SDK's side is the VerirunError
+construction in _invoke_json, in version, and in RunResult's
+raise_for_failures. The mapping is faithful and lossless. When the
+CLI emits its error object, the SDK raises with the object's own
+message text, its exit code (the process code standing as fallback,
+and the two cannot disagree since error_json derives its field from
+the same exit code the process returns), its kind, and the whole
+payload, so the verification family's structured fields reach
+consumers on the exception's payload even though the typed surface
+carries only the kind string. When no payload exists, the SDK raises
+with the process's stderr text as the message, the process code, no
+kind, and an empty payload, the exact path S1.2's probe exercised
+twice against the 0.1.0 binary. Two shapes are recorded and
+dispositioned. First, kinds exist only for the verification family,
+because error_json defines them only there, that being INV-CLI-2's
+own scope, and every other CLI error reaches the SDK as message and
+exit code alone. The taxonomy is the CLI's, and the SDK mirrors it
+rather than inventing one, so no mapping defect stands. Second, a run
+taken with the check option raises through raise_for_failures, which
+joins the task failures into the exception message and leaves the
+payload empty, so the structured failures stand available only
+through the unchecked call's result. The information is not lost, it
+is de-structured, and the shape is the documented bargain of the
+check option, accepted here with S1.4's fault suite charged to pin
+it. Disposition: no finding, and the payload-less fallback this entry
+describes is confirmed as the site where S1.2's deferred diagnostic
+remedy attaches in S1.4.
