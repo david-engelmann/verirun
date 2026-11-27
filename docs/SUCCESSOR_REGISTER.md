@@ -196,9 +196,10 @@ probe. Third, the Python floor is owned by a hosted leg: a
 python-floor CI job runs the full SDK suite under Python 3.10, the
 oldest version the package claims, so the classifiers stand as a
 tested claim rather than an aspiration. S1.3's recorded shape is
-pinned by a check-mode test in the end-to-end suite, which asserts
-the raised exception carries the task failures in its message and an
-empty payload. Disposition: SF-S1-1 is landed, the SDK's fault
+pinned by two check-mode tests in the end-to-end suite, which assert
+the raised exception carries execution failures in its message, falls
+back to its generic text for a plain exit-code failure, and keeps an
+empty payload either way. Disposition: SF-S1-1 is landed, the SDK's fault
 surface is tested per function, and the claimed Python range has a
 hosted floor. Workstream S1 stands complete with this slice, its
 closure reviews recorded at the programme level.

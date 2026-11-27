@@ -122,6 +122,33 @@ class VerirunSdkTests(unittest.TestCase):
     def test_check_mode_raises_with_failures_in_message(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
+            spec_path = root / "pipeline.json"
+            spec = {
+                "tasks": [
+                    {
+                        "task_id": "boom",
+                        "executable": "verirun-no-such-executable",
+                        "args": [],
+                        "env": {},
+                        "inputs": [],
+                        "outputs": [],
+                        "depends_on": [],
+                    }
+                ]
+            }
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+
+            with self.assertRaises(verirun.VerirunError) as ctx:
+                verirun.run(
+                    spec_path, cas=root / "cas", work=root / "work", check=True
+                )
+            self.assertEqual(ctx.exception.exit_code, 1)
+            self.assertIn("boom", str(ctx.exception))
+            self.assertEqual(ctx.exception.payload, {})
+
+    def test_check_mode_exit_code_failure_uses_the_generic_message(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
             if os.name == "nt":
                 executable = "cmd"
                 args = ["/C", "exit 3"]
@@ -149,7 +176,10 @@ class VerirunSdkTests(unittest.TestCase):
                     spec_path, cas=root / "cas", work=root / "work", check=True
                 )
             self.assertEqual(ctx.exception.exit_code, 1)
-            self.assertIn("boom", str(ctx.exception))
+            # An exit-code failure leaves no entry in the run's failure
+            # details, which name only failures the exit code cannot
+            # explain, so the message is the generic fallback.
+            self.assertEqual(str(ctx.exception), "verirun run failed (task failure)")
             self.assertEqual(ctx.exception.payload, {})
 
 
