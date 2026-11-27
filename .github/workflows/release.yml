@@ -28,7 +28,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       tag: ${{ steps.meta.outputs.tag }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Verify version parity and extract changelog section
         id: meta
         env:
@@ -160,7 +160,7 @@ jobs:
             bin_name: verirun.exe
             native: true
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
       - name: Install pinned toolchain and target
         shell: bash
         run: |

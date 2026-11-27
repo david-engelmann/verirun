@@ -23,8 +23,9 @@ use windows_sys::Wdk::Storage::FileSystem::{
     FILE_OPEN_REPARSE_POINT as NT_OPEN_REPARSE_POINT, FILE_SYNCHRONOUS_IO_NONALERT, NtCreateFile,
 };
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE, STATUS_FILE_IS_A_DIRECTORY,
-    STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND, UNICODE_STRING,
+    CloseHandle, GENERIC_READ, HANDLE, INVALID_HANDLE_VALUE, OBJ_CASE_INSENSITIVE,
+    STATUS_FILE_IS_A_DIRECTORY, STATUS_OBJECT_NAME_NOT_FOUND, STATUS_OBJECT_PATH_NOT_FOUND,
+    UNICODE_STRING,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_ATTRIBUTE_DIRECTORY,
@@ -38,7 +39,6 @@ use windows_sys::Win32::System::JobObjects::{
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
     SetInformationJobObject, TerminateJobObject,
 };
-use windows_sys::Win32::System::Kernel::OBJ_CASE_INSENSITIVE;
 
 use crate::TraversalError;
 
@@ -350,7 +350,7 @@ impl DirHandle {
             })?;
         attributes.RootDirectory = self.handle;
         attributes.ObjectName = core::ptr::addr_of!(unicode);
-        attributes.Attributes = OBJ_CASE_INSENSITIVE.cast_unsigned();
+        attributes.Attributes = OBJ_CASE_INSENSITIVE;
         // SAFETY: the status block is plain data, zeroed here
         // and written by the call before it is read.
         let mut status_block: IO_STATUS_BLOCK = unsafe { core::mem::zeroed() };

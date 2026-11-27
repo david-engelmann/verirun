@@ -1,0 +1,159 @@
+name: verify-published
+
+# External consumer verification for published crates.io and PyPI artifacts.
+# Runs entirely in temporary directories outside any repository checkout to
+# prove that fresh Cargo projects, `cargo install verirun-cli`, and
+# `pip install verirun` resolve and execute the published 0.2.1 release.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 6 * * 1"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  scratch-project:
+    name: scratch-project
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.100.0"
+    steps:
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.100.0 --profile minimal
+          rustup show active-toolchain
+      - name: Build and run external crate consumer
+        run: |
+          set -euo pipefail
+          WORK_DIR="$(mktemp -d "${RUNNER_TEMP:-/tmp}/verirun-scratch-XXXXXX")"
+          cd "$WORK_DIR"
+          cargo new scratch-consumer
+          cd scratch-consumer
+          cargo add verirun-core@0.2.1 verirun-store@0.2.1
+          cat <<'RS' > src/main.rs
+          use verirun_core::canonical;
+          use verirun_core::digest::{DomainTag, hash_bytes};
+          use verirun_core::parse;
+          use verirun_store::cas_fs::Cas;
+          use verirun_store::sha256::Sha256Factory;
+
+          fn main() {
+              let parsed = parse::parse(br#"{"b":[true,null],"a":1}"#).expect("parse JSON");
+              let canonical_bytes = canonical::to_vec(&parsed).expect("encode canonical JSON");
+              assert_eq!(canonical_bytes, br#"{"a":1,"b":[true,null]}"#);
+
+              let store_root = std::env::temp_dir().join(format!("verirun-published-cas-{}", std::process::id()));
+              let cas = Cas::open(&store_root).expect("open filesystem CAS");
+              let digest = cas.put_bytes(&canonical_bytes).expect("put canonical blob");
+              let roundtrip = cas.read_to_vec(&digest).expect("read verified blob");
+              assert_eq!(roundtrip, canonical_bytes);
+
+              let expected = hash_bytes(&Sha256Factory, DomainTag::Blob, &canonical_bytes);
+              assert_eq!(digest, expected);
+              std::fs::remove_dir_all(&store_root).expect("clean up CAS");
+              println!("verified published crate roundtrip: {digest}");
+          }
+          RS
+          cargo run --release
+
+  install-cli:
+    name: install-cli
+    runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: "1.100.0"
+    steps:
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.100.0 --profile minimal
+          rustup show active-toolchain
+      - name: Install verirun-cli from crates.io and verify 2-task pipeline
+        run: |
+          set -euo pipefail
+          INSTALL_ROOT="${RUNNER_TEMP:-/tmp}/verirun-install"
+          SMOKE_DIR="$(mktemp -d "${RUNNER_TEMP:-/tmp}/verirun-cli-smoke-XXXXXX")"
+          cargo install verirun-cli --version 0.2.1 --root "$INSTALL_ROOT"
+          VERIRUN="$INSTALL_ROOT/bin/verirun"
+          test "$("$VERIRUN" --version)" = "verirun 0.2.1"
+
+          cat <<'JSON' > "$SMOKE_DIR/pipeline.json"
+          {
+            "tasks": [
+              {
+                "task_id": "greet",
+                "executable": "sh",
+                "args": ["-c", "printf 'hello published cli\n' > outputs/greeting.txt"],
+                "env": {},
+                "inputs": [],
+                "outputs": ["greeting.txt"],
+                "depends_on": []
+              },
+              {
+                "task_id": "shout",
+                "executable": "sh",
+                "args": ["-c", "tr a-z A-Z < inputs/greeting.txt > outputs/loud.txt"],
+                "env": {},
+                "inputs": ["greeting.txt"],
+                "outputs": ["loud.txt"],
+                "depends_on": ["greet"]
+              }
+            ]
+          }
+          JSON
+
+          MANIFEST="$("$VERIRUN" run --cas "$SMOKE_DIR/cas" --work "$SMOKE_DIR/work" --pin "$SMOKE_DIR/pipeline.json")"
+          "$VERIRUN" verify --cas "$SMOKE_DIR/cas" "$MANIFEST"
+
+  install-pypi:
+    name: install-pypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install verirun from PyPI and verify PipelineBuilder run
+        run: |
+          set -euo pipefail
+          SMOKE_DIR="$(mktemp -d "${RUNNER_TEMP:-/tmp}/verirun-pypi-smoke-XXXXXX")"
+          cd "$SMOKE_DIR"
+          python -m pip install --upgrade pip
+          pip install verirun==0.2.1
+          python - <<'PY'
+          from pathlib import Path
+          import tempfile
+          import verirun
+
+          assert verirun.__version__ == "0.2.1", verirun.__version__
+          assert verirun.version() == "0.2.1", verirun.version()
+
+          with tempfile.TemporaryDirectory() as tmp:
+              root = Path(tmp)
+              cas = root / "cas"
+              work = root / "work"
+              pipeline = (
+                  verirun.PipelineBuilder()
+                  .add_task(
+                      task_id="greet",
+                      executable="sh",
+                      args=["-c", "printf 'hello pypi\\n' > outputs/greeting.txt"],
+                      outputs=["greeting.txt"],
+                  )
+                  .add_task(
+                      task_id="shout",
+                      executable="sh",
+                      args=["-c", "tr a-z A-Z < inputs/greeting.txt > outputs/loud.txt"],
+                      inputs=["greeting.txt"],
+                      outputs=["loud.txt"],
+                      depends_on=["greet"],
+                  )
+              )
+              assert pipeline.validate() == ("greet", "shout")
+              result = pipeline.run(cas=cas, work=work, pin_manifest=True, check=True)
+              verified = verirun.verify(result.manifest, cas=cas)
+              assert verified.verified
+              print("verified PyPI wheel manifest:", verified.manifest)
+          PY

@@ -1,8 +1,8 @@
 <p align="center">
   <a href="https://github.com/david-engelmann/verirun">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="docs/media/verirun-lockup-dark.svg">
-      <img src="docs/media/verirun-lockup-light.svg" alt="verirun" height="56">
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/david-engelmann/verirun/main/docs/media/verirun-lockup-dark.svg">
+      <img src="https://raw.githubusercontent.com/david-engelmann/verirun/main/docs/media/verirun-lockup-light.svg" alt="verirun" height="56">
     </picture>
   </a>
 </p>
@@ -14,10 +14,10 @@
 </p>
 
 <p align="center">
-  <a href="docs/TUTORIAL.md"><b>Tutorial</b></a> ·
-  <a href="docs/README.md">Docs</a> ·
-  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
-  <a href="docs/INVARIANTS.md">Invariants</a> ·
+  <a href="https://github.com/david-engelmann/verirun/blob/main/docs/TUTORIAL.md"><b>Tutorial</b></a> ·
+  <a href="https://github.com/david-engelmann/verirun/blob/main/docs/README.md">Docs</a> ·
+  <a href="https://github.com/david-engelmann/verirun/blob/main/docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="https://github.com/david-engelmann/verirun/blob/main/docs/INVARIANTS.md">Invariants</a> ·
   <a href="https://github.com/david-engelmann/verirun/releases">Releases</a>
 </p>
 
@@ -26,12 +26,12 @@
   <a href="https://crates.io/crates/verirun-cli"><img src="https://img.shields.io/crates/v/verirun-cli?color=1d4ed8&label=crates.io" alt="crates.io version"></a>
   <a href="https://pypi.org/project/verirun/"><img src="https://img.shields.io/pypi/v/verirun?color=1d4ed8&label=pypi" alt="PyPI version"></a>
   <a href="https://docs.rs/verirun-core"><img src="https://img.shields.io/docsrs/verirun-core" alt="docs.rs"></a>
-  <a href="Cargo.toml"><img src="https://img.shields.io/badge/MSRV-1.88-informational" alt="MSRV 1.88"></a>
-  <a href="LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="MIT or Apache-2.0 license"></a>
+  <a href="https://github.com/david-engelmann/verirun/blob/main/Cargo.toml"><img src="https://img.shields.io/badge/MSRV-1.88-informational" alt="MSRV 1.88"></a>
+  <a href="https://github.com/david-engelmann/verirun/blob/main/LICENSE-MIT"><img src="https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue" alt="MIT or Apache-2.0 license"></a>
 </p>
 
 <p align="center">
-  <img src="docs/media/money-shot.gif"
+  <img src="https://raw.githubusercontent.com/david-engelmann/verirun/main/docs/media/money-shot.gif"
        alt="A two-part view with live task graph and content-addressed store telemetry above and real verirun CLI calls below, showing a cold run with pinning, a four-worker warm cached run, a manifest diff, and a one-byte disk corruption caught by verirun verify with exit code 2"
        width="900">
 </p>
@@ -51,8 +51,8 @@ Build scripts and pipeline steps usually leave behind mutable folders, ambient e
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/media/tamper-proof-dark.svg">
-    <img src="docs/media/tamper-proof-light.svg"
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/david-engelmann/verirun/main/docs/media/tamper-proof-dark.svg">
+    <img src="https://raw.githubusercontent.com/david-engelmann/verirun/main/docs/media/tamper-proof-light.svg"
          alt="Four domain-separated SHA-256 stages from verirun/blob/v1 through verirun/manifest/v1 showing how a 1-byte disk flip in loud.txt causes verirun verify to exit with code 2"
          width="860">
   </picture>
@@ -62,8 +62,8 @@ Build scripts and pipeline steps usually leave behind mutable folders, ambient e
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/media/how-it-works-dark.svg">
-    <img src="docs/media/how-it-works-light.svg"
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/david-engelmann/verirun/main/docs/media/how-it-works-dark.svg">
+    <img src="https://raw.githubusercontent.com/david-engelmann/verirun/main/docs/media/how-it-works-light.svg"
          alt="JSON run specs, host input bindings, worker limits, and pins enter the verirun pipeline across upfront DAG validation, hermetic sandboxes, process-tree cleanup, handle-relative collection, crash-safe sharded CAS, and verified caching, producing Merkle manifests and verify, show, diff, and gc workflows"
          width="860">
   </picture>
@@ -71,10 +71,10 @@ Build scripts and pipeline steps usually leave behind mutable folders, ambient e
 
 | Crate | Kind | External runtime deps | Role |
 | --- | --- | --- | --- |
-| [`verirun-core`](crates/verirun-core/README.md) | library | none (`std` only) | Strict JSON parser, RFC 8785 canonical encoder, domain-framed digests, DAG validator, and manifest builder and differ. |
-| [`verirun-platform`](crates/verirun-platform/README.md) | library | `libc` (Unix), `windows-sys` (Win) | Sole OS FFI seam for process groups and Job Objects, no-follow handle-relative path traversal, and `rename_replace` atomic replacement. |
-| [`verirun-store`](crates/verirun-store/README.md) | library | `sha2` | Crash-safe sharded content-addressed store, hermetic subprocess runner, parallel scheduler, `by-exec` cache, and garbage collector. |
-| [`verirun-cli`](crates/verirun-cli/README.md) | library and binary (`verirun`) | `clap`, `serde_json` | Command line interface (`run`, `verify`, `show`, `diff`, `pin`, `unpin`, `gc`) with total `--json` parity and documented exit codes. |
+| [`verirun-core`](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-core/README.md) | library | none (`std` only) | Strict JSON parser, RFC 8785 canonical encoder, domain-framed digests, DAG validator, and manifest builder and differ. |
+| [`verirun-platform`](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-platform/README.md) | library | `libc` (Unix), `windows-sys` (Win) | Sole OS FFI seam for process groups and Job Objects, no-follow handle-relative path traversal, and `rename_replace` atomic replacement. |
+| [`verirun-store`](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-store/README.md) | library | `sha2` | Crash-safe sharded content-addressed store, hermetic subprocess runner, parallel scheduler, `by-exec` cache, and garbage collector. |
+| [`verirun-cli`](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-cli/README.md) | library and binary (`verirun`) | `clap`, `serde_json` | Command line interface (`run`, `verify`, `show`, `diff`, `pin`, `unpin`, `gc`) with total `--json` parity and documented exit codes. |
 
 ## Quickstart
 
@@ -91,11 +91,28 @@ cargo install verirun-cli
 ```python
 import verirun
 
-result = verirun.run("pipeline.json", cas="./cas", work="./work", pin_manifest=True, check=True)
+pipeline = (
+    verirun.PipelineBuilder()
+    .add_task(
+        task_id="greet",
+        executable="sh",
+        args=["-c", "printf 'hello from verirun\\n' > outputs/greeting.txt"],
+        outputs=["greeting.txt"],
+    )
+    .add_task(
+        task_id="shout",
+        executable="sh",
+        args=["-c", "tr a-z A-Z < inputs/greeting.txt > outputs/loud.txt"],
+        inputs=["greeting.txt"],
+        outputs=["loud.txt"],
+        depends_on=["greet"],
+    )
+)
+result = pipeline.run(cas="./cas", work="./work", pin_manifest=True, check=True)
 verirun.verify(result.manifest, cas="./cas")
 ```
 
-Save a two-task run description as `pipeline.json`. Inside its sandbox, each task reads declared inputs under `inputs/` and writes declared outputs under `outputs/`.
+Or save the same two-task run description directly as `pipeline.json`. Inside its sandbox, each task reads declared inputs under `inputs/` and writes declared outputs under `outputs/`.
 
 ```json
 {
@@ -171,17 +188,17 @@ Measured on 2026-11-24 on a hosted Linux runner from full runs of `canonical_ben
 
 | If you want to... | Read |
 | --- | --- |
-| Walk a complete first run from JSON spec to diff and GC | [Step-by-step tutorial](docs/TUTORIAL.md) |
-| Browse every document in the repository | [Documentation index](docs/README.md) |
-| Understand the store layout, RFC 8785 rules, and OS sandboxing | [Architecture](docs/ARCHITECTURE.md) · [Decisions](DECISIONS.md) |
-| Check every formal invariant and its enforcing property or fault test | [Invariants and traceability matrix](docs/INVARIANTS.md) |
-| Inspect crate-level APIs and examples | [verirun-core](crates/verirun-core/README.md) · [verirun-platform](crates/verirun-platform/README.md) · [verirun-store](crates/verirun-store/README.md) · [verirun-cli](crates/verirun-cli/README.md) |
-| Review the audit and perfection registers | [Audit register](docs/AUDIT_REGISTER.md) · [Perfection register](docs/PERFECTION_REGISTER.md) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) |
+| Walk a complete first run from JSON spec to diff and GC | [Step-by-step tutorial](https://github.com/david-engelmann/verirun/blob/main/docs/TUTORIAL.md) |
+| Browse every document in the repository | [Documentation index](https://github.com/david-engelmann/verirun/blob/main/docs/README.md) |
+| Understand the store layout, RFC 8785 rules, and OS sandboxing | [Architecture](https://github.com/david-engelmann/verirun/blob/main/docs/ARCHITECTURE.md) · [Decisions](https://github.com/david-engelmann/verirun/blob/main/DECISIONS.md) |
+| Check every formal invariant and its enforcing property or fault test | [Invariants and traceability matrix](https://github.com/david-engelmann/verirun/blob/main/docs/INVARIANTS.md) |
+| Inspect crate-level APIs and examples | [verirun-core](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-core/README.md) · [verirun-platform](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-platform/README.md) · [verirun-store](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-store/README.md) · [verirun-cli](https://github.com/david-engelmann/verirun/blob/main/crates/verirun-cli/README.md) |
+| Review the audit and perfection registers | [Audit register](https://github.com/david-engelmann/verirun/blob/main/docs/AUDIT_REGISTER.md) · [Perfection register](https://github.com/david-engelmann/verirun/blob/main/docs/PERFECTION_REGISTER.md) · [Security policy](https://github.com/david-engelmann/verirun/blob/main/SECURITY.md) · [Changelog](https://github.com/david-engelmann/verirun/blob/main/CHANGELOG.md) |
 
 ## Contributing
 
-[CONTRIBUTING.md](CONTRIBUTING.md) explains the two-stage milestone workflow, fault-oracle standards, forever format stability, and local verification gates.
+[CONTRIBUTING.md](https://github.com/david-engelmann/verirun/blob/main/CONTRIBUTING.md) explains the two-stage milestone workflow, fault-oracle standards, forever format stability, and local verification gates.
 
 ## Licence
 
-`verirun` is dual licensed under the [MIT licence](LICENSE-MIT) and the [Apache License 2.0](LICENSE-APACHE). You may use it under either one.
+`verirun` is dual licensed under the [MIT licence](https://github.com/david-engelmann/verirun/blob/main/LICENSE-MIT) and the [Apache License 2.0](https://github.com/david-engelmann/verirun/blob/main/LICENSE-APACHE). You may use it under either one.
