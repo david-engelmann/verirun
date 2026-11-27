@@ -1,4 +1,4 @@
-//! DAG validation fault oracles (INV-DAG-1 to INV-DAG-6).
+//! DAG validation fault oracles (INV-DAG-1 to INV-DAG-7).
 //!
 //! Every test feeds a parsed run file to core validation and
 //! asserts the exact first error, because the fixed check order of
@@ -324,4 +324,76 @@ fn fault_duplicate_input() {
     let fan_in_a = task("a").replace(r#""inputs":[]"#, r#""inputs":["shared.txt"]"#);
     let fan_in_b = task("b").replace(r#""inputs":[]"#, r#""inputs":["shared.txt"]"#);
     assert!(validate(&run(&[fan_in_a, fan_in_b])).is_ok());
+}
+
+#[test]
+fn fault_case_colliding_paths() {
+    // Two outputs in different tasks that differ only in letter
+    // case (INV-DAG-7). On a case-insensitive filesystem the pair
+    // is one file, so validation refuses it everywhere, naming
+    // both paths and both tasks. Before the folded comparison
+    // existed this spec validated, so this case fails on the
+    // pre-rule behaviour.
+    let upper = task("a").replace(r#""outputs":[]"#, r#""outputs":["Report.txt"]"#);
+    let lower = task("b").replace(r#""outputs":[]"#, r#""outputs":["report.txt"]"#);
+    assert_eq!(
+        validate(&run(&[upper, lower])),
+        Err(DagError::CaseCollidingOutput {
+            first_path: "Report.txt".to_string(),
+            path: "report.txt".to_string(),
+            first_task: "a".to_string(),
+            second_task: "b".to_string()
+        })
+    );
+
+    // The same refusal inside one task's own outputs.
+    let both = task("a").replace(r#""outputs":[]"#, r#""outputs":["A.txt","a.txt"]"#);
+    assert_eq!(
+        validate(&run(&[both])),
+        Err(DagError::CaseCollidingOutput {
+            first_path: "A.txt".to_string(),
+            path: "a.txt".to_string(),
+            first_task: "a".to_string(),
+            second_task: "a".to_string()
+        })
+    );
+
+    // The fold runs over the whole path, so a collision through
+    // a directory component alone is refused as well.
+    let dir_upper = task("a").replace(r#""outputs":[]"#, r#""outputs":["Data/out.txt"]"#);
+    let dir_lower = task("b").replace(r#""outputs":[]"#, r#""outputs":["data/out.txt"]"#);
+    assert_eq!(
+        validate(&run(&[dir_upper, dir_lower])),
+        Err(DagError::CaseCollidingOutput {
+            first_path: "Data/out.txt".to_string(),
+            path: "data/out.txt".to_string(),
+            first_task: "a".to_string(),
+            second_task: "b".to_string()
+        })
+    );
+
+    // Two inputs in one task that differ only in letter case
+    // share one materialization directory and are refused the
+    // same way, naming the task and both paths.
+    let inputs = task("a").replace(r#""inputs":[]"#, r#""inputs":["In.txt","in.txt"]"#);
+    assert_eq!(
+        validate(&run(&[inputs])),
+        Err(DagError::CaseCollidingInput {
+            task_id: "a".to_string(),
+            first_path: "In.txt".to_string(),
+            path: "in.txt".to_string()
+        })
+    );
+
+    // Control: fold-equal inputs in different tasks validate,
+    // because each task materializes its own inputs directory.
+    let in_a = task("a").replace(r#""inputs":[]"#, r#""inputs":["Same.txt"]"#);
+    let in_b = task("b").replace(r#""inputs":[]"#, r#""inputs":["same.txt"]"#);
+    assert!(validate(&run(&[in_a, in_b])).is_ok());
+
+    // Control: outputs that differ in more than letter case
+    // validate.
+    let one = task("a").replace(r#""outputs":[]"#, r#""outputs":["a.txt"]"#);
+    let two = task("b").replace(r#""outputs":[]"#, r#""outputs":["a2.txt"]"#);
+    assert!(validate(&run(&[one, two])).is_ok());
 }

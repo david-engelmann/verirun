@@ -59,6 +59,10 @@ the perfection register as their deliverable.
   2026-11-27, two findings landed, one nit landed, and the
   unverifiable claims named, on the evidence recorded in its
   section below.
+- S4.2 Case-colliding declared paths refused. CLOSED
+  2026-11-27, charged by Main's ruling on the follow-on
+  decision S3.1 scoped, on the evidence recorded in its
+  section below.
 
 ## S2.0: Published-state ground truth
 
@@ -691,3 +695,63 @@ Disposition: two findings landed, one nit landed, and the
 unverifiable claims named rather than chased. Workstream S4
 stands complete with this slice, and the programme's slices
 stand complete with it.
+
+## S4.2: Case-colliding declared paths refused
+
+Closed 2026-11-27. This slice was charged by Main's ruling of
+2026-11-27 on the follow-on decision S3.1 scoped. The ruling
+is reject at validation, on the ground that a spec valid on a
+case-sensitive filesystem but colliding on a case-insensitive
+one is a portability defect of exactly the kind verirun
+exists to eliminate, and that documenting the fact alone
+would leave the defect reachable. The case fact stays
+recorded in S3.1's entry as the rule's reason. S4.1's closing
+sentence stood when it was written. This slice, charged the
+same day, is the workstream's second, and the programme's
+slices stand complete with it. The slice was built on main
+e9727ff4, the S4.1 merge, as its coordination claim
+provided, and re-based onto main 771bc27e for landing after
+PR 258's v0.2.2 preparation took the CHANGELOG head and the
+queue refused the first branch on the conflict. Only the
+CHANGELOG placement changed in the re-base. The other seven
+files are byte-identical to the first branch's versions.
+
+Validation now compares declared paths case-folded as well
+as exactly. Check 4 in dag.rs keeps a folded owners map
+beside the exact one and returns DagError CaseCollidingOutput
+naming both paths and both tasks. Check 5 keeps a folded set
+within each task's inputs and returns DagError
+CaseCollidingInput naming the task and both paths. Folding
+is the Unicode lowercase mapping of the whole normalized
+path, a pure function of the path, so the refusal is
+identical on every platform and a collision through a
+directory component alone is caught. Exact duplicates still
+report under the older errors, whose comparisons run first.
+ARCHITECTURE sections 7.1 and 11 record the comparison, and
+INVARIANTS gains INV-DAG-7.
+
+The pin is fault_case_colliding_paths in
+crates/verirun-core/tests/dag_faults.rs, with
+fault_case_colliding_outputs_exit_3 at the CLI level in
+cli_exit_codes.rs. The core cases assert the exact errors
+for a cross-task output pair, a same-task output pair, a
+directory-only collision, and an input pair, with fold-equal
+inputs in different tasks and outputs differing in more than
+letter case as controls. Every refusal case validated before
+this slice, so the tests fail on the pre-rule behaviour by
+construction. The change is breaking for specs that relied
+on case-distinct paths and is taken under the pre-1.0
+versioning policy, recorded in the CHANGELOG's Unreleased
+section.
+
+Checks 4 and 5 moved out of validate_run_spec into their own
+functions during the build, because the folded comparisons
+carried the function past the workspace's clippy line limit
+and the tree carries no allow attributes for that lint. The
+extraction changes no behaviour. The local gate ran green
+before the push (clippy across the workspace with warnings
+denied, fmt, and the dag_faults and cli_exit_codes suites),
+with hosted CI as the gate of record.
+
+Disposition: Main's ruling executed as charged. Workstream
+S4 stands complete with this slice.

@@ -387,6 +387,33 @@ fn fault_duplicate_env_key_in_run_file() {
 }
 
 #[test]
+fn fault_case_colliding_outputs_exit_3() {
+    // INV-DAG-7 at the CLI level: two declared outputs that
+    // differ only in letter case are refused at validation, the
+    // exit is 3, and the error names both paths.
+    let dir = fresh_dir("case-collide");
+    let cas = dir.join("cas");
+    let cas_arg = cas.to_str().expect("utf8 path").to_string();
+    let spec_path = write_spec(
+        &dir,
+        "{\"tasks\":[{\"task_id\":\"t\",\"executable\":\"sh\",\"args\":[\"-c\",\"true\"],\"env\":{},\"inputs\":[],\"outputs\":[\"A.txt\",\"a.txt\"],\"depends_on\":[]}]}",
+    );
+    let output = invoke(&[
+        "run",
+        spec_path.to_str().expect("utf8 path"),
+        "--cas",
+        &cas_arg,
+        "--work",
+        dir.join("work").to_str().expect("utf8 path"),
+    ]);
+    assert_eq!(code(&output), 3, "case collision: {}", stderr(&output));
+    let err = stderr(&output);
+    assert!(err.contains("\"A.txt\""), "names the first path: {err}");
+    assert!(err.contains("\"a.txt\""), "names the second path: {err}");
+    remove_tree(&dir);
+}
+
+#[test]
 fn fault_json_parity_on_argument_and_seed_errors() {
     // INV-CLI-2: malformed digest arguments and invalid SIM_SEED
     // values must emit structured `error_json` on stdout when
