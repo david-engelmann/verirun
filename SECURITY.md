@@ -10,7 +10,7 @@ Security fixes land on the latest minor release line of `verirun` (`0.2.x`). Bec
 
 - Every blob, artifact record, task record, and manifest commits to domain-separated SHA-256 digests over RFC 8785 canonical JSON. `verirun verify` and `verirun show` re-hash every referenced object and check recorded artifact byte lengths and Merkle roots before trusting stored data.
 - Declared input and output paths are restricted to normalized relative paths inside the task sandbox. Output collection walks components through held directory handles with `O_NOFOLLOW` on Unix and `FILE_OPEN_REPARSE_POINT` inspection on Windows, preventing check-then-open symlink swaps.
-- Child processes receive a cleared environment containing only declared pairs, the three fixed defaults (`LC_ALL=C`, `SOURCE_DATE_EPOCH=0`, `TZ=UTC`), and the private sandbox `TMPDIR`. Tasks execute in dedicated Unix process groups or Windows job objects that are terminated on timeout and on drop.
+- Child processes receive a cleared environment containing only declared pairs, the three fixed defaults (`LC_ALL=C`, `SOURCE_DATE_EPOCH=0`, `TZ=UTC`), and the private sandbox `TMPDIR`. Tasks execute in dedicated Unix process groups or Windows job objects that are terminated on timeout, and on drop while supervision is live. Once a task has been supervised to completion, its group is disarmed before it is dropped, its leader already reaped, so a finished task's group terminates nothing at drop.
 - Tasks execute as normal OS subprocesses under the invoking user account. Running untrusted code that requires network, syscall, or mandatory access isolation should wrap `verirun` inside a container, virtual machine, or OS sandbox.
 
 ## Reporting a vulnerability

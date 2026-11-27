@@ -44,7 +44,7 @@ Build scripts and pipeline steps usually leave behind mutable folders, ambient e
 
 - **Upfront graph validation.** Missing dependencies, cycles, duplicate task IDs, colliding output paths, reserved environment keys (`PATH`, `HOME`, `TMPDIR`), and unsafe relative paths are rejected with exit code `3` before any subprocess spawns.
 - **Hermetic task sandboxes.** Each task executes in a fresh working folder with a scrubbed environment holding only its declared variables plus fixed deterministic defaults. Worker count (`--jobs`) and host folder paths never enter any digest.
-- **Process-tree containment.** Tasks exceeding `timeout_ms` are terminated along with every child in their Unix process group or Windows Job Object, and surviving background group members are cleaned up when the task finishes.
+- **Process-tree containment.** Tasks exceeding `timeout_ms` are terminated along with every child in their Unix process group or Windows Job Object.
 - **Race-free, crash-safe content store.** Outputs are collected component by component relative to open directory handles so symlinks and reparse points are refused without `TOCTOU` races. Blobs land via temporary write, `fsync`, atomic rename, and directory sync, and remain read-only on disk in bounded `64 KiB` streaming chunks.
 - **Verified `by-exec` caching.** When a task's executable, arguments, environment, and input digests match a prior success, `verirun` verifies every referenced blob and recorded byte length before reusing the cached record without spawning the program.
 - **End-to-end tamper conviction.** `verirun verify` re-parses the canonical manifest, checks the Merkle root, and streams every referenced artifact and log through SHA-256, exiting with code `2` on the first corrupted byte or mismatched size.
@@ -53,7 +53,7 @@ Build scripts and pipeline steps usually leave behind mutable folders, ambient e
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/david-engelmann/verirun/main/docs/media/tamper-proof-dark.svg">
     <img src="https://raw.githubusercontent.com/david-engelmann/verirun/main/docs/media/tamper-proof-light.svg"
-         alt="Four domain-separated SHA-256 stages from verirun/blob/v1 through verirun/manifest/v1 showing how a 1-byte disk flip in loud.txt causes verirun verify to exit with code 2"
+         alt="Four domain-separated SHA-256 stages showing how a 1-byte disk flip in loud.txt causes verirun verify to exit with code 2"
          width="860">
   </picture>
 </p>
