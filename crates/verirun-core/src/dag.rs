@@ -112,6 +112,16 @@ impl ValidatedDag {
     }
 }
 
+/// The case-folded form of a normalized path, used by the
+/// collision checks in [`validate_run_spec`]. Folding is the
+/// Unicode lowercase mapping applied per character, so the
+/// folded form is a pure function of the path and agrees on
+/// every platform, including the case-sensitive filesystems
+/// where two folded-equal paths could still name two files.
+fn case_folded(path: &str) -> String {
+    path.chars().flat_map(char::to_lowercase).collect()
+}
+
 /// Validates a parsed run file value into a [`ValidatedDag`].
 ///
 /// The checks run in the fixed order of section 7.1 and the module
@@ -122,7 +132,8 @@ impl ValidatedDag {
 ///
 /// Returns [`DagError`] describing the first violation found: a
 /// schema violation, a duplicated task id, an unknown dependency, a
-/// colliding output, a duplicated input, an unsafe path, or the
+/// colliding or case-colliding output, a duplicated or
+/// case-colliding input, an unsafe path, or the
 /// sorted cyclic remnant.
 ///
 /// # Panics
@@ -183,8 +194,33 @@ pub fn validate_run_spec(spec: &Value) -> Result<ValidatedDag, DagError> {
         })
         .collect();
 
-    // Check 4: colliding outputs, in file and declared order.
+    check_colliding_outputs(&specs, &output_results)?;
+
+    let mut normalized_inputs: BTreeMap<String, Vec<NormalizedPath>> = BTreeMap::new();
+    let mut normalized_outputs: BTreeMap<String, Vec<NormalizedPath>> = BTreeMap::new();
+    normalize_declared_paths(
+        &specs,
+        &output_results,
+        &mut normalized_inputs,
+        &mut normalized_outputs,
+    )?;
+
+    assemble_and_order(specs, normalized_inputs, normalized_outputs)
+}
+
+/// Check 4: colliding outputs, in file and declared order.
+/// The comparison also runs on case-folded forms. Two output
+/// paths that differ only in letter case name two files on a
+/// case-sensitive filesystem and one file on a
+/// case-insensitive one, so the spec's meaning would depend
+/// on the host filesystem; the folded claim is refused
+/// everywhere, naming both paths.
+fn check_colliding_outputs(
+    specs: &[TaskSpec],
+    output_results: &[Vec<Result<NormalizedPath, crate::error::PathError>>],
+) -> Result<(), DagError> {
     let mut owners: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut folded_owners: BTreeMap<String, (&str, &str)> = BTreeMap::new();
     for (task, results) in specs.iter().zip(output_results.iter()) {
         for normalized in results.iter().filter_map(|result| result.as_ref().ok()) {
             if let Some(first) = owners.get(normalized.as_str()) {
@@ -194,16 +230,34 @@ pub fn validate_run_spec(spec: &Value) -> Result<ValidatedDag, DagError> {
                     second_task: task.task_id.clone(),
                 });
             }
+            let folded = case_folded(normalized.as_str());
+            if let Some((first_path, first_task)) = folded_owners.get(&folded) {
+                return Err(DagError::CaseCollidingOutput {
+                    first_path: (*first_path).to_string(),
+                    path: normalized.as_str().to_string(),
+                    first_task: (*first_task).to_string(),
+                    second_task: task.task_id.clone(),
+                });
+            }
             owners.insert(normalized.as_str(), task.task_id.as_str());
+            folded_owners.insert(folded, (normalized.as_str(), task.task_id.as_str()));
         }
     }
+    Ok(())
+}
 
-    // Check 5: path safety, inputs before outputs within a task,
-    // in file and declared order.
-    let mut normalized_inputs: BTreeMap<String, Vec<NormalizedPath>> = BTreeMap::new();
-    let mut normalized_outputs: BTreeMap<String, Vec<NormalizedPath>> = BTreeMap::new();
+/// Check 5: path safety, inputs before outputs within a task,
+/// in file and declared order. Fills the normalized input and
+/// output paths per task for assembly.
+fn normalize_declared_paths(
+    specs: &[TaskSpec],
+    output_results: &[Vec<Result<NormalizedPath, crate::error::PathError>>],
+    normalized_inputs: &mut BTreeMap<String, Vec<NormalizedPath>>,
+    normalized_outputs: &mut BTreeMap<String, Vec<NormalizedPath>>,
+) -> Result<(), DagError> {
     for (task, results) in specs.iter().zip(output_results.iter()) {
         let mut inputs: Vec<NormalizedPath> = Vec::with_capacity(task.inputs.len());
+        let mut folded_inputs: BTreeMap<String, String> = BTreeMap::new();
         for declared in &task.inputs {
             match crate::paths::validate_path(declared) {
                 Ok(normalized) => {
@@ -218,6 +272,18 @@ pub fn validate_run_spec(spec: &Value) -> Result<ValidatedDag, DagError> {
                             path: normalized.as_str().to_string(),
                         });
                     }
+                    // The folded comparison of check 4, within
+                    // this task's own inputs, which share one
+                    // materialization directory.
+                    let folded = case_folded(normalized.as_str());
+                    if let Some(first_path) = folded_inputs.get(&folded) {
+                        return Err(DagError::CaseCollidingInput {
+                            task_id: task.task_id.clone(),
+                            first_path: first_path.clone(),
+                            path: normalized.as_str().to_string(),
+                        });
+                    }
+                    folded_inputs.insert(folded, normalized.as_str().to_string());
                     inputs.push(normalized);
                 }
                 Err(source) => {
@@ -243,8 +309,7 @@ pub fn validate_run_spec(spec: &Value) -> Result<ValidatedDag, DagError> {
         normalized_inputs.insert(task.task_id.clone(), inputs);
         normalized_outputs.insert(task.task_id.clone(), outputs);
     }
-
-    assemble_and_order(specs, normalized_inputs, normalized_outputs)
+    Ok(())
 }
 
 /// Assembly and check 6: Kahn's algorithm over a
