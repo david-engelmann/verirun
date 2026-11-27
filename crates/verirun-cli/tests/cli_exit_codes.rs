@@ -442,6 +442,33 @@ fn fault_trailing_colliding_outputs_exit_3() {
 }
 
 #[test]
+fn fault_case_colliding_task_ids_exit_3() {
+    // INV-DAG-9 at the CLI level: two task ids that differ
+    // only in letter case are refused at validation, the exit
+    // is 3, and the error names both ids.
+    let dir = fresh_dir("id-case-collide");
+    let cas = dir.join("cas");
+    let cas_arg = cas.to_str().expect("utf8 path").to_string();
+    let spec_path = write_spec(
+        &dir,
+        "{\"tasks\":[{\"task_id\":\"Build\",\"executable\":\"sh\",\"args\":[\"-c\",\"true\"],\"env\":{},\"inputs\":[],\"outputs\":[],\"depends_on\":[]},{\"task_id\":\"build\",\"executable\":\"sh\",\"args\":[\"-c\",\"true\"],\"env\":{},\"inputs\":[],\"outputs\":[],\"depends_on\":[]}]}",
+    );
+    let output = invoke(&[
+        "run",
+        spec_path.to_str().expect("utf8 path"),
+        "--cas",
+        &cas_arg,
+        "--work",
+        dir.join("work").to_str().expect("utf8 path"),
+    ]);
+    assert_eq!(code(&output), 3, "task id collision: {}", stderr(&output));
+    let err = stderr(&output);
+    assert!(err.contains("\"Build\""), "names the first id: {err}");
+    assert!(err.contains("\"build\""), "names the second id: {err}");
+    remove_tree(&dir);
+}
+
+#[test]
 fn fault_json_parity_on_argument_and_seed_errors() {
     // INV-CLI-2: malformed digest arguments and invalid SIM_SEED
     // values must emit structured `error_json` on stdout when

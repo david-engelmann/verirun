@@ -145,7 +145,8 @@ fn win32_stripped(path: &str) -> String {
 /// # Errors
 ///
 /// Returns [`DagError`] describing the first violation found: a
-/// schema violation, a duplicated task id, an unknown dependency, a
+/// schema violation, a duplicated or case-colliding task id, an
+/// unknown dependency, a
 /// colliding, case-colliding, or trailing-colliding output, a
 /// duplicated, case-colliding, or trailing-colliding input, an
 /// unsafe path, or the
@@ -172,14 +173,27 @@ pub fn validate_run_spec(spec: &Value) -> Result<ValidatedDag, DagError> {
         specs.push(parse_task(item)?);
     }
 
-    // Check 2: duplicate task ids, in file order.
+    // Check 2: duplicate task ids, in file order. Ids that
+    // differ only in letter case are refused as well, because
+    // each task's sandbox is a directory named by its id, and
+    // a case-insensitive filesystem would give two such tasks
+    // one sandbox.
     let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    let mut folded_ids: BTreeMap<String, &str> = BTreeMap::new();
     for task in &specs {
         if !seen.insert(task.task_id.as_str()) {
             return Err(DagError::DuplicateTaskId {
                 task_id: task.task_id.clone(),
             });
         }
+        let folded = case_folded(&task.task_id);
+        if let Some(first_id) = folded_ids.get(&folded) {
+            return Err(DagError::CaseCollidingTaskId {
+                first_id: (*first_id).to_string(),
+                task_id: task.task_id.clone(),
+            });
+        }
+        folded_ids.insert(folded, task.task_id.as_str());
     }
     let ids: std::collections::BTreeSet<&str> =
         specs.iter().map(|task| task.task_id.as_str()).collect();

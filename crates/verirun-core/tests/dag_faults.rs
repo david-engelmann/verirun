@@ -1,4 +1,4 @@
-//! DAG validation fault oracles (INV-DAG-1 to INV-DAG-8).
+//! DAG validation fault oracles (INV-DAG-1 to INV-DAG-9).
 //!
 //! Every test feeds a parsed run file to core validation and
 //! asserts the exact first error, because the fixed check order of
@@ -475,4 +475,23 @@ fn fault_trailing_colliding_paths() {
     // characters validate.
     let apart = task("a").replace(r#""outputs":[]"#, r#""outputs":["a.txt","a.txt.bak"]"#);
     assert!(validate(&run(&[apart])).is_ok());
+}
+
+#[test]
+fn fault_case_colliding_task_ids() {
+    // Two task ids that differ only in letter case share one
+    // sandbox directory on a case-insensitive filesystem,
+    // because each task's sandbox is named by its id
+    // (INV-DAG-9).
+    assert_eq!(
+        validate(&run(&[task("Build"), task("build")])),
+        Err(DagError::CaseCollidingTaskId {
+            first_id: "Build".to_string(),
+            task_id: "build".to_string()
+        })
+    );
+
+    // Control: ids that differ in more than letter case
+    // validate.
+    assert!(validate(&run(&[task("Build"), task("build2")])).is_ok());
 }
