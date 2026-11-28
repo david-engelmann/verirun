@@ -159,12 +159,15 @@ jobs:
             python: "3.12"
           - os: ubuntu-latest
             python: "3.10"
+          - os: windows-latest
+            python: "3.12"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: ${{ matrix.python }}
       - name: Install verirun from PyPI and verify PipelineBuilder run
+        shell: bash
         run: |
           set -euo pipefail
           SMOKE_DIR="$(mktemp -d "${RUNNER_TEMP:-/tmp}/verirun-pypi-smoke-XXXXXX")"
