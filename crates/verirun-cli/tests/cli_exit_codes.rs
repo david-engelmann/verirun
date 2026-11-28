@@ -497,6 +497,39 @@ fn fault_trailing_colliding_task_ids_exit_3() {
 }
 
 #[test]
+fn fault_declared_lookup_env_keys_exit_3() {
+    // A declared PATH or HOME is refused at validation with
+    // exit code 3 naming the key, because a declared PATH
+    // steers the child's own command lookups and a declared
+    // HOME its file lookups.
+    let dir = fresh_dir("env-lookup-keys");
+    let cas = dir.join("cas");
+    let cas_arg = cas.to_str().expect("utf8 path").to_string();
+    let work_arg = dir.join("work").to_str().expect("utf8 path").to_string();
+    for (key, value) in [("PATH", "/opt/tools/bin"), ("HOME", "/home/fake")] {
+        let body = format!(
+            "{{\"tasks\":[{{\"task_id\":\"a\",\"executable\":\"sh\",\"args\":[\"-c\",\"true\"],\"env\":{{\"{key}\":\"{value}\"}},\"inputs\":[],\"outputs\":[],\"depends_on\":[]}}]}}"
+        );
+        let spec_path = write_spec(&dir, &body);
+        let output = invoke(&[
+            "run",
+            spec_path.to_str().expect("utf8 path"),
+            "--cas",
+            &cas_arg,
+            "--work",
+            &work_arg,
+        ]);
+        assert_eq!(code(&output), 3, "declared {key}: {}", stderr(&output));
+        let err = stderr(&output);
+        assert!(
+            err.contains(&format!("\"{key}\"")),
+            "names the refused key {key}: {err}"
+        );
+    }
+    remove_tree(&dir);
+}
+
+#[test]
 fn fault_json_parity_on_argument_and_seed_errors() {
     // INV-CLI-2: malformed digest arguments and invalid SIM_SEED
     // values must emit structured `error_json` on stdout when

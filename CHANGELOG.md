@@ -8,6 +8,7 @@ Every notable change to verirun is recorded here. Versions follow the semantic v
 - Trailing-colliding declared paths refused at validation. Spec validation now also rejects two declared output paths, or two inputs of one task, whose components differ only in trailing spaces and dots, with exit code 3 naming both paths, because Win32 strips those characters from each component and would give the pair one file (breaking, under the pre-1.0 versioning policy).
 - Case-colliding task ids refused at validation. Spec validation now also rejects two task ids that differ only in letter case, with exit code 3 naming both ids, because each task's sandbox is a directory named by its id and a case-insensitive filesystem would give the two tasks one sandbox (breaking, under the pre-1.0 versioning policy).
 - Trailing-colliding task ids refused at validation. Spec validation now also rejects two task ids that differ only in trailing spaces or dots, with exit code 3 naming both ids, because Win32 strips those characters from a path component and would give the two tasks one sandbox directory on Windows (breaking, under the pre-1.0 versioning policy).
+- Declared PATH and HOME refused at validation. Spec validation now rejects a task env declaring `PATH` or `HOME`, with exit code 3 naming the key, because a declared `PATH` steers the child's own command lookups and a declared `HOME` its file lookups (breaking, under the pre-1.0 versioning policy).
 
 ## 0.2.2
 

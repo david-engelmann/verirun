@@ -121,8 +121,8 @@ For a spec with several violations, validation always reports the same first err
 Edge case: a spec that is simultaneously cyclic and has a duplicate id reports the duplicate, in every process and at every seed.
 
 ### INV-DAG-6. Schema strictness
-Unknown task fields, a missing required field, a wrong-typed field, an empty `task_id` or `executable`, a `task_id` that is not a single safe path component (it contains a slash or a backslash, or it is "." or "..", or its Win32-stripped form is empty), a declared runner-managed env key (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`, `TMPDIR`), and `timeout_ms` below 1 are each rejected with exit code 3 before execution.
-Edge cases. `timeout_ms` of 1 and `MAX_SAFE_INTEGER` (`9007199254740991`) are accepted while 0 is rejected, and an env object declaring `TZ` or `TMPDIR` is rejected so no declared `TMPDIR` can enter `exec_digest` and be overwritten at spawn. A task id of `../escape` is rejected while an id with interior dots such as `a.b-c` is accepted.
+Unknown task fields, a missing required field, a wrong-typed field, an empty `task_id` or `executable`, a `task_id` that is not a single safe path component (it contains a slash or a backslash, or it is "." or "..", or its Win32-stripped form is empty), a declared runner-managed env key (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`, `TMPDIR`), a declared `PATH` or `HOME`, and `timeout_ms` below 1 are each rejected with exit code 3 before execution. The env key comparison folds ASCII letter case, because environment lookup on Windows is case-insensitive, so a declared `Path` is rejected as `PATH` on every platform.
+Edge cases. `timeout_ms` of 1 and `MAX_SAFE_INTEGER` (`9007199254740991`) are accepted while 0 is rejected, and an env object declaring `TZ` or `TMPDIR` is rejected so no declared `TMPDIR` can enter `exec_digest` and be overwritten at spawn. An env object declaring `PATH` or `HOME` is rejected because a declared `PATH` steers the child's own command lookups and a declared `HOME` its file lookups. A task id of `../escape` is rejected while an id with interior dots such as `a.b-c` is accepted.
 
 ### INV-DAG-7. Case-colliding declared paths rejected upfront
 Two declared output paths that differ only in letter case are rejected with exit code 3, naming both paths and both task ids, and two input paths declared by one task that differ only in letter case are rejected the same way, naming the task and both paths. A case-insensitive filesystem would give such a pair one file, so the spec's meaning would depend on the host filesystem. Folding is the Unicode lowercase mapping, a pure function of the path, so the refusal is identical on every platform.
@@ -143,7 +143,7 @@ Edge cases: an exact duplicate id (reported as a duplicate, which check 2 reache
 ## 5. Execution invariants (RUN)
 
 ### INV-RUN-1. Hermetic environment
-A child process observes exactly its declared env pairs, the three fixed defaults, and the runner-set `TMPDIR`, and nothing else. No host variable, including `PATH`, `HOME`, and locale variables, is present unless declared and allowed.
+A child process observes exactly its declared env pairs, the three fixed defaults, and the runner-set `TMPDIR`, and nothing else. No host variable, including `PATH`, `HOME`, and locale variables, is present unless declared, and `PATH` and `HOME` can never be declared (INV-DAG-6), so they are never present.
 Edge case: the test host exports a sentinel variable. A task that dumps its environment produces a blob whose content is checked pair by pair against the expected sorted set.
 
 ### INV-RUN-2. Fixed defaults hold
