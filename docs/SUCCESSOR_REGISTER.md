@@ -1235,3 +1235,55 @@ Disposition: findings B1, B2, G1, and G2 stand closed.
 The seed behaviour itself is unchanged and stays
 pinned by the completions tests, which assert the
 empty stderr the scoped texts now describe.
+
+## Repair slice 3: workflows
+
+Closed 2026-11-28. The audit found the workflow set
+drifting in three ways. verify-published.yml hardcoded
+0.2.2 with no dispatch input, so after the next release
+its Monday schedule would keep verifying a stale
+release green (finding C1). No job exercised the GitHub
+Release assets or install.sh, and the PyPI job covered
+one OS and one interpreter (finding C2). Action pinning
+was inconsistent, with SHA pins in some workflows and
+mutable tags in others, including a moving branch on
+the action that holds the PyPI publish permission
+(finding F). Main approved the repairs as slice 3 of
+this programme.
+
+The build: verify-published.yml takes a version input
+on workflow_dispatch, defaulting to 0.2.2, and every
+version literal in its jobs now reads the single
+VERIRUN_VERSION environment value the input feeds,
+with scheduled runs falling back to the default. A new
+install-script job runs install.sh against the live
+GitHub release and asserts the installed binary's
+version. The install-pypi job widens to a matrix of
+Ubuntu and macOS on Python 3.12 plus Ubuntu on Python
+3.10. Every mutable action reference across the
+workflow set is now pinned to a full-length SHA with a
+version comment, thirty references in all, including
+the PyPI publish action pinned off its moving branch
+and the crates.io auth action pinned at its v1 branch
+head, which is also its v1.0.6 tag. Each SHA was
+resolved from the action's own repository refs at
+build time.
+
+The slice's reviews found two wording couplings, and
+both are repaired in this slice. The workflow header
+no longer claims the run happens entirely outside a
+checkout, since the install-script job checks the
+repository out to obtain install.sh, and a comment at
+the VERIRUN_VERSION value names its coupling to the
+dispatch input default, which a release bump must move
+together. The red team also noted that the PyPI job's
+pipefail line now runs on macOS, where it rests on the
+hosted runner resolving bash through PATH to the
+image's newer bash, and that point stands as a known
+uncertainty the first matrix run settles.
+
+Disposition: findings C1, C2, and F stand closed. The
+first scheduled run under the new shape is the
+workflow's own Monday run, and the install-script job
+exercises the same release assets the audit verified
+by hand.
