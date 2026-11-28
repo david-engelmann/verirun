@@ -468,6 +468,13 @@ const TASK_FIELDS: [&str; 8] = [
 /// execution digest and then be overwritten at spawn.
 const FIXED_ENV_KEYS: [&str; 4] = ["LC_ALL", "SOURCE_DATE_EPOCH", "TMPDIR", "TZ"];
 
+/// The environment keys a spec must never declare because a
+/// declared value would steer the child's own lookups: `PATH`
+/// steers command resolution and `HOME` steers file lookups.
+/// The runner does not set them either, so a child observes
+/// neither unless its own program sets them.
+const REFUSED_ENV_KEYS: [&str; 2] = ["HOME", "PATH"];
+
 const fn as_object(value: &Value) -> Option<&Vec<(String, Value)>> {
     match value {
         Value::Object(pairs) => Some(pairs),
@@ -645,7 +652,8 @@ fn parse_task(item: &Value) -> Result<TaskSpec, DagError> {
 }
 
 /// Parses the `env` object of one task (part of check 1):
-/// string values only, and none of the fixed default keys.
+/// string values only, and none of the fixed default keys or
+/// the refused keys.
 fn parse_env(
     pairs: &[(String, Value)],
     named: Option<&String>,
@@ -659,6 +667,14 @@ fn parse_env(
                         named.cloned(),
                         &format!(
                             "env declares the fixed key {key:?}; fixed defaults are set by the runner and must not be declared"
+                        ),
+                    ));
+                }
+                if REFUSED_ENV_KEYS.contains(&key.as_str()) {
+                    return Err(schema(
+                        named.cloned(),
+                        &format!(
+                            "env declares the refused key {key:?}; PATH and HOME steer the child's own lookups and must not be declared"
                         ),
                     ));
                 }

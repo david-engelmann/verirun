@@ -271,6 +271,11 @@ fn fault_schema_rejection_table() {
         run(&[task("a").replace(r#""env":{}"#, r#""env":{"LC_ALL":"C"}"#)]),
         run(&[task("a").replace(r#""env":{}"#, r#""env":{"SOURCE_DATE_EPOCH":"0"}"#)]),
         run(&[task("a").replace(r#""env":{}"#, r#""env":{"TMPDIR":"/tmp/fake"}"#)]),
+        // A declared PATH or HOME: neither is runner-managed,
+        // but a declared value would steer the child's own
+        // command and file lookups, so both are refused.
+        run(&[task("a").replace(r#""env":{}"#, r#""env":{"PATH":"/opt/tools/bin"}"#)]),
+        run(&[task("a").replace(r#""env":{}"#, r#""env":{"HOME":"/home/fake"}"#)]),
         // timeout_ms below 1.
         run(&[task_with("a", r#""timeout_ms":0"#)]),
         run(&[task_with("a", r#""timeout_ms":-5"#)]),
