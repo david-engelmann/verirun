@@ -271,9 +271,9 @@ class VerirunSdkTests(unittest.TestCase):
             verirun.PipelineBuilder().add_task(task_id="...", executable="sh")
         )
 
-        # Reserved env keys under ASCII case folding, as the CLI
-        # compares them: environment lookup on Windows is
-        # case-insensitive.
+        # Reserved env keys under ASCII case folding, the
+        # comparison the CLI makes. Environment lookup on
+        # Windows is case-insensitive.
         for folded in ("Path", "home", "tz"):
             err = assert_invalid(
                 verirun.PipelineBuilder().add_task(

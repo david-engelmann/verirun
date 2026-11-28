@@ -67,7 +67,7 @@ def _case_folded(text: str) -> str:
 def _win32_stripped(text: str) -> str:
     """The path with trailing spaces and dots stripped per component.
 
-    Mirrors the CLI's Win32-stripped form: Win32 strips those
+    Mirrors the CLI's Win32-stripped form. Win32 strips those
     characters from each path component when it opens a file.
     """
     return "/".join(part.rstrip(" .") for part in text.split("/"))
@@ -76,13 +76,18 @@ def _win32_stripped(text: str) -> str:
 def _is_reserved_env_key(key: str) -> bool:
     """Whether an env key names a reserved key, folding ASCII case.
 
-    Mirrors the CLI's comparison: environment lookup on Windows
+    Mirrors the CLI's comparison. Environment lookup on Windows
     is case-insensitive, so a declared Path is refused as PATH.
     """
     folded = "".join(
         chr(ord(ch) + 32) if "A" <= ch <= "Z" else ch for ch in key
     )
-    return folded in {name.lower() for name in _RESERVED_ENV_KEYS}
+    return folded in _RESERVED_ENV_KEYS_FOLDED
+
+
+_RESERVED_ENV_KEYS_FOLDED = frozenset(
+    name.lower() for name in _RESERVED_ENV_KEYS
+)
 _TASK_FIELDS = frozenset(
     {
         "task_id",
@@ -149,7 +154,7 @@ def _normalize_env_mapping(value: Any) -> Mapping[str, str]:
 def _validate_relative_path(raw: str, *, task_id: str, field_name: str) -> str:
     """Validate a declared path and return its normalized form.
 
-    Mirrors the CLI's path rules in verirun-core: dot components
+    Mirrors the CLI's path rules in verirun-core. Dot components
     and empty components are normalized away, so spellings such
     as ./seed.txt, dir//file.txt, and dir/ name the same path
     here as they do at the CLI.
@@ -364,7 +369,9 @@ class PipelineBuilder:
             stripped = _case_folded(_win32_stripped(tid))
             if stripped in stripped_ids:
                 raise _invalid_spec(
-                    f"task_id {tid!r} and task_id {stripped_ids[stripped]!r} name the same directory on Windows, where trailing spaces and dots are stripped"
+                    f"task_id {tid!r} and task_id {stripped_ids[stripped]!r} "
+                    "name the same directory on Windows, where trailing "
+                    "spaces and dots are stripped"
                 )
             stripped_ids[stripped] = tid
 
@@ -416,13 +423,16 @@ class PipelineBuilder:
                 folded_in = _case_folded(norm_in)
                 if folded_in in folded_inputs:
                     raise _invalid_spec(
-                        f"task {task.task_id!r} input {norm_in!r} differs only in letter case from input {folded_inputs[folded_in]!r}"
+                        f"task {task.task_id!r} input {norm_in!r} differs "
+                        f"only in letter case from input {folded_inputs[folded_in]!r}"
                     )
                 folded_inputs[folded_in] = norm_in
                 stripped_in = _case_folded(_win32_stripped(norm_in))
                 if stripped_in in stripped_inputs:
                     raise _invalid_spec(
-                        f"task {task.task_id!r} input {norm_in!r} and input {stripped_inputs[stripped_in]!r} name the same file on Windows, where trailing spaces and dots are stripped"
+                        f"task {task.task_id!r} input {norm_in!r} and input "
+                        f"{stripped_inputs[stripped_in]!r} name the same file "
+                        "on Windows, where trailing spaces and dots are stripped"
                     )
                 stripped_inputs[stripped_in] = norm_in
 
@@ -440,14 +450,18 @@ class PipelineBuilder:
                 if folded_out in folded_output_owners:
                     first_path, first_owner = folded_output_owners[folded_out]
                     raise _invalid_spec(
-                        f"output path {norm_out!r} differs only in letter case from output path {first_path!r} claimed by {first_owner!r}"
+                        f"output path {norm_out!r} differs only in letter "
+                        f"case from output path {first_path!r} claimed by {first_owner!r}"
                     )
                 folded_output_owners[folded_out] = (norm_out, task.task_id)
                 stripped_out = _case_folded(_win32_stripped(norm_out))
                 if stripped_out in stripped_output_owners:
                     first_path, first_owner = stripped_output_owners[stripped_out]
                     raise _invalid_spec(
-                        f"output path {norm_out!r} and output path {first_path!r} claimed by {first_owner!r} name the same file on Windows, where trailing spaces and dots are stripped"
+                        f"output path {norm_out!r} and output path "
+                        f"{first_path!r} claimed by {first_owner!r} name the "
+                        "same file on Windows, where trailing spaces and "
+                        "dots are stripped"
                     )
                 stripped_output_owners[stripped_out] = (norm_out, task.task_id)
 

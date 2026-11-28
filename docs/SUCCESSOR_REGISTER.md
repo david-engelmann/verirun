@@ -1166,7 +1166,7 @@ timeout values as named SDK strictness, recorded here
 rather than aligned, because each refuses a spelling
 that is a likely mistake and none accepts anything the
 CLI refuses. First-error identity still differs from
-the core's fixed order in mixed-violation specs; the
+the core's fixed order in mixed-violation specs. The
 exit kind and code agree. Findings A1 and A2 stand
 closed, and A4 stands closed as aligned where it
 mattered and named where it did not.
