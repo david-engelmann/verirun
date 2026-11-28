@@ -1167,6 +1167,12 @@ rather than aligned, because each refuses a spelling
 that is a likely mistake and none accepts anything the
 CLI refuses. First-error identity still differs from
 the core's fixed order in mixed-violation specs. The
-exit kind and code agree. Findings A1 and A2 stand
-closed, and A4 stands closed as aligned where it
-mattered and named where it did not.
+exit kind and code agree. The slice's red team probed
+two further strictness edges past the A4 list and both
+are retained on the same reasoning. The builder
+refuses an empty pipeline, which the core's assembly
+accepts, and its whitespace refusal spans the full
+Python whitespace class where the core refuses only
+the blank and stripped-empty forms. Findings A1 and
+A2 stand closed, and A4 stands closed as aligned
+where it mattered and named where it did not.
