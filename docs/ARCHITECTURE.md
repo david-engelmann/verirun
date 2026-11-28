@@ -453,7 +453,7 @@ The runner is hermetic by design on both platforms it runs on, and the boundary 
 The child process environment is built from nothing, via `env_clear()`, then populated with exactly:
 
 - The task's declared `env` pairs.
-- Fixed defaults `TZ=UTC`, `LC_ALL=C`, and `SOURCE_DATE_EPOCH=0`. A spec that tries to declare any of these keys, or `TMPDIR`, is rejected during validation so no declared value can enter `exec_digest` and be silently overwritten at spawn.
+- Fixed defaults `TZ=UTC`, `LC_ALL=C`, and `SOURCE_DATE_EPOCH=0`. A spec that tries to declare any of these keys, or `TMPDIR`, is rejected during validation so no declared value can enter `exec_digest` and be silently overwritten at spawn. A spec that declares `PATH` or `HOME` is rejected as well, because a declared `PATH` steers the child's own command lookups and a declared `HOME` its file lookups.
 - `TMPDIR`, set by the runner to the task's private temporary directory inside its sandbox. This value is host-specific, so it is excluded from the environment digest (section 5.3) and from the manifest.
 
 There is no `PATH` inheritance. See section 8.2. The effective environment is sorted by key before spawn for stable diagnostics, though spawn order itself is not observable by well-behaved children.

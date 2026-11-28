@@ -1082,3 +1082,49 @@ schema rejection table of dag_faults.
 
 Disposition: the charged refusal stands landed, and
 the audit's one adjacent observation stands closed.
+
+## S4.6: Declared PATH and HOME refused
+
+Closed 2026-11-28. This slice carries Main's ruling on
+the audit's finding A3, direction tighten: the SDK
+refused six env keys and AGENTS.md stated six, but the
+core enforced only the four runner-managed keys, so a
+declared PATH or HOME validated and reached the child,
+where a declared PATH steers the child's own command
+lookups and a declared HOME its file lookups. The
+ruling grows the core's refusal to the six keys the
+other two sources already state, as its own slice in
+the S4 family with pins that fail on the pre-rule
+behaviour.
+
+The build: parse_env refuses the two keys beside the
+fixed four, under a REFUSED_ENV_KEYS constant, with a
+schema error naming the key and its own message,
+because PATH and HOME are refused for a different
+reason than the runner-managed keys. The schema
+rejection table in dag_faults gains both keys, and
+fault_declared_lookup_env_keys_exit_3 pins exit code 3
+and the named key at the CLI for both. INV-DAG-6 and
+INV-RUN-1 state the six-key set, ARCHITECTURE section
+8.1 describes it, and the CHANGELOG's Unreleased
+section carries the breaking note. The SDK and
+AGENTS.md needed no change: the core caught up to
+them.
+
+The slice's red team found the refusal's edge: the key
+comparison was exact match, and environment lookup on
+Windows is case-insensitive, so a declared Path or
+home would have answered the child's PATH or HOME
+lookups there, and the same exact match left the fixed
+four open to the same aliasing. The repair landed in
+this slice: both key sets are compared with ASCII case
+folding through one helper, the schema table pins the
+folded spellings, and the TaskSpec env field's doc
+comment now names all six keys. The SDK's identical
+exact-match check is charged to slice 1 of this
+programme, which aligns the SDK's validation with the
+core's.
+
+Disposition: the enforced env set is now the six keys
+on every surface that states it, and finding A3 stands
+closed.
