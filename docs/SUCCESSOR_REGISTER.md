@@ -1462,8 +1462,21 @@ appended where it already applied. _probe_version
 keeps its best-effort contract and returns None on
 undecodable output, now by its own decode inside its
 existing guard rather than by platform accident. The
-valid UTF-8 path is unchanged, which is every output
-the CLI itself produces.
+valid UTF-8 path is otherwise unchanged, which is
+every output the CLI itself produces.
+
+Two edges the slice's reviews named stand recorded.
+Captured line endings now stand as written rather
+than passing through the text mode's newline
+translation, which no consumer of the decoded text
+can observe, since each one strips, splits, or
+parses what it reads. And because both streams
+decode before any return code is read, undecodable
+stderr fails a call whose payload and exit code are
+otherwise good, on the same terms as undecodable
+stdout. The probe decodes both of its streams
+inside its guard, so its abstention over garbage
+on either stream matches the text mode's exactly.
 
 New tests drive stub executables that emit invalid
 UTF-8 on stdout and on stderr and assert the naming

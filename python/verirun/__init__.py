@@ -786,6 +786,11 @@ def _probe_version(exe: Path) -> str | None:
             timeout=10,
         )
         stdout = proc.stdout.decode("utf-8")
+        # The stderr decode is deliberate. The text mode this
+        # replaces decoded both streams before returning, so
+        # garbage on either one made the probe abstain, and
+        # the contract keeps that shape.
+        proc.stderr.decode("utf-8")
     except (OSError, ValueError, subprocess.SubprocessError):
         return None
     if not stdout:
