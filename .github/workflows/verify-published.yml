@@ -1,9 +1,11 @@
 name: verify-published
 
 # External consumer verification for published crates.io and PyPI artifacts.
-# Runs entirely in temporary directories outside any repository checkout to
-# prove that fresh Cargo projects, `cargo install verirun-cli`, and
-# `pip install verirun` resolve and execute the published release. The
+# The installs run in temporary directories outside any repository checkout
+# (the install-script job checks the repository out only to obtain
+# install.sh) to prove that fresh Cargo projects, `cargo install
+# verirun-cli`, and `pip install verirun` resolve and execute the
+# published release. The
 # release under verification is the workflow_dispatch version input, and
 # scheduled runs verify the input's default.
 
@@ -22,6 +24,8 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # The fallback restates the workflow_dispatch input default above, since
+  # scheduled runs carry no inputs. Keep the two in step at a release bump.
   VERIRUN_VERSION: ${{ inputs.version || '0.2.2' }}
 
 jobs:

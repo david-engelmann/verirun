@@ -1269,6 +1269,19 @@ head, which is also its v1.0.6 tag. Each SHA was
 resolved from the action's own repository refs at
 build time.
 
+The slice's reviews found two wording couplings, and
+both are repaired in this slice. The workflow header
+no longer claims the run happens entirely outside a
+checkout, since the install-script job checks the
+repository out to obtain install.sh, and a comment at
+the VERIRUN_VERSION value names its coupling to the
+dispatch input default, which a release bump must move
+together. The red team also noted that the PyPI job's
+pipefail line now runs on macOS, where it rests on the
+hosted runner resolving bash through PATH to the
+image's newer bash, and that point stands as a known
+uncertainty the first matrix run settles.
+
 Disposition: findings C1, C2, and F stand closed. The
 first scheduled run under the new shape is the
 workflow's own Monday run, and the install-script job
