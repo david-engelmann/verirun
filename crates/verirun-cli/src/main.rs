@@ -83,7 +83,9 @@ fn run_subcommand(cas: Arg, json: Arg) -> Command {
 
 /// Builds the argument parser for the surface of section
 /// 12.1. `--seed` is a global argument: every command accepts
-/// it and every run prints the active seed.
+/// it and every store command prints the active seed. The
+/// completions command is dispatched before seed resolution
+/// and prints no seed line.
 fn build_cli() -> Command {
     let cas = Arg::new("cas")
         .long("cas")
@@ -105,7 +107,7 @@ fn build_cli() -> Command {
                 .value_name("N")
                 .global(true)
                 .value_parser(clap::value_parser!(u64))
-                .help("The active seed, printed to stderr on every run"),
+                .help("The active seed, printed to stderr by every store command"),
         )
         .subcommand(run_subcommand(cas.clone(), json.clone()))
         .subcommand(digest_subcommand(

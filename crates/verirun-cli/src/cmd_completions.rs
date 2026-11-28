@@ -173,7 +173,7 @@ _verirun() {
     )
 
     _arguments -C \
-        '--seed=[The active seed, printed to stderr on every run]:seed:' \
+        '--seed=[The active seed, printed to stderr by every store command]:seed:' \
         '(-h --help)'{-h,--help}'[Print help]' \
         '(-V --version)'{-V,--version}'[Print version]' \
         '1: :->command' \
@@ -194,7 +194,7 @@ _verirun() {
                         '*--input=[Bind a sandbox-relative input path to a host file]:binding:' \
                         '--pin[Pin the produced manifest so garbage collection preserves it]' \
                         '--json[Render the result as one JSON object]' \
-                        '--seed=[The active seed, printed to stderr on every run]:seed:' \
+                        '--seed=[The active seed, printed to stderr by every store command]:seed:' \
                         '(-h --help)'{-h,--help}'[Print help]'
                     ;;
                 verify|show|pin|unpin)
@@ -202,7 +202,7 @@ _verirun() {
                         '1:manifest digest:' \
                         '--cas=[The content-addressed store directory]:cas directory:_files -/' \
                         '--json[Render the result as one JSON object]' \
-                        '--seed=[The active seed, printed to stderr on every run]:seed:' \
+                        '--seed=[The active seed, printed to stderr by every store command]:seed:' \
                         '(-h --help)'{-h,--help}'[Print help]'
                     ;;
                 diff)
@@ -211,7 +211,7 @@ _verirun() {
                         '2:second manifest digest:' \
                         '--cas=[The content-addressed store directory]:cas directory:_files -/' \
                         '--json[Render the result as one JSON object]' \
-                        '--seed=[The active seed, printed to stderr on every run]:seed:' \
+                        '--seed=[The active seed, printed to stderr by every store command]:seed:' \
                         '(-h --help)'{-h,--help}'[Print help]'
                     ;;
                 gc)
@@ -220,14 +220,14 @@ _verirun() {
                         '--grace-secs=[Grace threshold in seconds]:seconds:' \
                         '--dry-run[Print the plan and delete nothing]' \
                         '--json[Render the result as one JSON object]' \
-                        '--seed=[The active seed, printed to stderr on every run]:seed:' \
+                        '--seed=[The active seed, printed to stderr by every store command]:seed:' \
                         '(-h --help)'{-h,--help}'[Print help]'
                     ;;
                 completions)
                     _arguments \
                         '1:shell:(bash zsh fish powershell)' \
                         '--json[Render the result as one JSON object]' \
-                        '--seed=[The active seed, printed to stderr on every run]:seed:' \
+                        '--seed=[The active seed, printed to stderr by every store command]:seed:' \
                         '(-h --help)'{-h,--help}'[Print help]'
                     ;;
             esac
