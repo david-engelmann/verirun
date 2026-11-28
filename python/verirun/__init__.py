@@ -675,7 +675,15 @@ class GcResult:
 
 
 def find_binary(binary: PathInput | None = None) -> Path:
-    """Locate the bundled or installed ``verirun`` executable."""
+    """Locate the bundled or installed ``verirun`` executable.
+
+    The search order is the explicit argument, the ``VERIRUN_BIN``
+    environment variable, the Python environment's script
+    directories, a checkout's ``target/release`` and ``target/debug``
+    builds newest first, and finally ``PATH``. A checkout build
+    therefore shadows an installed binary when the SDK is imported
+    from inside a checkout.
+    """
     if binary is not None:
         candidate = Path(binary)
         if candidate.is_file():

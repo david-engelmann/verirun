@@ -1287,3 +1287,48 @@ first scheduled run under the new shape is the
 workflow's own Monday run, and the install-script job
 exercises the same release assets the audit verified
 by hand.
+
+## Repair slice 4: furniture and small surfaces
+
+Closed 2026-11-28. The last slice of the repair
+programme gathers the audit's remaining findings.
+CITATION.cff named its license in a form the CFF 1.2.0
+schema does not accept, and its version field sat
+outside the parity gate (findings D1 and D2). The
+completions surface test asserted the scripts against
+its own hand-copied lists, so it could not fail if the
+parser dropped or renamed a surface element (finding
+E1). install.sh carried a cluster of small defects in
+its version patterns, its success path, and its edge
+cases (finding H). The completion scripts omitted the
+parser's own help subcommand, and PowerShell offered
+no file completion where bash completes filenames
+(finding I). The SDK's find_binary ranked a checkout's
+builds above PATH without saying so (finding J).
+
+The build: the CITATION.cff license is the two-item
+array the schema wants, and the version parity checks
+in ci.yml and the Makefile hygiene target both read
+CITATION.cff, with the sabotage control proving the
+new leg fires. The completions test derives its
+expected subcommands and flags from the built binary's
+own help output, with count assertions as the tripwire
+for a drop, and the hand-copied lists are gone. The
+four scripts complete the help subcommand, PowerShell
+completes filenames for the run positional, and the
+completions_script doc comment no longer carries its
+own copy of the flag list. install.sh validates
+versions as exactly three dot-separated numeric
+components in both the requested version and the
+resolved latest tag, refuses an explicitly empty
+--version, names the remedy when no install directory
+can be determined, cleans up its staged file, drops
+the non-POSIX local keyword, and runs the installed
+binary and checks its reported version before
+declaring success. The find_binary docstring states
+the search order, including the checkout shadowing.
+
+Disposition: findings D1, D2, E1, H, I, and J stand
+closed. With this slice the repair programme Main
+approved on 2026-11-27 is complete, all six slices
+landed under the three reviews.

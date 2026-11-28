@@ -8,7 +8,9 @@ authors:
     given-names: David
 version: 0.2.2
 date-released: "2026-11-27"
-license: MIT OR Apache-2.0
+license:
+  - MIT
+  - Apache-2.0
 repository-code: "https://github.com/david-engelmann/verirun"
 url: "https://docs.rs/verirun-core"
 keywords:
