@@ -9,6 +9,7 @@ Every notable change to verirun is recorded here. Versions follow the semantic v
 - Case-colliding task ids refused at validation. Spec validation now also rejects two task ids that differ only in letter case, with exit code 3 naming both ids, because each task's sandbox is a directory named by its id and a case-insensitive filesystem would give the two tasks one sandbox (breaking, under the pre-1.0 versioning policy).
 - Trailing-colliding task ids refused at validation. Spec validation now also rejects two task ids that differ only in trailing spaces or dots, with exit code 3 naming both ids, because Win32 strips those characters from a path component and would give the two tasks one sandbox directory on Windows (breaking, under the pre-1.0 versioning policy).
 - Declared PATH and HOME refused at validation. Spec validation now rejects a task env declaring `PATH` or `HOME`, with exit code 3 naming the key, because a declared `PATH` steers the child's own command lookups and a declared `HOME` its file lookups (breaking, under the pre-1.0 versioning policy).
+- Windows standalone installer (`install.ps1`). Added a PowerShell release installer for Windows (`x86_64`) carrying the same SHA-256 contract as `install.sh`, downloading the platform zip and `SHA256SUMS` from GitHub Releases, verifying the archive digest before extraction, checking the staged binary's version before it replaces an existing install, and supporting `-Version`, `-InstallDir`, and `-BaseUrl` overrides with the same environment fallbacks.
 
 ## 0.2.2
 

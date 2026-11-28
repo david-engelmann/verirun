@@ -45,6 +45,7 @@ jobs:
               "Makefile",
               ".editorconfig",
               "install.sh",
+              "install.ps1",
               "README.md",
               "AGENTS.md",
               "CONTRIBUTING.md",

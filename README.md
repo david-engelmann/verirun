@@ -83,6 +83,8 @@ Install the `verirun` binary with the standalone SHA-256 verified release instal
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/david-engelmann/verirun/main/install.sh | sh
+# on Windows, in PowerShell
+irm https://raw.githubusercontent.com/david-engelmann/verirun/main/install.ps1 | iex
 # or install binary + typed Python SDK from PyPI
 pip install verirun
 # or run directly without installing

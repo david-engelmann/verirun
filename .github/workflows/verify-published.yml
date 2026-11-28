@@ -2,8 +2,8 @@ name: verify-published
 
 # External consumer verification for published crates.io and PyPI artifacts.
 # The installs run in temporary directories outside any repository checkout
-# (the install-script job checks the repository out only to obtain
-# install.sh) to prove that fresh Cargo projects, `cargo install
+# (the install-script jobs check the repository out only to obtain the
+# installer scripts) to prove that fresh Cargo projects, `cargo install
 # verirun-cli`, and `pip install verirun` resolve and execute the
 # published release. The
 # release under verification is the workflow_dispatch version input, and
@@ -131,6 +131,21 @@ jobs:
           INSTALL_DIR="${RUNNER_TEMP:-/tmp}/verirun-script-install"
           sh install.sh --version "$VERIRUN_VERSION" --install-dir "$INSTALL_DIR"
           test "$("$INSTALL_DIR/verirun" --version)" = "verirun $VERIRUN_VERSION"
+
+  install-script-windows:
+    name: install-script-windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the CLI through install.ps1 from the GitHub release
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $env:RUNNER_TEMP "verirun-script-install"
+          ./install.ps1 -Version $env:VERIRUN_VERSION -InstallDir $installDir
+          $got = & "$installDir/verirun.exe" --version
+          if ($got -ne "verirun $env:VERIRUN_VERSION") {
+            throw "unexpected version output: $got"
+          }
 
   install-pypi:
     name: install-pypi
