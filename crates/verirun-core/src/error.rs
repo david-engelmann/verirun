@@ -312,6 +312,17 @@ pub enum DagError {
         /// The task id declared second.
         task_id: String,
     },
+    /// Two task ids differ only in trailing spaces or dots,
+    /// so a Windows filesystem would give the two tasks one
+    /// sandbox directory, because Win32 strips those
+    /// characters from a path component when it opens a file.
+    /// The error names both ids.
+    TrailingCollidingTaskId {
+        /// The task id declared first.
+        first_id: String,
+        /// The task id declared second.
+        task_id: String,
+    },
     /// A `depends_on` entry names no task in the run.
     UnknownDependency {
         /// The task declaring the dependency.
@@ -415,6 +426,12 @@ impl fmt::Display for DagError {
                 write!(
                     f,
                     "task ids {first_id:?} and {task_id:?} differ only in letter case"
+                )
+            }
+            Self::TrailingCollidingTaskId { first_id, task_id } => {
+                write!(
+                    f,
+                    "task ids {first_id:?} and {task_id:?} name the same directory on Windows, where trailing spaces and dots are stripped"
                 )
             }
             Self::UnknownDependency { task_id, missing } => {

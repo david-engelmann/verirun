@@ -121,7 +121,7 @@ For a spec with several violations, validation always reports the same first err
 Edge case: a spec that is simultaneously cyclic and has a duplicate id reports the duplicate, in every process and at every seed.
 
 ### INV-DAG-6. Schema strictness
-Unknown task fields, a missing required field, a wrong-typed field, an empty `task_id` or `executable`, a `task_id` that is not a single safe path component (it contains a slash or a backslash, or it is "." or ".."), a declared runner-managed env key (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`, `TMPDIR`), and `timeout_ms` below 1 are each rejected with exit code 3 before execution.
+Unknown task fields, a missing required field, a wrong-typed field, an empty `task_id` or `executable`, a `task_id` that is not a single safe path component (it contains a slash or a backslash, or it is "." or "..", or its Win32-stripped form is empty), a declared runner-managed env key (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`, `TMPDIR`), and `timeout_ms` below 1 are each rejected with exit code 3 before execution.
 Edge cases. `timeout_ms` of 1 and `MAX_SAFE_INTEGER` (`9007199254740991`) are accepted while 0 is rejected, and an env object declaring `TZ` or `TMPDIR` is rejected so no declared `TMPDIR` can enter `exec_digest` and be overwritten at spawn. A task id of `../escape` is rejected while an id with interior dots such as `a.b-c` is accepted.
 
 ### INV-DAG-7. Case-colliding declared paths rejected upfront
@@ -135,6 +135,10 @@ Edge cases: a collision through a directory component alone (`dir /f.txt` agains
 ### INV-DAG-9. Case-colliding task ids rejected upfront
 Two task ids that differ only in letter case are rejected with exit code 3, naming both ids. Each task's sandbox is a directory named by its id under the work root, so a case-insensitive filesystem would give two such tasks one sandbox, and one task's sandbox preparation would erase the other's. Folding is the Unicode lowercase mapping of INV-DAG-7, so the refusal is identical on every platform.
 Edge cases: an exact duplicate id (reported as a duplicate, which check 2 reaches first), ids differing in more than letter case (accepted).
+
+### INV-DAG-10. Trailing-colliding task ids rejected upfront
+Two task ids that differ only in trailing spaces or dots are rejected with exit code 3, naming both ids. Each task's sandbox is a directory named by its id under the work root, and Win32 strips trailing spaces and dots from a path component when it opens a file, so two such ids name one sandbox directory on Windows, and one task's sandbox preparation would erase the other's. The comparison runs on the case-folded Win32-stripped form of INV-DAG-8, so ids differing in both letter case and trailing characters are refused under this invariant, and the refusal is identical on every platform.
+Edge cases: an exact duplicate id (reported as a duplicate, which check 2 reaches first), a case-colliding pair (reported under INV-DAG-9, which check 2 reaches first), ids differing in more than trailing spaces, dots, and letter case (accepted). A single id whose stripped form is empty, such as "..." or " ", is refused earlier, as a schema error under the safe path component rule, because on Windows it would name the tasks directory itself rather than a sandbox inside it.
 
 ## 5. Execution invariants (RUN)
 

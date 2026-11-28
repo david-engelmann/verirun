@@ -1024,3 +1024,61 @@ recorded with every charged repair landed or
 dispositioned, and main CI on the final main 08a9ca34
 (run 46079369072) completed SUCCESS on all seven
 jobs. The successor programme is complete.
+
+## Post-closure repairs
+
+Opened 2026-11-27. The closure section named two
+landings from David's side that stood unread by this
+seat, PR 228 and PR 258. Main charged a read-only audit
+of their surfaces, this seat reported findings with
+proposed repairs, and Main approved the four repair
+slices as packaged, charged the trailing-colliding
+task id refusal below as slice S4.5, and ruled the
+audit's env key divergence be closed by tightening the
+core to the six keys the SDK and AGENTS.md already
+state, as its own slice in the S4 family. Each repair
+lands under the three reviews, and each slice records
+its entry here as it lands.
+
+## S4.5: Trailing-colliding task ids refused
+
+Closed 2026-11-28. This slice was charged by Main's
+ruling on the PR 228 and PR 258 audit, from the audit
+red team's adjacent observation: task ids were checked
+exactly and by case fold only, so two ids differing
+only in trailing spaces or dots name one sandbox
+directory on Windows, because Win32 strips those
+characters from a path component when it opens a file
+and each task's sandbox is a directory named by its id
+under the work root. The ruling charges the refusal at
+validation with both ids named, the same defect class
+as INV-DAG-8 and INV-DAG-9, with pins that fail on the
+pre-rule behaviour.
+
+The build: check 2 keeps a stripped map beside the
+exact set and the folded map, keyed on the case-folded
+Win32-stripped form of the id, and a second id whose
+key matches an earlier id returns
+DagError::TrailingCollidingTaskId naming both ids.
+Exact duplicates still report first as duplicates, and
+pure case pairs still report under INV-DAG-9. INV-DAG-10
+records the rule, ARCHITECTURE sections 7.1 and 11
+describe it, and the CHANGELOG's Unreleased section
+carries the breaking note. The pins are
+fault_trailing_colliding_task_ids in dag_faults, whose
+refusal cases validated before this slice, and
+fault_trailing_colliding_task_ids_exit_3 pinning exit
+code 3 and both quoted ids at the CLI.
+
+The slice's red team found the same mechanism one
+step further in: a lone id made only of spaces and
+dots, such as "..." or " ", strips to empty and would
+name the tasks directory itself on Windows, and
+sandbox preparation wipes the directory it is given.
+The repair landed in this slice: is_safe_task_id now
+refuses an id whose Win32 stripped form is empty, as
+a schema error beside "." and "..", pinned in the
+schema rejection table of dag_faults.
+
+Disposition: the charged refusal stands landed, and
+the audit's one adjacent observation stands closed.
