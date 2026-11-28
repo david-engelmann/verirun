@@ -263,7 +263,7 @@ For every command, `--json` output carries the same information content as the t
 Edge cases. A verification failure rendered both ways names the same expected and actual digests in both, and malformed digest or `SIM_SEED` invocations under `--json` emit valid JSON on stdout alongside the stderr message.
 
 ### INV-CLI-3. Seed reporting and reproduction
-Every CLI run prints its active seed. Seeded property and simulation runners produce byte-identical traces in separate processes at the same seed, and different traces at a different seed for generators with enough entropy to differ.
+Every store command prints its active seed. The completions command is the exception, because it prints a static script, touches no store, and resolves no seed. Seeded property and simulation runners produce byte-identical traces in separate processes at the same seed, and different traces at a different seed for generators with enough entropy to differ.
 Edge case: the same seed passed once through `--seed` and once through `SIM_SEED` produces identical traces.
 
 ### INV-CLI-4. Diff semantics
