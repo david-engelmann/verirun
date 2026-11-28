@@ -276,6 +276,13 @@ fn fault_schema_rejection_table() {
         // command and file lookups, so both are refused.
         run(&[task("a").replace(r#""env":{}"#, r#""env":{"PATH":"/opt/tools/bin"}"#)]),
         run(&[task("a").replace(r#""env":{}"#, r#""env":{"HOME":"/home/fake"}"#)]),
+        // The key comparison folds ASCII letter case, because
+        // environment lookup on Windows is case-insensitive:
+        // a declared Path or tz would answer the child's PATH
+        // or TZ lookups there.
+        run(&[task("a").replace(r#""env":{}"#, r#""env":{"Path":"/opt/tools/bin"}"#)]),
+        run(&[task("a").replace(r#""env":{}"#, r#""env":{"home":"/home/fake"}"#)]),
+        run(&[task("a").replace(r#""env":{}"#, r#""env":{"tz":"UTC"}"#)]),
         // timeout_ms below 1.
         run(&[task_with("a", r#""timeout_ms":0"#)]),
         run(&[task_with("a", r#""timeout_ms":-5"#)]),

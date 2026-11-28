@@ -1111,6 +1111,20 @@ section carries the breaking note. The SDK and
 AGENTS.md needed no change: the core caught up to
 them.
 
+The slice's red team found the refusal's edge: the key
+comparison was exact match, and environment lookup on
+Windows is case-insensitive, so a declared Path or
+home would have answered the child's PATH or HOME
+lookups there, and the same exact match left the fixed
+four open to the same aliasing. The repair landed in
+this slice: both key sets are compared with ASCII case
+folding through one helper, the schema table pins the
+folded spellings, and the TaskSpec env field's doc
+comment now names all six keys. The SDK's identical
+exact-match check is charged to slice 1 of this
+programme, which aligns the SDK's validation with the
+core's.
+
 Disposition: the enforced env set is now the six keys
 on every surface that states it, and finding A3 stands
 closed.

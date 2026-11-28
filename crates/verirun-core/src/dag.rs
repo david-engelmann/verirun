@@ -50,8 +50,9 @@ pub struct TaskSpec {
     pub args: Vec<String>,
     /// Declared environment pairs. The runner-managed keys of
     /// section 8.1 (`TZ`, `LC_ALL`, `SOURCE_DATE_EPOCH`, `TMPDIR`)
-    /// must not appear here; validation rejects a spec that
-    /// declares one.
+    /// and the refused keys (`PATH`, `HOME`) must not appear
+    /// here; validation rejects a spec that declares one, in
+    /// any letter case.
     pub env: BTreeMap<String, String>,
     /// Sandbox relative paths of files to materialize from the
     /// store before execution, as declared.
@@ -475,6 +476,15 @@ const FIXED_ENV_KEYS: [&str; 4] = ["LC_ALL", "SOURCE_DATE_EPOCH", "TMPDIR", "TZ"
 /// neither unless its own program sets them.
 const REFUSED_ENV_KEYS: [&str; 2] = ["HOME", "PATH"];
 
+/// Whether a declared env key names a member of a key set.
+/// The comparison folds ASCII letter case, because
+/// environment lookup on Windows is case-insensitive: a
+/// declared `Path` answers the child's `PATH` lookups there,
+/// so it must be refused as `PATH` on every platform.
+fn env_key_in(set: &[&str], key: &str) -> bool {
+    set.iter().any(|name| key.eq_ignore_ascii_case(name))
+}
+
 const fn as_object(value: &Value) -> Option<&Vec<(String, Value)>> {
     match value {
         Value::Object(pairs) => Some(pairs),
@@ -662,7 +672,7 @@ fn parse_env(
         Value::Object(entries) => {
             let mut map = BTreeMap::new();
             for (key, value) in entries {
-                if FIXED_ENV_KEYS.contains(&key.as_str()) {
+                if env_key_in(&FIXED_ENV_KEYS, key) {
                     return Err(schema(
                         named.cloned(),
                         &format!(
@@ -670,7 +680,7 @@ fn parse_env(
                         ),
                     ));
                 }
-                if REFUSED_ENV_KEYS.contains(&key.as_str()) {
+                if env_key_in(&REFUSED_ENV_KEYS, key) {
                     return Err(schema(
                         named.cloned(),
                         &format!(
