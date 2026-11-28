@@ -1353,3 +1353,64 @@ Disposition: findings D1, D2, E1, H, I, and J stand
 closed. With this slice the repair programme Main
 approved on 2026-11-27 is complete, all six slices
 landed under the three reviews.
+
+## Residual Windows workstream
+
+Main charged two residuals from the seat's scoping
+pass over the landed W workstream on 2026-11-28, and
+approved the design record the same day. PF-1 stands
+as an accepted platform fact, the INV-DAG-7 fold
+limitation stands declined absent concrete deployment
+evidence, and aarch64 Windows stands uncharged. The
+workstream runs two slices, RW1 and RW2, and records
+itself here.
+
+## Slice RW1: the Windows install route
+
+install.sh serves Linux and macOS only, and its
+detect_label refuses any other host, so the windows
+zip on GitHub Releases had no scripted route. This
+slice adds install.ps1 at the repository root
+carrying the same contract in PowerShell form. The
+parameters are -Version, -InstallDir, and -BaseUrl,
+with the same environment fallbacks install.sh reads
+and the same default release root and install
+directory. Version validation matches the repaired
+POSIX rule, exactly three dot-separated numeric
+components with no leading zero on any component,
+and an explicitly empty -Version is an error naming
+the remedy. Latest resolution follows the /latest
+redirect, and a local directory base works in the
+same spirit as the file route, so the script is
+testable offline. The zip and SHA256SUMS download
+from the one release origin, the digest is verified
+with Get-FileHash before extraction and a mismatch
+fails closed, and the binary is staged inside the
+install directory and version-checked while staged,
+so a bad download leaves a working install standing,
+with the staged file and the temporary directory
+cleaned up on every path.
+
+verify-published.yml gains an install-script-windows
+job on windows-latest that checks the repository out
+with the pinned checkout, runs install.ps1 with the
+workflow's version, and asserts the installed
+binary's version, mirroring the POSIX job. install.ps1
+joins the hygiene required-files lists in ci.yml and
+the Makefile together. The README install section
+and the cli README gain the Windows route beside the
+POSIX one, and the CHANGELOG records the addition.
+
+The hosted windows job is the gate of record for the
+script, since no PowerShell interpreter exists on the
+build box. The parity controls owed are the POSIX
+names restated for this route, a tampered sums entry
+failing closed, a wrong-version staged binary refused
+with the previous install standing, the malformed
+version set refused, and an explicitly empty version
+erroring, each exercised where a PowerShell
+interpreter exists and otherwise carried by the
+hosted job's live run against the published release.
+
+Disposition: residual item 1 stands closed on this
+slice's landing. Item 4 follows as RW2.
