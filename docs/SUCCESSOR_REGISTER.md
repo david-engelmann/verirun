@@ -48,7 +48,8 @@ the perfection register as their deliverable.
   checks extended to every version home and to pull request time,
   on the evidence recorded in its section below.
 - S3.1 The macOS probe. CLOSED 2026-11-27, one platform fact
-  recorded, a second placed beside PF-1 at closure, and a
+  recorded, the durability residual and the case fact both
+  placed beside PF-1 at closure, and a
   follow-on list scoped, on the probe evidence recorded in its
   section below.
 - S3.2 The Windows parity re-proof. CLOSED 2026-11-27, no finding,
@@ -512,7 +513,7 @@ byte-identity, so that probe re-proves the suite's premise
 rather than hunting divergence. With the durability half
 answered, this entry's disposition stands as written.
 
-## S3.2: The parity re-proof
+## S3.2: The Windows parity re-proof
 
 Closed 2026-11-27. The bounded one-pass re-proof ran hosted
 once, on all three
@@ -827,7 +828,7 @@ does not reach. Neither contradicts any claim the register
 makes. Both are the same one-file defect family in
 namespaces the case ruling did not name.
 
-Disposition: workstream S4 stands complete on the repaired
+Disposition: Workstream S4 stands complete on the repaired
 record, with one limitation recorded and two follow-ons
 proposed.
 
@@ -903,3 +904,123 @@ it the S4 red team's three should-fixes stand fully
 dispositioned: the fold limitation recorded and its
 widening declined by Main's ruling, and both adjacent
 defects charged and landed as S4.3 and this slice.
+
+## Programme closure
+
+Closed 2026-11-27. The successor programme's three
+closure reviews ran over main 163007cd, the tree carrying
+every slice through the S4 closure repairs, and this
+section records their verdicts, the repairs they charged,
+and the programme's final state.
+
+Spec fidelity returned every charged item MET across the
+twelve banked slices, with the S1, S2 and S3 workstream
+closures met as repaired at their closures and the
+programme's own closing act the one item the tree could
+not yet show. That act is this section.
+
+The red team returned the ledger and tree claims
+surviving, and two claims partially surviving. S2.0's
+disposition sentence stood unqualified against asymmetric
+evidence, and S3.2's completion sentence rested on one
+named run. Both are qualified and supported below rather
+than rewritten in place. PR 258's surfaces stood unnamed
+in the register, and they are named below as standing
+unread by this seat.
+
+Standards returned no blockers, two should-fixes of form,
+and eight nits. The should-fixes are answered here:
+workstream S1's closure verdicts are stated in full
+below, and S3.1's disposition sentence is reconciled
+below. The nits that asked for text changes are repaired
+in this same landing: S3.2's section heading now matches
+the roadmap's name, the S4 closure section's closing
+disposition is capitalized, and S3.1's ledger line names
+both facts placed beside PF-1. The remaining nits (S2.0's
+opening form and its disposition inside the slice
+narrative, the completion-after-disposition order in
+three repaired entries, the ledger's order against the
+body's, and finding identifiers carried unevenly) are
+dispositioned without changes, as form that does not
+misstate any fact.
+
+Workstream S1's closure, stated in full: the red team
+approved, with one should-fix on the version probe's
+silent failure modes, repaired inside S1.4 itself. Spec
+fidelity returned the slice items met in substance with
+the coverage form partial, the deviation repaired by
+exact restatement in S1.4's entry. Standards approved
+with no blockers and no should-fixes, four nits
+dispositioned in the same entry. The repairs landed in
+PR 238's later heads, and S1.4's entry carries the
+closure record in its closing lines.
+
+S3.1's disposition said the workstream stood open on
+S3.2. That was true when written. S3.2 closed the same
+day, its charged items were discharged at the S3 closure
+repairs, and the S3 closure section records the
+workstream complete. The sentence stands as written,
+reconciled here.
+
+S2.0's disposition said no broken or partial 0.2.0
+stands on any channel. The evidence its entry names is
+the PyPI install-and-run and the Linux x86_64 archive
+check. The crates.io install-and-run of both published
+versions stands in S1.2's entry, and the remaining
+published archives' functional proof stands in S2.2's
+completion. Read with those entries, the disposition is
+carried. As written it outran the evidence named beside
+it, and this note is the qualification.
+
+S3.2's completion said the windows job has run green on
+every gated head since the programme-start run. The
+support is collective: every gated PR run the register
+cites from S1.1 onward completed SUCCESS, and each of
+those runs carries the windows job. The cited runs
+include 45907080976, 45914144036, 45919878279,
+45937183653, 45952309562, 45961107266, 45969331584,
+45986711148, 45996105545, 46006133972, 46017333171,
+46030187337, 46048141832 and 46057284203.
+
+Main's rulings at S4 closure stand recorded here as the
+programme's final dispositions. The fold widening is
+declined: INV-DAG-7's Unicode lowercase mapping stands,
+and the NTFS upcase divergence (long s, final sigma,
+dotless i) stands as a named limitation, because the
+filesystems' tables disagree with each other and no
+single fold closes every corner. It reopens only on
+concrete Windows deployment evidence. The two adjacent
+defects were charged as follow-on slices and landed:
+S4.3 as PR 266 on main 18c01bb4, and S4.4 as PR 268 on
+main 08a9ca34.
+
+Two landings from David's side stand outside the
+programme's slices and unread by this seat, named here
+for Main's direction. PR 228 added the Python
+PipelineBuilder to the SDK and the verify-published
+workflow. PR 258 added the CLI completions subcommand
+and the SDK completions surface, the SHA256SUMS
+verifying install script, the cargo-deny supply-chain
+gate with its deny.toml and CI job, edits to the ci and
+stress workflows, and repo furniture (CITATION.cff,
+CODE_OF_CONDUCT.md, issue and pull request templates,
+Makefile, .editorconfig). Neither landing's substance
+has been read by this seat beyond its changelog and file
+list.
+
+The open items the programme carries out are S2.1's four
+account-side confirmations, which stand for Main or
+David: the environment protection rules on the pypi and
+crates-io environments, the PyPI trusted-publishing
+registration on PyPI's side, the crates.io trusted
+publishing state per crate in both its current-state and
+direction forms, and release immutability or tag
+protection. The programme proposed no version decision
+and no freeze, and none is taken here.
+
+Final state: fourteen slice sections stand closed on
+evidenced entries, the three closure reviews stand
+recorded with every charged repair landed or
+dispositioned, and main CI on the final main 08a9ca34
+(run 46079369072) completed SUCCESS on all seven
+jobs. The successor programme is complete.
