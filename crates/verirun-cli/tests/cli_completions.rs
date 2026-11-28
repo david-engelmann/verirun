@@ -7,37 +7,21 @@
 //! documented flag across `bash`, `zsh`, `fish`, and
 //! `powershell`, supports `--json` output parity, and exits `3`
 //! (never `2`) on unknown or missing shell names.
+//!
+//! The expected surface is derived from the built binary's own
+//! `--help` output, never from a hand-copied list in this file,
+//! so a subcommand or flag the parser gains, renames, or drops
+//! fails here until the scripts catch up. The two count
+//! assertions are the tripwire for a drop, which derivation
+//! alone cannot see. When the CLI surface changes on purpose,
+//! update the scripts and the counts together.
 
 #![forbid(unsafe_code)]
 
+use std::collections::BTreeSet;
 use std::process::{Command, Output};
 
 use verirun_cli::{Shell, completions_script};
-
-const SUBCOMMANDS: &[&str] = &[
-    "run",
-    "verify",
-    "show",
-    "diff",
-    "gc",
-    "pin",
-    "unpin",
-    "completions",
-];
-
-const FLAGS: &[&str] = &[
-    "--cas",
-    "--work",
-    "--jobs",
-    "--input",
-    "--pin",
-    "--grace-secs",
-    "--dry-run",
-    "--json",
-    "--seed",
-    "--help",
-    "--version",
-];
 
 fn invoke(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_verirun"))
@@ -59,8 +43,75 @@ fn stderr(output: &Output) -> String {
     String::from_utf8(output.stderr.clone()).expect("stderr is utf8")
 }
 
+fn help_text(args: &[&str]) -> String {
+    let mut full: Vec<&str> = args.to_vec();
+    full.push("--help");
+    let out = invoke(&full);
+    assert_eq!(code(&out), 0, "help for {args:?} failed: {}", stderr(&out));
+    stdout(&out)
+}
+
+/// Subcommand names from the top-level help's Commands section,
+/// excluding the parser's own `help`, which the scripts complete
+/// as a name but which takes no flags of its own to derive.
+fn derived_subcommands() -> Vec<String> {
+    let text = help_text(&[]);
+    let mut names = Vec::new();
+    let mut in_commands = false;
+    for line in text.lines() {
+        if line == "Commands:" {
+            in_commands = true;
+            continue;
+        }
+        if in_commands {
+            if line.is_empty() {
+                break;
+            }
+            let name = line
+                .split_whitespace()
+                .next()
+                .expect("a Commands line carries a name");
+            if name != "help" {
+                names.push(name.to_string());
+            }
+        }
+    }
+    names
+}
+
+/// Every long flag the top-level and per-subcommand help output
+/// defines, as one sorted set.
+fn derived_flags(subcommands: &[String]) -> BTreeSet<String> {
+    let mut flags = BTreeSet::new();
+    let mut helps = vec![help_text(&[])];
+    for name in subcommands {
+        helps.push(help_text(&[name]));
+    }
+    for text in &helps {
+        for token in text.split(|c: char| !(c.is_ascii_alphanumeric() || c == '-')) {
+            if token.starts_with("--") && token.len() > 2 {
+                flags.insert(token.to_string());
+            }
+        }
+    }
+    flags
+}
+
 #[test]
 fn library_and_cli_completions_cover_all_shells_subcommands_and_flags() {
+    let subcommands = derived_subcommands();
+    assert_eq!(
+        subcommands.len(),
+        8,
+        "the parser's subcommand surface changed: {subcommands:?}"
+    );
+    let flags = derived_flags(&subcommands);
+    assert_eq!(
+        flags.len(),
+        11,
+        "the parser's flag surface changed: {flags:?}"
+    );
+
     let shells = [
         ("bash", Shell::Bash),
         ("zsh", Shell::Zsh),
@@ -83,15 +134,15 @@ fn library_and_cli_completions_cover_all_shells_subcommands_and_flags() {
         assert_ne!(expected, "");
         assert!(expected.ends_with('\n'));
 
-        for subcmd in SUBCOMMANDS {
+        for subcmd in &subcommands {
             assert!(
-                expected.contains(subcmd),
+                expected.contains(subcmd.as_str()),
                 "{name} completion script is missing subcommand {subcmd:?}"
             );
         }
-        for flag in FLAGS {
+        for flag in &flags {
             assert!(
-                expected.contains(flag),
+                expected.contains(flag.as_str()),
                 "{name} completion script is missing flag {flag:?}"
             );
         }

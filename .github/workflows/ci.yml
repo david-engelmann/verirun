@@ -106,6 +106,12 @@ jobs:
               sys.exit("python/verirun/__init__.py carries no __version__ literal")
           if sdk_match.group(1) != expected:
               sys.exit(f"SDK __version__ {sdk_match.group(1)!r} != {expected!r}")
+          cff_text = pathlib.Path("CITATION.cff").read_text(encoding="utf-8")
+          cff_match = re.search(r"^version: (\S+)$", cff_text, re.MULTILINE)
+          if cff_match is None:
+              sys.exit("CITATION.cff carries no version")
+          if cff_match.group(1) != expected:
+              sys.exit(f"CITATION.cff version {cff_match.group(1)!r} != {expected!r}")
           for manifest in [
               "crates/verirun-platform/Cargo.toml",
               "crates/verirun-core/Cargo.toml",

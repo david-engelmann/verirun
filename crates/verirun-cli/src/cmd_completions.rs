@@ -67,11 +67,9 @@ impl FromStr for Shell {
 
 /// Returns the deterministic completion script for `shell`.
 ///
-/// Each script registers tab completions for every `verirun`
-/// subcommand (`run`, `verify`, `show`, `diff`, `pin`, `unpin`,
-/// `gc`, and `completions`) and their flags (`--cas`, `--work`,
-/// `--jobs`, `--input`, `--pin`, `--grace-secs`, `--dry-run`,
-/// `--json`, `--seed`, `--help`, and `--version`).
+/// Each script registers tab completions for the full subcommand
+/// and option surface the CLI parser defines, including the
+/// parser's own `help` subcommand.
 #[must_use]
 pub const fn completions_script(shell: Shell) -> &'static str {
     match shell {
@@ -96,7 +94,7 @@ const BASH_SCRIPT: &str = r#"_verirun() {
                 i=$((i + 2))
                 continue
                 ;;
-            run|verify|show|diff|pin|unpin|gc|completions)
+            run|verify|show|diff|pin|unpin|gc|completions|help)
                 cmd="${COMP_WORDS[$i]}"
                 break
                 ;;
@@ -118,7 +116,7 @@ const BASH_SCRIPT: &str = r#"_verirun() {
         if [[ "$cur" == -* ]]; then
             COMPREPLY=( $(compgen -W "--seed --help -h --version -V" -- "$cur") )
         else
-            COMPREPLY=( $(compgen -W "run verify show diff pin unpin gc completions" -- "$cur") )
+            COMPREPLY=( $(compgen -W "run verify show diff pin unpin gc completions help" -- "$cur") )
         fi
         return 0
     fi
@@ -147,6 +145,9 @@ const BASH_SCRIPT: &str = r#"_verirun() {
                 COMPREPLY=( $(compgen -W "bash zsh fish powershell" -- "$cur") )
             fi
             ;;
+        help)
+            COMPREPLY=( $(compgen -W "run verify show diff pin unpin gc completions help" -- "$cur") )
+            ;;
     esac
     return 0
 }
@@ -170,6 +171,7 @@ _verirun() {
         'unpin:Remove a manifest garbage collection pin'
         'gc:Collect unreachable objects older than the grace threshold'
         'completions:Print shell completion script for bash, zsh, fish, or powershell'
+        'help:Print this message or the help of the given subcommand(s)'
     )
 
     _arguments -C \
@@ -230,6 +232,12 @@ _verirun() {
                         '--seed=[The active seed, printed to stderr by every store command]:seed:' \
                         '(-h --help)'{-h,--help}'[Print help]'
                     ;;
+                help)
+                    _arguments \
+                        '1:command:(run verify show diff pin unpin gc completions help)' \
+                        '--seed=[The active seed, printed to stderr by every store command]:seed:' \
+                        '(-h --help)'{-h,--help}'[Print help]'
+                    ;;
             esac
             ;;
     esac
@@ -241,7 +249,7 @@ fi
 "#;
 
 const FISH_SCRIPT: &str = r"# Fish completions for verirun
-# Subcommands: run verify show diff pin unpin gc completions
+# Subcommands: run verify show diff pin unpin gc completions help
 # Flags: --cas --work --jobs --input --pin --grace-secs --dry-run --json --seed --help --version
 
 function __verirun_subcommand
@@ -254,7 +262,7 @@ function __verirun_subcommand
             case --cas --work --jobs --input --grace-secs --seed
                 set i (math $i + 2)
                 continue
-            case run verify show diff pin unpin gc completions
+            case run verify show diff pin unpin gc completions help
                 echo $w
                 return 0
         end
@@ -284,6 +292,7 @@ complete -c verirun -n '__verirun_needs_subcommand' -f -a pin -d 'Verify a manif
 complete -c verirun -n '__verirun_needs_subcommand' -f -a unpin -d 'Remove a manifest garbage collection pin'
 complete -c verirun -n '__verirun_needs_subcommand' -f -a gc -d 'Collect unreachable objects older than the grace threshold'
 complete -c verirun -n '__verirun_needs_subcommand' -f -a completions -d 'Print shell completion script'
+complete -c verirun -n '__verirun_needs_subcommand' -f -a help -d 'Print this message or the help of the given subcommand(s)'
 
 complete -c verirun -n '__verirun_using_subcommand run verify show diff pin unpin gc' -l cas -r -a '(__fish_complete_directories)' -d 'Content-addressed store directory (--cas)'
 complete -c verirun -n '__verirun_using_subcommand run verify show diff pin unpin gc completions' -l json -d 'Render the result as one JSON object (--json)'
@@ -305,7 +314,7 @@ const POWERSHELL_SCRIPT: &str = r#"Register-ArgumentCompleter -Native -CommandNa
     param($wordToComplete, $commandAst, $cursorPosition)
 
     $elements = $commandAst.CommandElements | ForEach-Object { $_.Extent.Text }
-    $subcommands = @('run', 'verify', 'show', 'diff', 'pin', 'unpin', 'gc', 'completions')
+    $subcommands = @('run', 'verify', 'show', 'diff', 'pin', 'unpin', 'gc', 'completions', 'help')
     $activeSubcommand = $null
 
     for ($i = 1; $i -lt $elements.Count; $i++) {
@@ -331,7 +340,13 @@ const POWERSHELL_SCRIPT: &str = r#"Register-ArgumentCompleter -Native -CommandNa
         }
     } else {
         switch ($activeSubcommand) {
-            'run' { @('--cas', '--work', '--jobs', '--input', '--pin', '--json', '--seed', '--help', '-h') }
+            'run' {
+                if ($wordToComplete.StartsWith('-')) {
+                    @('--cas', '--work', '--jobs', '--input', '--pin', '--json', '--seed', '--help', '-h')
+                } else {
+                    @(Get-ChildItem -Name "$wordToComplete*" -ErrorAction SilentlyContinue)
+                }
+            }
             'verify' { @('--cas', '--json', '--seed', '--help', '-h') }
             'show' { @('--cas', '--json', '--seed', '--help', '-h') }
             'diff' { @('--cas', '--json', '--seed', '--help', '-h') }
@@ -345,6 +360,7 @@ const POWERSHELL_SCRIPT: &str = r#"Register-ArgumentCompleter -Native -CommandNa
                     @('bash', 'zsh', 'fish', 'powershell')
                 }
             }
+            'help' { @('run', 'verify', 'show', 'diff', 'pin', 'unpin', 'gc', 'completions', 'help', '--help', '-h') }
             default { @() }
         }
     }
