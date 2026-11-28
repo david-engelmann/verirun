@@ -1,23 +1,35 @@
-# Standalone release installer for verirun on Windows.
-# Downloads the Windows release zip and SHA256SUMS from GitHub Releases,
-# verifies the archive SHA-256 digest before extraction, and installs
-# verirun.exe into the destination directory.
-#
-# Usage:
-#   install.ps1 [-Version <vX.Y.Z>] [-InstallDir <DIR>] [-BaseUrl <URL>]
-#
-# Options:
-#   -Version <vX.Y.Z>      Release tag to install (defaults to latest release)
-#   -InstallDir <DIR>      Destination directory (default: $INSTALL_DIR or $HOME/.local/bin)
-#   -BaseUrl <URL>         Release root URL (default: https://github.com/david-engelmann/verirun/releases)
-#
-# Environment:
-#   VERIRUN_VERSION        Default version when -Version is omitted
-#   INSTALL_DIR            Default destination directory when -InstallDir is omitted
-#   VERIRUN_BASE_URL       Default release root URL when -BaseUrl is omitted
-#
-# When the script is downloaded and run in memory, pass the settings
-# through the environment variables above.
+<#
+.SYNOPSIS
+Install a prebuilt verirun release binary with SHA-256 verification.
+
+.DESCRIPTION
+Downloads the Windows release zip and SHA256SUMS from GitHub Releases,
+verifies the archive SHA-256 digest before extraction, and installs
+verirun.exe into the destination directory. The staged binary is
+version-checked before it replaces any existing install, so a bad
+download leaves a working install standing.
+
+.PARAMETER Version
+Release tag to install, as vX.Y.Z or X.Y.Z. Defaults to the latest
+release when omitted.
+
+.PARAMETER InstallDir
+Destination directory. Defaults to $HOME/.local/bin.
+
+.PARAMETER BaseUrl
+Release root URL. Defaults to the verirun GitHub Releases root. A
+local directory holding the release layout also works, which makes
+the script testable offline.
+
+.EXAMPLE
+./install.ps1 -Version v0.2.2 -InstallDir "$HOME/.local/bin"
+
+.NOTES
+Environment fallbacks: VERIRUN_VERSION, INSTALL_DIR, and
+VERIRUN_BASE_URL supply the defaults when the matching parameter is
+omitted. When the script is downloaded and run in memory, pass the
+settings through those environment variables.
+#>
 
 [CmdletBinding()]
 param(
@@ -97,10 +109,24 @@ function Fetch-ToFile([string]$Source, [string]$Destination, [bool]$IsLocal) {
 
 $versionGiven = $PSBoundParameters.ContainsKey('Version')
 if (-not $versionGiven) { $Version = $env:VERIRUN_VERSION }
-if (-not $PSBoundParameters.ContainsKey('InstallDir')) { $InstallDir = $env:INSTALL_DIR }
-if ([string]::IsNullOrEmpty($InstallDir)) { $InstallDir = Join-Path $HOME '.local/bin' }
-if (-not $PSBoundParameters.ContainsKey('BaseUrl')) { $BaseUrl = $env:VERIRUN_BASE_URL }
-if ([string]::IsNullOrEmpty($BaseUrl)) { $BaseUrl = $DefaultBaseUrl }
+if ($PSBoundParameters.ContainsKey('InstallDir')) {
+    if ([string]::IsNullOrEmpty($InstallDir)) {
+        Fail "install directory must not be empty (set -InstallDir or INSTALL_DIR, or set HOME)"
+    }
+} else {
+    $InstallDir = $env:INSTALL_DIR
+    if ([string]::IsNullOrEmpty($InstallDir) -and -not [string]::IsNullOrEmpty($HOME)) {
+        $InstallDir = Join-Path $HOME '.local/bin'
+    }
+}
+if ($PSBoundParameters.ContainsKey('BaseUrl')) {
+    if ([string]::IsNullOrEmpty($BaseUrl)) {
+        Fail "base URL must not be empty"
+    }
+} else {
+    $BaseUrl = $env:VERIRUN_BASE_URL
+    if ([string]::IsNullOrEmpty($BaseUrl)) { $BaseUrl = $DefaultBaseUrl }
+}
 
 if ($versionGiven -and [string]::IsNullOrEmpty($Version)) {
     Fail "-Version must not be empty (omit it to install the latest release)"
@@ -108,23 +134,24 @@ if ($versionGiven -and [string]::IsNullOrEmpty($Version)) {
 if ([string]::IsNullOrEmpty($InstallDir)) {
     Fail "install directory must not be empty (set -InstallDir or INSTALL_DIR, or set HOME)"
 }
-if ([string]::IsNullOrEmpty($BaseUrl)) {
-    Fail "base URL must not be empty"
-}
-
-if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') {
-    Fail "unsupported CPU architecture '$env:PROCESSOR_ARCHITECTURE' (supported: AMD64)"
-}
 
 if ([string]::IsNullOrEmpty($Version)) {
     $Version = Resolve-LatestTag $BaseUrl
 }
 
-$versionNum = $Version -replace '^v', ''
+$versionNum = $Version -creplace '^v', ''
 if (-not (Test-ValidVersion $versionNum)) {
     Fail "invalid version '$Version' (expected vX.Y.Z or X.Y.Z)"
 }
 $tag = "v$versionNum"
+
+$arch = $env:PROCESSOR_ARCHITECTURE
+if ($arch -eq 'x86' -and $env:PROCESSOR_ARCHITEW6432) {
+    $arch = $env:PROCESSOR_ARCHITEW6432
+}
+if ($arch -ne 'AMD64') {
+    Fail "unsupported CPU architecture '$arch' (supported: AMD64)"
+}
 
 $stage = "verirun-v$versionNum-windows-x86_64"
 $archive = "$stage.zip"
@@ -164,8 +191,9 @@ try {
     foreach ($line in Get-Content -LiteralPath $sumsPath) {
         $parts = $line -split '\s+'
         if ($parts.Count -ge 2) {
-            $name = $parts[1].TrimStart('*')
-            if ($name -eq $archive) {
+            $name = $parts[1]
+            if ($name.StartsWith('*')) { $name = $name.Substring(1) }
+            if ($name -ceq $archive) {
                 $expectedSha = $parts[0].ToLower()
                 break
             }
@@ -192,15 +220,20 @@ try {
     if (-not (Test-Path -LiteralPath $InstallDir -PathType Container)) {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
-    $stagedBin = Join-Path $InstallDir ".verirun.install.$PID"
+    $stagedBin = Join-Path $InstallDir ".verirun.install.$PID.exe"
     Copy-Item -LiteralPath $extractedBin -Destination $stagedBin
 
-    $stagedVersion = & $stagedBin --version
+    $stagedVersion = $null
+    try {
+        $stagedVersion = & $stagedBin --version
+    } catch {
+        Fail "the downloaded binary does not run"
+    }
     if ($LASTEXITCODE -ne 0) {
         Fail "the downloaded binary does not run"
     }
     $stagedVersion = "$stagedVersion".Trim()
-    if ($stagedVersion -ne "verirun $versionNum") {
+    if ($stagedVersion -cne "verirun $versionNum") {
         Fail "the downloaded binary reports '$stagedVersion' (expected 'verirun $versionNum')"
     }
 
