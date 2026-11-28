@@ -1216,6 +1216,21 @@ jobs stay hosted-only and why. The CHANGELOG's
 released 0.2.2 line about the Makefile stands as
 history and is not rewritten.
 
+The slice's red team found the same falsity surviving
+on adjacent surfaces, and the repairs landed in this
+slice. INV-CLI-2's SIM_SEED clauses are scoped the
+same way, since completions under --json with a
+malformed SIM_SEED emits its script object and exits
+0. The --seed help string and its six copies in the
+zsh completion script now say the seed prints by every
+store command. The Makefile examples target runs the
+two Rust examples the hosted gate runs, so the
+mirroring claim holds at step level as well as job
+level. The cli_seed test header and the tutorial's
+run sentence are scoped, and the pull request template
+gains the fuzz compile check beside the fuzz format
+check.
+
 Disposition: findings B1, B2, G1, and G2 stand closed.
 The seed behaviour itself is unchanged and stays
 pinned by the completions tests, which assert the

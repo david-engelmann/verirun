@@ -23,7 +23,7 @@ Two facts about the sandbox matter when writing tasks. A task runs in its own di
 verirun run --cas cas --work work build.json
 ```
 
-The program prints the active seed to standard error on every invocation, and the manifest digest to standard output.
+The program prints the active seed to standard error on every run, and the manifest digest to standard output.
 
 ```text
 seed: 0

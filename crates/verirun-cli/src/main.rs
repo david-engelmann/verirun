@@ -107,7 +107,7 @@ fn build_cli() -> Command {
                 .value_name("N")
                 .global(true)
                 .value_parser(clap::value_parser!(u64))
-                .help("The active seed, printed to stderr on every run"),
+                .help("The active seed, printed to stderr by every store command"),
         )
         .subcommand(run_subcommand(cas.clone(), json.clone()))
         .subcommand(digest_subcommand(

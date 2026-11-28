@@ -5,6 +5,7 @@ Describe the defect fixed or capability added and name the section of `docs/ARCH
 ## Verification checklist
 
 - [ ] `cargo fmt --all -- --check` passes, including the fuzz workspace (`cargo fmt --manifest-path fuzz/Cargo.toml --all -- --check`)
+- [ ] `cargo check --manifest-path fuzz/Cargo.toml --locked --bins` passes
 - [ ] `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` passes
 - [ ] `SIM_SEED=20261112 PROPTEST_CASES=1000 cargo test --workspace --all-features --locked --no-fail-fast` passes
 - [ ] `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps --locked` passes

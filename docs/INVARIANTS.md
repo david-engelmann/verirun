@@ -259,8 +259,8 @@ Every CLI outcome maps to exactly one documented code: 0 success or verified, 1 
 Edge cases: a usage error (exits 3), a tampered store under `verify` (exits 2), a timed out task under `run` (exits 1), a cyclic graph under `run` (exits 3).
 
 ### INV-CLI-2. JSON output parity
-For every command, `--json` output carries the same information content as the text output, including digests, statuses, and error context. Malformed digest arguments, malformed `--input` bindings, and invalid `SIM_SEED` values likewise emit structured `error_json` on stdout when `--json` is passed. The JSON form is never the only place a failure is explained.
-Edge cases. A verification failure rendered both ways names the same expected and actual digests in both, and malformed digest or `SIM_SEED` invocations under `--json` emit valid JSON on stdout alongside the stderr message.
+For every command, `--json` output carries the same information content as the text output, including digests, statuses, and error context. Malformed digest arguments, malformed `--input` bindings, and invalid `SIM_SEED` values likewise emit structured `error_json` on stdout when `--json` is passed. The JSON form is never the only place a failure is explained. The completions command is the exception for `SIM_SEED`, since it resolves no seed, so a malformed value cannot fail it and it emits its script object instead.
+Edge cases. A verification failure rendered both ways names the same expected and actual digests in both, and malformed digest invocations under `--json`, and malformed `SIM_SEED` values on the store commands, emit valid JSON on stdout alongside the stderr message.
 
 ### INV-CLI-3. Seed reporting and reproduction
 Every store command prints its active seed. The completions command is the exception, because it prints a static script, touches no store, and resolves no seed. Seeded property and simulation runners produce byte-identical traces in separate processes at the same seed, and different traces at a different seed for generators with enough entropy to differ.

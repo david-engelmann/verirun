@@ -45,6 +45,8 @@ python-test:
 	python3 -m unittest discover -s python/tests -v
 
 examples:
+	cargo run --locked -p verirun-core --example canonical_and_digests
+	cargo run --locked -p verirun-store --example store_roundtrip
 	cargo build --locked -p verirun-cli --bin verirun
 	python3 examples/reproducible_eval_pipeline.py
 	sh examples/run_and_verify.sh
