@@ -60,13 +60,29 @@ fetch_to_file() {
   fi
 }
 
+valid_version() {
+  # $1 is a version with any leading v already stripped. It is
+  # valid only as exactly three dot-separated numeric components,
+  # with no leading zero on any component.
+  case "$1" in
+    .* | *. | *..*) return 1 ;;
+    0[0-9]* | *.0[0-9]*) return 1 ;;
+  esac
+  case "$(printf '%s' "$1" | tr -d '0123456789.'; printf 'x')" in
+    x) ;;
+    *) return 1 ;;
+  esac
+  version_dots=$(printf '%s' "$1" | tr -cd '.')
+  [ "${#version_dots}" -eq 2 ]
+}
+
 resolve_latest_tag() {
   root_url="${1%/}"
   case "$root_url" in
     file://*)
-      local_root="${root_url#file://}"
-      if [ -f "$local_root/latest" ]; then
-        tr -d ' \t\r\n' <"$local_root/latest"
+      resolve_local_root="${root_url#file://}"
+      if [ -f "$resolve_local_root/latest" ]; then
+        tr -d ' \t\r\n' <"$resolve_local_root/latest"
         return 0
       fi
       err "--version <vX.Y.Z> is required when installing from a local file:// base URL"
@@ -86,13 +102,14 @@ resolve_latest_tag() {
 
   resolved_tag="${effective##*/}"
   case "$resolved_tag" in
-    v[0-9]*.[0-9]*.[0-9]*)
-      printf '%s\n' "$resolved_tag"
-      ;;
-    *)
-      err "could not parse release tag from redirect URL: $effective"
+    v*)
+      if valid_version "${resolved_tag#v}"; then
+        printf '%s\n' "$resolved_tag"
+        return 0
+      fi
       ;;
   esac
+  err "could not parse release tag from redirect URL: $effective"
 }
 
 compute_sha256() {
@@ -128,7 +145,11 @@ detect_label() {
 }
 
 req_version="${VERIRUN_VERSION:-}"
-install_dir="${INSTALL_DIR:-${HOME:-}/.local/bin}"
+version_given=0
+install_dir="${INSTALL_DIR:-}"
+if [ -z "$install_dir" ] && [ -n "${HOME:-}" ]; then
+  install_dir="$HOME/.local/bin"
+fi
 base_url="${VERIRUN_BASE_URL:-$DEFAULT_BASE_URL}"
 
 while [ "$#" -gt 0 ]; do
@@ -140,10 +161,12 @@ while [ "$#" -gt 0 ]; do
     --version)
       [ "$#" -ge 2 ] || err "--version requires a value"
       req_version="$2"
+      version_given=1
       shift 2
       ;;
     --version=*)
       req_version="${1#--version=}"
+      version_given=1
       shift
       ;;
     --install-dir)
@@ -170,8 +193,11 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-[ -n "$install_dir" ] || err "install directory must not be empty"
+[ -n "$install_dir" ] || err "install directory must not be empty (set --install-dir or INSTALL_DIR, or set HOME)"
 [ -n "$base_url" ] || err "base URL must not be empty"
+if [ "$version_given" -eq 1 ] && [ -z "$req_version" ]; then
+  err "--version must not be empty (omit it to install the latest release)"
+fi
 
 need_cmd tar
 need_cmd awk
@@ -183,10 +209,9 @@ if [ -z "$req_version" ]; then
 fi
 
 version_num="${req_version#v}"
-case "$version_num" in
-  [0-9]*.[0-9]*.[0-9]*) ;;
-  *) err "invalid version '$req_version' (expected vX.Y.Z or X.Y.Z)" ;;
-esac
+if ! valid_version "$version_num"; then
+  err "invalid version '$req_version' (expected vX.Y.Z or X.Y.Z)"
+fi
 case "$version_num" in
   */* | *" "* | *"	"*)
     err "invalid characters in version '$req_version'"
@@ -210,9 +235,13 @@ case "$trimmed_base" in
 esac
 
 tmp_dir=""
+staged_bin=""
 cleanup() {
   if [ -n "$tmp_dir" ] && [ -d "$tmp_dir" ]; then
     rm -rf "$tmp_dir"
+  fi
+  if [ -n "$staged_bin" ] && [ -f "$staged_bin" ]; then
+    rm -f "$staged_bin"
   fi
 }
 trap cleanup EXIT INT TERM HUP
@@ -256,7 +285,14 @@ mkdir -p "$install_dir"
 staged_bin="$install_dir/.verirun.install.$$"
 cp "$extracted_bin" "$staged_bin"
 chmod 0755 "$staged_bin"
+
+staged_version=$("$staged_bin" --version) ||
+  err "the downloaded binary does not run"
+[ "$staged_version" = "verirun $version_num" ] ||
+  err "the downloaded binary reports '$staged_version' (expected 'verirun $version_num')"
+
 mv -f "$staged_bin" "$install_dir/verirun"
+staged_bin=""
 
 printf 'Installed verirun %s to %s/verirun (SHA-256 verified: %s)\n' "$tag" "$install_dir" "$actual_sha"
 case ":${PATH:-}:" in
