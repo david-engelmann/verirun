@@ -1,7 +1,7 @@
 //! Seed reporting property (INV-CLI-3;
 //! docs/ARCHITECTURE.md section 12.1).
 //!
-//! Every command prints its active seed to stderr, where the
+//! Every store command prints its active seed to stderr, where the
 //! seed comes from `--seed`, else the `SIM_SEED` environment
 //! variable, else 0. The same seed in separate processes
 //! produces byte-identical traces; the flag and the environment

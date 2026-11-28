@@ -1176,3 +1176,62 @@ Python whitespace class where the core refuses only
 the blank and stripped-empty forms. Findings A1 and
 A2 stand closed, and A4 stands closed as aligned
 where it mattered and named where it did not.
+
+## Repair slice 2: governing texts
+
+Closed 2026-11-28. The audit found the texts that
+govern the CLI and the gates overstating what the
+implementation does. The completions command falsified
+the seed sentences in ARCHITECTURE section 12.1,
+INV-CLI-3, and the build_cli doc comment, because it
+is dispatched before seed resolution, prints no seed
+line, and cannot fail on a malformed SIM_SEED (finding
+B1). The normative command list in section 12.1 omitted
+completions entirely (finding B2). The stress workflow
+header claimed the pull request gate runs every test
+at 1,000 property cases, while the msrv job runs the
+suite at 100 (finding G1). The Makefile and AGENTS.md
+gate claims overstated what make ci covers, and the
+pull request template omitted two checks the gate runs
+(finding G2). Main approved the repairs as slice 2 of
+this programme.
+
+The build: section 12.1 gains the completions line in
+its command list and scopes its seed sentences to the
+store commands, naming completions as the exception
+with its reasons. INV-CLI-3 and the build_cli doc
+comment are scoped the same way. The cli README already
+scoped its sentence correctly and is unchanged. The
+stress header qualifies its pull request sentence with
+the msrv exception. The pull request template gains
+the cargo audit line and the fuzz format check. For
+finding G2 the claims were made true rather than
+weakened where a target could carry them: the Makefile
+gains hygiene and audit targets wired into ci, with
+hygiene running the same required-files, copy bar,
+toolchain pin, and version parity checks as the hosted
+job, verified locally against the tree and against a
+sabotaged version. AGENTS.md now states which four
+jobs stay hosted-only and why. The CHANGELOG's
+released 0.2.2 line about the Makefile stands as
+history and is not rewritten.
+
+The slice's red team found the same falsity surviving
+on adjacent surfaces, and the repairs landed in this
+slice. INV-CLI-2's SIM_SEED clauses are scoped the
+same way, since completions under --json with a
+malformed SIM_SEED emits its script object and exits
+0. The --seed help string and its six copies in the
+zsh completion script now say the seed prints by every
+store command. The Makefile examples target runs the
+two Rust examples the hosted gate runs, so the
+mirroring claim holds at step level as well as job
+level. The cli_seed test header and the tutorial's
+run sentence are scoped, and the pull request template
+gains the fuzz compile check beside the fuzz format
+check.
+
+Disposition: findings B1, B2, G1, and G2 stand closed.
+The seed behaviour itself is unchanged and stays
+pinned by the completions tests, which assert the
+empty stderr the scoped texts now describe.
