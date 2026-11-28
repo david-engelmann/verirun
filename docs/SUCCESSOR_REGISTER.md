@@ -1403,14 +1403,35 @@ POSIX one, and the CHANGELOG records the addition.
 
 The hosted windows job is the gate of record for the
 script, since no PowerShell interpreter exists on the
-build box. The parity controls owed are the POSIX
-names restated for this route, a tampered sums entry
-failing closed, a wrong-version staged binary refused
-with the previous install standing, the malformed
-version set refused, and an explicitly empty version
-erroring, each exercised where a PowerShell
-interpreter exists and otherwise carried by the
-hosted job's live run against the published release.
+build box. A hosted control battery on windows-latest
+exercised the route against a local release root
+built from the real binary, and every control passed
+on the reviewed head. The happy path and the local
+latest resolution install and report the right
+version, a tampered sums entry fails closed and
+installs nothing, a wrong-version staged binary is
+refused with the previous install standing and no
+staged file left behind, four malformed versions are
+refused, and an explicitly empty version errors with
+its remedy.
+
+The slice's reviews repaired the script in place
+before it landed. The staged copy first carried no
+.exe extension, which Windows cannot execute, so the
+staged check could never have run. It now stages as
+an .exe, its launch failure produces the script's
+own error, and the sums match and the version
+comparison are case-exact. Empty -InstallDir and
+-BaseUrl values now error like their POSIX
+counterparts, an unset HOME reaches the remedy
+message the POSIX script prints, the architecture
+gate reads the WoW64 variable so a 32-bit shell on
+64-bit Windows is not refused, and the header is
+comment-based help. The red team's remaining notes,
+the extraction cmdlet's version-dependent entry
+handling and the in-memory invocation edges, stand
+dispositioned without changes, each bounded by the
+digest gate or by the caller's own session.
 
 Disposition: residual item 1 stands closed on this
 slice's landing. Item 4 follows as RW2.
