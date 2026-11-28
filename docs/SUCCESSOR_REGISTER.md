@@ -1070,5 +1070,15 @@ refusal cases validated before this slice, and
 fault_trailing_colliding_task_ids_exit_3 pinning exit
 code 3 and both quoted ids at the CLI.
 
+The slice's red team found the same mechanism one
+step further in: a lone id made only of spaces and
+dots, such as "..." or " ", strips to empty and would
+name the tasks directory itself on Windows, and
+sandbox preparation wipes the directory it is given.
+The repair landed in this slice: is_safe_task_id now
+refuses an id whose Win32 stripped form is empty, as
+a schema error beside "." and "..", pinned in the
+schema rejection table of dag_faults.
+
 Disposition: the charged refusal stands landed, and
 the audit's one adjacent observation stands closed.

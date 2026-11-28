@@ -254,6 +254,12 @@ fn fault_schema_rejection_table() {
         run(&[task("a/b")]),
         run(&[task(".")]),
         run(&[task("..")]),
+        // A task id whose Win32 stripped form is empty: on
+        // Windows it would name the tasks directory itself
+        // rather than a sandbox inside it (INV-DAG-10).
+        run(&[task("...")]),
+        run(&[task(" ")]),
+        run(&[task(" .")]),
         run(&[r#"{"task_id":"a\\b","executable":"run","args":[],"env":{},"inputs":[],"outputs":[],"depends_on":[]}"#.to_string()]),
         // An empty executable.
         run(&[task("a").replace(r#""executable":"run""#, r#""executable":"""#)]),

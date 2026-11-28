@@ -477,9 +477,16 @@ const fn as_object(value: &Value) -> Option<&Vec<(String, Value)>> {
 
 /// A task id names one directory under the run's tasks folder,
 /// so it must be a single safe path component: non-empty, no
-/// slash, no backslash, and neither "." nor "..".
+/// slash, no backslash, and neither "." nor "..". Its Win32
+/// stripped form must also be non-empty, because an id made
+/// only of spaces and dots would name the tasks directory
+/// itself on Windows.
 fn is_safe_task_id(text: &str) -> bool {
-    !text.is_empty() && text != "." && text != ".." && !text.contains(['/', '\\'])
+    !text.is_empty()
+        && text != "."
+        && text != ".."
+        && !text.contains(['/', '\\'])
+        && !win32_stripped(text).is_empty()
 }
 
 fn field<'a>(pairs: &'a [(String, Value)], name: &str) -> Option<&'a Value> {
