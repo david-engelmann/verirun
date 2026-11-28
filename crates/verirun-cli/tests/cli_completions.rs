@@ -99,6 +99,19 @@ fn derived_flags(subcommands: &[String]) -> BTreeSet<String> {
 
 #[test]
 fn library_and_cli_completions_cover_all_shells_subcommands_and_flags() {
+    let subcommands = derived_subcommands();
+    assert_eq!(
+        subcommands.len(),
+        8,
+        "the parser's subcommand surface changed: {subcommands:?}"
+    );
+    let flags = derived_flags(&subcommands);
+    assert_eq!(
+        flags.len(),
+        11,
+        "the parser's flag surface changed: {flags:?}"
+    );
+
     let shells = [
         ("bash", Shell::Bash),
         ("zsh", Shell::Zsh),
@@ -121,18 +134,6 @@ fn library_and_cli_completions_cover_all_shells_subcommands_and_flags() {
         assert_ne!(expected, "");
         assert!(expected.ends_with('\n'));
 
-        let subcommands = derived_subcommands();
-        assert_eq!(
-            subcommands.len(),
-            8,
-            "the parser's subcommand surface changed: {subcommands:?}"
-        );
-        let flags = derived_flags(&subcommands);
-        assert_eq!(
-            flags.len(),
-            11,
-            "the parser's flag surface changed: {flags:?}"
-        );
         for subcmd in &subcommands {
             assert!(
                 expected.contains(subcmd.as_str()),

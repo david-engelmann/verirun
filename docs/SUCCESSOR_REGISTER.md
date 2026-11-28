@@ -1328,6 +1328,27 @@ binary and checks its reported version before
 declaring success. The find_binary docstring states
 the search order, including the checkout shadowing.
 
+The slice's red team caught one consequence of the
+new smoke run, and it is repaired in this slice. The
+version check first ran on the installed path, after
+the move had already replaced any working binary, so
+a failed check left the bad binary standing. The
+check now runs on the staged file before the move, a
+failure leaves the previous install untouched, and
+the cleanup trap removes the staged file. The same
+pass tightened the validator further, refusing
+leading-zero components and a trailing newline the
+command substitution used to strip, and the standards
+nits are repaired with it, the PowerShell help arm
+last in its switch, the test derivation hoisted out
+of its per-shell loop, and the Makefile parity regex
+carrying the same end anchor as ci.yml. One red-team
+nit stands dispositioned without a change, since the
+PowerShell filename completion returns leaf names
+where bash preserves a typed directory prefix, and
+the difference is cosmetic beside an untestable-here
+script rewrite.
+
 Disposition: findings D1, D2, E1, H, I, and J stand
 closed. With this slice the repair programme Main
 approved on 2026-11-27 is complete, all six slices

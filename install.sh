@@ -62,12 +62,14 @@ fetch_to_file() {
 
 valid_version() {
   # $1 is a version with any leading v already stripped. It is
-  # valid only as exactly three dot-separated numeric components.
+  # valid only as exactly three dot-separated numeric components,
+  # with no leading zero on any component.
   case "$1" in
     .* | *. | *..*) return 1 ;;
+    0[0-9]* | *.0[0-9]*) return 1 ;;
   esac
-  case "$(printf '%s' "$1" | tr -d '0123456789.')" in
-    '') ;;
+  case "$(printf '%s' "$1" | tr -d '0123456789.'; printf 'x')" in
+    x) ;;
     *) return 1 ;;
   esac
   version_dots=$(printf '%s' "$1" | tr -cd '.')
@@ -283,13 +285,14 @@ mkdir -p "$install_dir"
 staged_bin="$install_dir/.verirun.install.$$"
 cp "$extracted_bin" "$staged_bin"
 chmod 0755 "$staged_bin"
+
+staged_version=$("$staged_bin" --version) ||
+  err "the downloaded binary does not run"
+[ "$staged_version" = "verirun $version_num" ] ||
+  err "the downloaded binary reports '$staged_version' (expected 'verirun $version_num')"
+
 mv -f "$staged_bin" "$install_dir/verirun"
 staged_bin=""
-
-installed_version=$("$install_dir/verirun" --version) ||
-  err "the installed binary at $install_dir/verirun does not run"
-[ "$installed_version" = "verirun $version_num" ] ||
-  err "the installed binary reports '$installed_version' (expected 'verirun $version_num')"
 
 printf 'Installed verirun %s to %s/verirun (SHA-256 verified: %s)\n' "$tag" "$install_dir" "$actual_sha"
 case ":${PATH:-}:" in

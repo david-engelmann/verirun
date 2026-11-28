@@ -347,7 +347,6 @@ const POWERSHELL_SCRIPT: &str = r#"Register-ArgumentCompleter -Native -CommandNa
                     @(Get-ChildItem -Name "$wordToComplete*" -ErrorAction SilentlyContinue)
                 }
             }
-            'help' { @('run', 'verify', 'show', 'diff', 'pin', 'unpin', 'gc', 'completions', 'help', '--help', '-h') }
             'verify' { @('--cas', '--json', '--seed', '--help', '-h') }
             'show' { @('--cas', '--json', '--seed', '--help', '-h') }
             'diff' { @('--cas', '--json', '--seed', '--help', '-h') }
@@ -361,6 +360,7 @@ const POWERSHELL_SCRIPT: &str = r#"Register-ArgumentCompleter -Native -CommandNa
                     @('bash', 'zsh', 'fish', 'powershell')
                 }
             }
+            'help' { @('run', 'verify', 'show', 'diff', 'pin', 'unpin', 'gc', 'completions', 'help', '--help', '-h') }
             default { @() }
         }
     }
