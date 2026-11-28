@@ -145,7 +145,8 @@ fn win32_stripped(path: &str) -> String {
 /// # Errors
 ///
 /// Returns [`DagError`] describing the first violation found: a
-/// schema violation, a duplicated or case-colliding task id, an
+/// schema violation, a duplicated, case-colliding, or
+/// trailing-colliding task id, an
 /// unknown dependency, a
 /// colliding, case-colliding, or trailing-colliding output, a
 /// duplicated, case-colliding, or trailing-colliding input, an
@@ -177,9 +178,13 @@ pub fn validate_run_spec(spec: &Value) -> Result<ValidatedDag, DagError> {
     // differ only in letter case are refused as well, because
     // each task's sandbox is a directory named by its id, and
     // a case-insensitive filesystem would give two such tasks
-    // one sandbox.
+    // one sandbox. Ids that differ only in trailing spaces or
+    // dots are refused on the same reasoning, because Win32
+    // strips those characters from a path component when it
+    // opens a file.
     let mut seen: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
     let mut folded_ids: BTreeMap<String, &str> = BTreeMap::new();
+    let mut stripped_ids: BTreeMap<String, &str> = BTreeMap::new();
     for task in &specs {
         if !seen.insert(task.task_id.as_str()) {
             return Err(DagError::DuplicateTaskId {
@@ -194,6 +199,14 @@ pub fn validate_run_spec(spec: &Value) -> Result<ValidatedDag, DagError> {
             });
         }
         folded_ids.insert(folded, task.task_id.as_str());
+        let stripped = case_folded(&win32_stripped(&task.task_id));
+        if let Some(first_id) = stripped_ids.get(&stripped) {
+            return Err(DagError::TrailingCollidingTaskId {
+                first_id: (*first_id).to_string(),
+                task_id: task.task_id.clone(),
+            });
+        }
+        stripped_ids.insert(stripped, task.task_id.as_str());
     }
     let ids: std::collections::BTreeSet<&str> =
         specs.iter().map(|task| task.task_id.as_str()).collect();

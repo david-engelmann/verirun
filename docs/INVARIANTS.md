@@ -136,6 +136,10 @@ Edge cases: a collision through a directory component alone (`dir /f.txt` agains
 Two task ids that differ only in letter case are rejected with exit code 3, naming both ids. Each task's sandbox is a directory named by its id under the work root, so a case-insensitive filesystem would give two such tasks one sandbox, and one task's sandbox preparation would erase the other's. Folding is the Unicode lowercase mapping of INV-DAG-7, so the refusal is identical on every platform.
 Edge cases: an exact duplicate id (reported as a duplicate, which check 2 reaches first), ids differing in more than letter case (accepted).
 
+### INV-DAG-10. Trailing-colliding task ids rejected upfront
+Two task ids that differ only in trailing spaces or dots are rejected with exit code 3, naming both ids. Each task's sandbox is a directory named by its id under the work root, and Win32 strips trailing spaces and dots from a path component when it opens a file, so two such ids name one sandbox directory on Windows, and one task's sandbox preparation would erase the other's. The comparison runs on the case-folded Win32-stripped form of INV-DAG-8, so ids differing in both letter case and trailing characters are refused under this invariant, and the refusal is identical on every platform.
+Edge cases: an exact duplicate id (reported as a duplicate, which check 2 reaches first), a case-colliding pair (reported under INV-DAG-9, which check 2 reaches first), ids differing in more than trailing spaces, dots, and letter case (accepted).
+
 ## 5. Execution invariants (RUN)
 
 ### INV-RUN-1. Hermetic environment

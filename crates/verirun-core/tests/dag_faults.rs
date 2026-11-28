@@ -495,3 +495,42 @@ fn fault_case_colliding_task_ids() {
     // validate.
     assert!(validate(&run(&[task("Build"), task("build2")])).is_ok());
 }
+
+#[test]
+fn fault_trailing_colliding_task_ids() {
+    // Two task ids that differ only in trailing spaces or
+    // dots name one sandbox directory on Windows, because
+    // Win32 strips those characters from a path component
+    // and each task's sandbox is named by its id
+    // (INV-DAG-10).
+    assert_eq!(
+        validate(&run(&[task("build"), task("build ")])),
+        Err(DagError::TrailingCollidingTaskId {
+            first_id: "build".to_string(),
+            task_id: "build ".to_string()
+        })
+    );
+    assert_eq!(
+        validate(&run(&[task("build"), task("build.")])),
+        Err(DagError::TrailingCollidingTaskId {
+            first_id: "build".to_string(),
+            task_id: "build.".to_string()
+        })
+    );
+
+    // The comparison folds case as well: ids differing in
+    // both letter case and trailing characters are refused
+    // under this invariant, because check 2 reaches the
+    // folded comparison first only for pure case pairs.
+    assert_eq!(
+        validate(&run(&[task("Build"), task("build ")])),
+        Err(DagError::TrailingCollidingTaskId {
+            first_id: "Build".to_string(),
+            task_id: "build ".to_string()
+        })
+    );
+
+    // Control: ids that differ in more than trailing spaces,
+    // dots, and letter case validate.
+    assert!(validate(&run(&[task("build"), task("build 2")])).is_ok());
+}
