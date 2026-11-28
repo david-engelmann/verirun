@@ -254,6 +254,12 @@ fn fault_schema_rejection_table() {
         run(&[task("a/b")]),
         run(&[task(".")]),
         run(&[task("..")]),
+        // A task id whose Win32 stripped form is empty: on
+        // Windows it would name the tasks directory itself
+        // rather than a sandbox inside it (INV-DAG-10).
+        run(&[task("...")]),
+        run(&[task(" ")]),
+        run(&[task(" .")]),
         run(&[r#"{"task_id":"a\\b","executable":"run","args":[],"env":{},"inputs":[],"outputs":[],"depends_on":[]}"#.to_string()]),
         // An empty executable.
         run(&[task("a").replace(r#""executable":"run""#, r#""executable":"""#)]),
@@ -494,4 +500,43 @@ fn fault_case_colliding_task_ids() {
     // Control: ids that differ in more than letter case
     // validate.
     assert!(validate(&run(&[task("Build"), task("build2")])).is_ok());
+}
+
+#[test]
+fn fault_trailing_colliding_task_ids() {
+    // Two task ids that differ only in trailing spaces or
+    // dots name one sandbox directory on Windows, because
+    // Win32 strips those characters from a path component
+    // and each task's sandbox is named by its id
+    // (INV-DAG-10).
+    assert_eq!(
+        validate(&run(&[task("build"), task("build ")])),
+        Err(DagError::TrailingCollidingTaskId {
+            first_id: "build".to_string(),
+            task_id: "build ".to_string()
+        })
+    );
+    assert_eq!(
+        validate(&run(&[task("build"), task("build.")])),
+        Err(DagError::TrailingCollidingTaskId {
+            first_id: "build".to_string(),
+            task_id: "build.".to_string()
+        })
+    );
+
+    // The comparison folds case as well: ids differing in
+    // both letter case and trailing characters are refused
+    // under this invariant, because check 2 reaches the
+    // folded comparison first only for pure case pairs.
+    assert_eq!(
+        validate(&run(&[task("Build"), task("build ")])),
+        Err(DagError::TrailingCollidingTaskId {
+            first_id: "Build".to_string(),
+            task_id: "build ".to_string()
+        })
+    );
+
+    // Control: ids that differ in more than trailing spaces,
+    // dots, and letter case validate.
+    assert!(validate(&run(&[task("build"), task("build 2")])).is_ok());
 }
