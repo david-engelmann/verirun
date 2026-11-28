@@ -53,6 +53,36 @@ _MAX_SAFE_INTEGER = 9_007_199_254_740_991
 _RESERVED_ENV_KEYS = frozenset(
     {"PATH", "HOME", "TMPDIR", "TZ", "LC_ALL", "SOURCE_DATE_EPOCH"}
 )
+
+
+def _case_folded(text: str) -> str:
+    """Unicode lowercase mapping, applied per character.
+
+    Mirrors the CLI's collision folding in verirun-core, which
+    lowercases per character, so the two agree on every input.
+    """
+    return "".join(ch.lower() for ch in text)
+
+
+def _win32_stripped(text: str) -> str:
+    """The path with trailing spaces and dots stripped per component.
+
+    Mirrors the CLI's Win32-stripped form: Win32 strips those
+    characters from each path component when it opens a file.
+    """
+    return "/".join(part.rstrip(" .") for part in text.split("/"))
+
+
+def _is_reserved_env_key(key: str) -> bool:
+    """Whether an env key names a reserved key, folding ASCII case.
+
+    Mirrors the CLI's comparison: environment lookup on Windows
+    is case-insensitive, so a declared Path is refused as PATH.
+    """
+    folded = "".join(
+        chr(ord(ch) + 32) if "A" <= ch <= "Z" else ch for ch in key
+    )
+    return folded in {name.lower() for name in _RESERVED_ENV_KEYS}
 _TASK_FIELDS = frozenset(
     {
         "task_id",
@@ -117,7 +147,14 @@ def _normalize_env_mapping(value: Any) -> Mapping[str, str]:
 
 
 def _validate_relative_path(raw: str, *, task_id: str, field_name: str) -> str:
-    if not raw or not raw.strip():
+    """Validate a declared path and return its normalized form.
+
+    Mirrors the CLI's path rules in verirun-core: dot components
+    and empty components are normalized away, so spellings such
+    as ./seed.txt, dir//file.txt, and dir/ name the same path
+    here as they do at the CLI.
+    """
+    if not raw:
         raise _invalid_spec(f"task {task_id!r} {field_name} path must not be empty")
     if raw.startswith("/") or (
         len(raw) >= 2 and raw[0].isascii() and raw[0].isalpha() and raw[1] == ":"
@@ -129,16 +166,17 @@ def _validate_relative_path(raw: str, *, task_id: str, field_name: str) -> str:
         raise _invalid_spec(
             f"task {task_id!r} {field_name} path {raw!r} must not contain backslashes"
         )
-    parts = raw.split("/")
-    for part in parts:
-        if part == "":
-            raise _invalid_spec(
-                f"task {task_id!r} {field_name} path {raw!r} contains an empty path component"
-            )
-        if part in {".", ".."}:
+    parts: list[str] = []
+    for part in raw.split("/"):
+        if part == "..":
             raise _invalid_spec(
                 f"task {task_id!r} {field_name} path {raw!r} contains unsafe component {part!r}"
             )
+        if part in {"", "."}:
+            continue
+        parts.append(part)
+    if not parts:
+        raise _invalid_spec(f"task {task_id!r} {field_name} path must not be empty")
     return "/".join(parts)
 
 
@@ -300,6 +338,8 @@ class PipelineBuilder:
             raise _invalid_spec("pipeline must contain at least one task")
 
         seen_ids: set[str] = set()
+        folded_ids: dict[str, str] = {}
+        stripped_ids: dict[str, str] = {}
         for task in self._tasks:
             tid = task.task_id
             if (
@@ -307,6 +347,7 @@ class PipelineBuilder:
                 or tid in {".", ".."}
                 or "/" in tid
                 or "\\" in tid
+                or _win32_stripped(tid) == ""
             ):
                 raise _invalid_spec(
                     f"invalid task_id {tid!r}: must be a non-blank single path component"
@@ -314,6 +355,18 @@ class PipelineBuilder:
             if tid in seen_ids:
                 raise _invalid_spec(f"duplicate task_id {tid!r}")
             seen_ids.add(tid)
+            folded = _case_folded(tid)
+            if folded in folded_ids:
+                raise _invalid_spec(
+                    f"task_id {tid!r} differs only in letter case from task_id {folded_ids[folded]!r}"
+                )
+            folded_ids[folded] = tid
+            stripped = _case_folded(_win32_stripped(tid))
+            if stripped in stripped_ids:
+                raise _invalid_spec(
+                    f"task_id {tid!r} and task_id {stripped_ids[stripped]!r} name the same directory on Windows, where trailing spaces and dots are stripped"
+                )
+            stripped_ids[stripped] = tid
 
             if not task.executable.strip():
                 raise _invalid_spec(f"task {tid!r} executable must not be blank")
@@ -328,7 +381,7 @@ class PipelineBuilder:
             for key in task.env:
                 if not key.strip():
                     raise _invalid_spec(f"task {tid!r} env key must not be blank")
-                if key in _RESERVED_ENV_KEYS:
+                if _is_reserved_env_key(key):
                     raise _invalid_spec(
                         f"task {tid!r} env declares reserved key {key!r}"
                     )
@@ -345,8 +398,12 @@ class PipelineBuilder:
                     )
 
         output_owners: dict[str, str] = {}
+        folded_output_owners: dict[str, tuple[str, str]] = {}
+        stripped_output_owners: dict[str, tuple[str, str]] = {}
         for task in self._tasks:
             seen_inputs: set[str] = set()
+            folded_inputs: dict[str, str] = {}
+            stripped_inputs: dict[str, str] = {}
             for raw_in in task.inputs:
                 norm_in = _validate_relative_path(
                     raw_in, task_id=task.task_id, field_name="input"
@@ -356,6 +413,18 @@ class PipelineBuilder:
                         f"task {task.task_id!r} declares duplicate input {norm_in!r}"
                     )
                 seen_inputs.add(norm_in)
+                folded_in = _case_folded(norm_in)
+                if folded_in in folded_inputs:
+                    raise _invalid_spec(
+                        f"task {task.task_id!r} input {norm_in!r} differs only in letter case from input {folded_inputs[folded_in]!r}"
+                    )
+                folded_inputs[folded_in] = norm_in
+                stripped_in = _case_folded(_win32_stripped(norm_in))
+                if stripped_in in stripped_inputs:
+                    raise _invalid_spec(
+                        f"task {task.task_id!r} input {norm_in!r} and input {stripped_inputs[stripped_in]!r} name the same file on Windows, where trailing spaces and dots are stripped"
+                    )
+                stripped_inputs[stripped_in] = norm_in
 
             for raw_out in task.outputs:
                 norm_out = _validate_relative_path(
@@ -367,6 +436,20 @@ class PipelineBuilder:
                         f"output path {norm_out!r} collides between {first_owner!r} and {task.task_id!r}"
                     )
                 output_owners[norm_out] = task.task_id
+                folded_out = _case_folded(norm_out)
+                if folded_out in folded_output_owners:
+                    first_path, first_owner = folded_output_owners[folded_out]
+                    raise _invalid_spec(
+                        f"output path {norm_out!r} differs only in letter case from output path {first_path!r} claimed by {first_owner!r}"
+                    )
+                folded_output_owners[folded_out] = (norm_out, task.task_id)
+                stripped_out = _case_folded(_win32_stripped(norm_out))
+                if stripped_out in stripped_output_owners:
+                    first_path, first_owner = stripped_output_owners[stripped_out]
+                    raise _invalid_spec(
+                        f"output path {norm_out!r} and output path {first_path!r} claimed by {first_owner!r} name the same file on Windows, where trailing spaces and dots are stripped"
+                    )
+                stripped_output_owners[stripped_out] = (norm_out, task.task_id)
 
         deps_by_id = {
             task.task_id: sorted(set(task.depends_on)) for task in self._tasks

@@ -196,19 +196,20 @@ class VerirunSdkTests(unittest.TestCase):
             )
             self.assertIn(reserved, str(err))
 
-        # Unsafe relative paths in inputs and outputs
+        # Unsafe relative paths in inputs and outputs. Dot
+        # components and empty components are not here: they
+        # normalize away, as they do at the CLI, and are pinned
+        # as accepted spellings in
+        # test_pipeline_builder_normalizes_path_spellings.
         unsafe_paths = (
             "",
             "/etc/passwd",
             "C:/temp/out.txt",
             "dir\\file.txt",
             ".",
-            "./file.txt",
-            "dir/./file.txt",
             "..",
             "../escape.txt",
             "dir/../escape.txt",
-            "dir//file.txt",
         )
         for bad_path in unsafe_paths:
             assert_invalid(
@@ -234,6 +235,53 @@ class VerirunSdkTests(unittest.TestCase):
             .add_task(task_id="b", executable="sh", outputs=["shared/out.txt"])
         )
 
+        # Collisions the CLI refuses under INV-DAG-7, 8, and 9:
+        # the builder refuses them upfront too.
+        assert_invalid(
+            verirun.PipelineBuilder()
+            .add_task(task_id="a", executable="sh", outputs=["Out.txt"])
+            .add_task(task_id="b", executable="sh", outputs=["out.txt"])
+        )
+        assert_invalid(
+            verirun.PipelineBuilder()
+            .add_task(task_id="a", executable="sh", outputs=["a.txt "])
+            .add_task(task_id="b", executable="sh", outputs=["a.txt"])
+        )
+        assert_invalid(
+            verirun.PipelineBuilder().add_task(
+                task_id="t", executable="sh", inputs=["In.txt", "in.txt"]
+            )
+        )
+        assert_invalid(
+            verirun.PipelineBuilder().add_task(
+                task_id="t", executable="sh", inputs=["a.txt ", "a.txt"]
+            )
+        )
+        assert_invalid(
+            verirun.PipelineBuilder()
+            .add_task(task_id="Build", executable="sh")
+            .add_task(task_id="build", executable="sh")
+        )
+        assert_invalid(
+            verirun.PipelineBuilder()
+            .add_task(task_id="build", executable="sh")
+            .add_task(task_id="build ", executable="sh")
+        )
+        assert_invalid(
+            verirun.PipelineBuilder().add_task(task_id="...", executable="sh")
+        )
+
+        # Reserved env keys under ASCII case folding, as the CLI
+        # compares them: environment lookup on Windows is
+        # case-insensitive.
+        for folded in ("Path", "home", "tz"):
+            err = assert_invalid(
+                verirun.PipelineBuilder().add_task(
+                    task_id="t", executable="sh", env={folded: "override"}
+                )
+            )
+            self.assertIn(folded, str(err))
+
         # Unknown dependency, self-dependency, and multi-node cycles
         assert_invalid(
             verirun.PipelineBuilder().add_task(
@@ -253,6 +301,35 @@ class VerirunSdkTests(unittest.TestCase):
             .add_task(task_id="gamma", executable="sh", depends_on=["beta"])
         )
         self.assertIn("alpha, beta, gamma", str(cycle_err))
+
+    def test_pipeline_builder_normalizes_path_spellings(self) -> None:
+        # Spellings the CLI normalizes (dot components, empty
+        # components, a trailing separator) validate here too,
+        # and two spellings of one path collide after
+        # normalization, as they do at the CLI.
+        builder = verirun.PipelineBuilder().add_task(
+            task_id="t",
+            executable="sh",
+            inputs=["./seed.txt", "dir//data.txt"],
+            outputs=["out/"],
+        )
+        self.assertEqual(builder.validate(), ("t",))
+
+        def assert_invalid(builder: verirun.PipelineBuilder) -> None:
+            with self.assertRaises(verirun.VerirunError) as ctx:
+                builder.validate()
+            self.assertEqual(ctx.exception.kind, "invalid_spec")
+
+        assert_invalid(
+            verirun.PipelineBuilder()
+            .add_task(task_id="a", executable="sh", outputs=["a/./b.txt"])
+            .add_task(task_id="b", executable="sh", outputs=["a/b.txt"])
+        )
+        assert_invalid(
+            verirun.PipelineBuilder().add_task(
+                task_id="t", executable="sh", inputs=["x.txt", "./x.txt"]
+            )
+        )
 
     def test_pipeline_builder_run_and_run_tasks_end_to_end(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
