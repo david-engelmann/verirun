@@ -22,6 +22,14 @@ Pass `--version` or `--install-dir` to pin a release tag or target directory.
 curl -fsSL https://raw.githubusercontent.com/david-engelmann/verirun/main/install.sh | sh -s -- --version v0.2.2 --install-dir "$HOME/.local/bin"
 ```
 
+On Windows (`x86_64`), the standalone `install.ps1` script carries the same contract for the prebuilt Windows zip, verifying the archive SHA-256 digest against `SHA256SUMS` before extracting `verirun.exe` into `$HOME/.local/bin`.
+
+```powershell
+irm https://raw.githubusercontent.com/david-engelmann/verirun/main/install.ps1 | iex
+```
+
+Pass `-Version` or `-InstallDir`, or set the `VERIRUN_VERSION` and `INSTALL_DIR` environment variables, to pin a release tag or target directory.
+
 Prebuilt release archives also include `cargo-binstall` metadata.
 
 ## Commands
