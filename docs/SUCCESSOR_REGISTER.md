@@ -1128,3 +1128,51 @@ core's.
 Disposition: the enforced env set is now the six keys
 on every surface that states it, and finding A3 stands
 closed.
+
+## Repair slice 1: SDK validation alignment
+
+Closed 2026-11-28. The audit found the Python
+PipelineBuilder's upfront validation diverged from the
+CLI in both directions. It accepted the collision
+shapes the CLI refuses under INV-DAG-7, 8, and 9
+(finding A1), it rejected path spellings the CLI
+accepts and normalizes (finding A2), and a cluster of
+smaller divergences stood beside them (finding A4).
+Main approved the alignment as slice 1 of this
+programme.
+
+The build: validate() now runs the folded and
+Win32-stripped comparisons beside the exact ones, for
+outputs across tasks, inputs within a task, and task
+ids, with helpers mirroring the core's per-character
+Unicode fold and per-component strip. The reserved env
+key check folds ASCII case, the mirror charged by
+S4.6's red team repair. _validate_relative_path now
+normalizes dot and empty components away exactly as
+the core's path rules do, so ./seed.txt, dir//file.txt,
+and dir/ validate and collide on their normalized
+forms. A task id whose stripped form is empty is
+refused, as at the CLI since S4.5. The pins live in
+test_sdk.py: the invalid-spec suite gains every
+collision shape and the folded env spellings, the
+unsafe-path list loses the spellings that now
+normalize, and a new test pins the accepted spellings
+and the collisions that follow normalization.
+
+Disposition on the rest of finding A4: the builder
+keeps its stricter refusals of whitespace-only task
+ids and executables, blank env keys, and non-integer
+timeout values as named SDK strictness, recorded here
+rather than aligned, because each refuses a spelling
+that is a likely mistake and none accepts anything the
+CLI refuses. First-error identity still differs from
+the core's fixed order in mixed-violation specs. The
+exit kind and code agree. The slice's red team probed
+two further strictness edges past the A4 list and both
+are retained on the same reasoning. The builder
+refuses an empty pipeline, which the core's assembly
+accepts, and its whitespace refusal spans the full
+Python whitespace class where the core refuses only
+the blank and stripped-empty forms. Findings A1 and
+A2 stand closed, and A4 stands closed as aligned
+where it mattered and named where it did not.
