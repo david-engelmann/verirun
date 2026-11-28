@@ -1435,3 +1435,66 @@ digest gate or by the caller's own session.
 
 Disposition: residual item 1 stands closed on this
 slice's landing. Item 4 follows as RW2.
+
+## Slice RW2: SDK decode parity
+
+The S1 work recorded the asymmetry this slice
+closes. The SDK ran the binary through subprocess in
+text mode at three sites, and only _probe_version
+guarded its call. When the child's output was not
+valid UTF-8, the failure shape depended on the
+platform, on Windows the captured stdout could come
+back as None and the caller died on an attribute
+error, and on POSIX the decode exception itself
+escaped. Neither shape was a VerirunError, so both
+broke the error contract S1.3 verified for every
+failure the CLI reports.
+
+The SDK now captures bytes at all three sites and
+decodes explicitly. A _run_binary helper returns the
+exit code and the two streams decoded through
+_decode_stream, which raises VerirunError naming the
+undecodable stream and carrying the exit code.
+_invoke_json and version route through the helper,
+so a decode failure joins the same error surface as
+every other failure, with the S1.4 version diagnostic
+appended where it already applied. _probe_version
+keeps its best-effort contract and returns None on
+undecodable output, now by its own decode inside its
+existing guard rather than by platform accident. The
+valid UTF-8 path is otherwise unchanged, which is
+every output the CLI itself produces.
+
+Two edges the slice's reviews named stand recorded.
+Captured line endings now stand as written rather
+than passing through the text mode's newline
+translation, which no consumer of the decoded text
+can observe, since each one strips, splits, or
+parses what it reads. And because both streams
+decode before any return code is read, undecodable
+stderr fails a call whose payload and exit code are
+otherwise good, on the same terms as undecodable
+stdout. The probe decodes both of its streams
+inside its guard, so its abstention over garbage
+on either stream matches the text mode's exactly.
+
+New tests drive stub executables that emit invalid
+UTF-8 on stdout and on stderr and assert the naming
+VerirunError on both, through completions and
+through version, plus a stub whose version answer is
+undecodable and whose failure message therefore
+stands without a version suffix, pinning the probe's
+contract. The stubs run under the suite's own Python
+through a per-platform launcher, so the tests mean
+the same thing on every platform the suite runs on,
+including the windows CI job, which already runs the
+suite. The install-pypi matrix in verify-published
+gains a windows-latest leg on Python 3.12, with the
+job's step naming bash explicitly, so the published
+wheel's SDK surface carries a permanent Windows gate
+as well.
+
+Disposition: residual item 4 stands closed on this
+slice's landing. With RW2 the residual Windows
+workstream is complete, both slices landed under
+the three reviews.

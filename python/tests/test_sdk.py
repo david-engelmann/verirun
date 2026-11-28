@@ -17,6 +17,26 @@ if importlib.util.find_spec("verirun") is None:
 import verirun  # noqa: E402
 
 
+def _write_stub(directory: Path, name: str, body: str) -> Path:
+    """Write a stub executable that runs ``body`` under this Python."""
+    script = directory / f"{name}.py"
+    script.write_text(body, encoding="utf-8")
+    if os.name == "nt":
+        launcher = directory / f"{name}.bat"
+        launcher.write_text(
+            f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n',
+            encoding="utf-8",
+        )
+        return launcher
+    launcher = directory / name
+    launcher.write_text(
+        f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n',
+        encoding="utf-8",
+    )
+    launcher.chmod(0o755)
+    return launcher
+
+
 def _shell_copy_cmd(src_rel: str, dst_rel: str) -> tuple[str, list[str]]:
     if os.name == "nt":
         src_win = src_rel.replace("/", "\\")
@@ -26,6 +46,51 @@ def _shell_copy_cmd(src_rel: str, dst_rel: str) -> tuple[str, list[str]]:
 
 
 class VerirunSdkTests(unittest.TestCase):
+    def test_undecodable_output_raises_verirun_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            stdout_stub = _write_stub(
+                root,
+                "badstdout",
+                "import sys\n"
+                "sys.stdout.buffer.write(b'\\xff\\xfe not json\\n')\n",
+            )
+            with self.assertRaises(verirun.VerirunError) as caught:
+                verirun.completions("bash", binary=stdout_stub)
+            self.assertIn("stdout", str(caught.exception))
+            self.assertIn("not valid UTF-8", str(caught.exception))
+            with self.assertRaises(verirun.VerirunError) as caught:
+                verirun.version(binary=stdout_stub)
+            self.assertIn("stdout", str(caught.exception))
+            self.assertIn("not valid UTF-8", str(caught.exception))
+
+            stderr_stub = _write_stub(
+                root,
+                "badstderr",
+                "import sys\n"
+                "sys.stdout.write('{}\\n')\n"
+                "sys.stderr.buffer.write(b'\\xff\\xfe\\n')\n"
+                "sys.exit(3)\n",
+            )
+            with self.assertRaises(verirun.VerirunError) as caught:
+                verirun.completions("bash", binary=stderr_stub)
+            self.assertIn("stderr", str(caught.exception))
+            self.assertIn("not valid UTF-8", str(caught.exception))
+
+            probe_stub = _write_stub(
+                root,
+                "badprobe",
+                "import sys\n"
+                "if sys.argv[1:] == ['--version']:\n"
+                "    sys.stdout.buffer.write(b'\\xff\\xfe\\n')\n"
+                "else:\n"
+                "    sys.stderr.write('boom\\n')\n"
+                "    sys.exit(3)\n",
+            )
+            with self.assertRaises(verirun.VerirunError) as caught:
+                verirun.completions("bash", binary=probe_stub)
+            self.assertEqual(str(caught.exception), "boom")
+
     def test_version_matches_package(self) -> None:
         self.assertEqual(verirun.__version__, "0.2.2")
         self.assertEqual(verirun.version(), verirun.__version__)
