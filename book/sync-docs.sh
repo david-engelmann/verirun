@@ -13,7 +13,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 src_docs="$repo_root/book/src/docs"
 
 rm -rf "$src_docs"
-mkdir -p "$src_docs"
+mkdir -p "$src_docs/media"
 
 published_pages=(
   "TUTORIAL"
@@ -26,6 +26,10 @@ published_pages=(
 for name in "${published_pages[@]}"; do
   cp "$repo_root/docs/$name.md" "$src_docs/$name.md"
 done
+
+cp "$repo_root"/docs/media/*.svg "$src_docs/media/"
+cp "$repo_root"/docs/media/*.png "$src_docs/media/"
+cp "$repo_root"/docs/media/*.gif "$src_docs/media/"
 
 maintainer_pages=(
   "AUDIT_PROGRAMME"
