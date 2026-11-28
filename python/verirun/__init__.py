@@ -737,6 +737,39 @@ def find_binary(binary: PathInput | None = None) -> Path:
     )
 
 
+def _decode_stream(raw: bytes, stream: str, returncode: int) -> str:
+    """Decode one captured stream as UTF-8.
+
+    A decode failure raises VerirunError naming the stream, so the
+    failure shape is the SDK's own on every platform instead of
+    depending on how the platform's subprocess text mode surfaces it.
+    """
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise VerirunError(
+            f"the verirun binary wrote output on {stream} that is not valid UTF-8",
+            exit_code=returncode or 3,
+        ) from None
+
+
+def _run_binary(exe: Path, args: Sequence[str]) -> tuple[int, str, str]:
+    """Run the binary and return its exit code and decoded streams.
+
+    Output is captured as bytes and decoded explicitly through
+    _decode_stream, so undecodable output raises VerirunError on
+    every platform.
+    """
+    proc = subprocess.run(
+        [str(exe), *args],
+        capture_output=True,
+        check=False,
+    )
+    stdout = _decode_stream(proc.stdout, "stdout", proc.returncode)
+    stderr = _decode_stream(proc.stderr, "stderr", proc.returncode)
+    return proc.returncode, stdout, stderr
+
+
 def _probe_version(exe: Path) -> str | None:
     """Best-effort version of a resolved binary, for error messages.
 
@@ -749,16 +782,15 @@ def _probe_version(exe: Path) -> str | None:
         proc = subprocess.run(
             [str(exe), "--version"],
             capture_output=True,
-            text=True,
-            encoding="utf-8",
             check=False,
             timeout=10,
         )
+        stdout = proc.stdout.decode("utf-8")
     except (OSError, ValueError, subprocess.SubprocessError):
         return None
-    if not proc.stdout:
+    if not stdout:
         return None
-    parts = proc.stdout.strip().split()
+    parts = stdout.strip().split()
     if proc.returncode == 0 and len(parts) == 2 and parts[0] == "verirun":
         return parts[1]
     return None
@@ -771,63 +803,51 @@ def _invoke_json(
     binary: PathInput | None = None,
 ) -> tuple[dict[str, Any], int]:
     exe = find_binary(binary)
-    proc = subprocess.run(
-        [str(exe), *args],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
+    returncode, stdout_text, stderr_text = _run_binary(exe, args)
     payload: dict[str, Any] | None = None
-    stdout = proc.stdout.strip()
+    stdout = stdout_text.strip()
     if stdout:
         try:
             payload = json.loads(stdout)
         except json.JSONDecodeError:
             payload = None
 
-    if proc.returncode not in allowed_codes:
+    if returncode not in allowed_codes:
         if isinstance(payload, dict) and "error" in payload:
             raise VerirunError(
                 str(payload["error"]),
-                exit_code=int(payload.get("exit_code", proc.returncode)),
+                exit_code=int(payload.get("exit_code", returncode)),
                 kind=payload.get("kind"),
                 payload=payload,
             )
-        message = proc.stderr.strip() or stdout or "verirun failed"
+        message = stderr_text.strip() or stdout or "verirun failed"
         probed = _probe_version(exe)
         if probed is not None:
             message = f"{message} (binary version {probed}, SDK version {__version__})"
         raise VerirunError(
             message,
-            exit_code=proc.returncode,
+            exit_code=returncode,
         )
 
     if not isinstance(payload, dict):
         raise VerirunError(
             "verirun did not return a JSON object",
-            exit_code=proc.returncode or 3,
+            exit_code=returncode or 3,
         )
-    return payload, proc.returncode
+    return payload, returncode
 
 
 def version(*, binary: PathInput | None = None) -> str:
     """Return the version reported by ``verirun --version``."""
     exe = find_binary(binary)
-    proc = subprocess.run(
-        [str(exe), "--version"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
-    if proc.returncode != 0:
+    returncode, stdout, stderr = _run_binary(exe, ["--version"])
+    if returncode != 0:
         raise VerirunError(
-            proc.stderr.strip() or "failed to query verirun version",
-            exit_code=proc.returncode,
+            stderr.strip() or "failed to query verirun version",
+            exit_code=returncode,
         )
-    parts = proc.stdout.strip().split()
-    return parts[-1] if parts else proc.stdout.strip()
+    parts = stdout.strip().split()
+    return parts[-1] if parts else stdout.strip()
 
 
 def completions(
